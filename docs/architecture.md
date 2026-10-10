@@ -35,10 +35,15 @@ src/
                         `browser.ts` the implementation that ships now.
   home/                 Where a signed-in User lands: `home-layout.ts` is which
                         Rows and in what order, `home-rows.tsx` which kind is
-                        drawn by what, `row.tsx` the Row and its card, one
-                        module per Row beside it. The Billboard is still to come.
+                        drawn by what, `row.tsx` the Row, its card and
+                        `cardForTitle`, one module per Row beside it. The
+                        Billboard is still to come.
   i18n/                 `en.ts` is the key set, `es.ts` is typed against it.
   jellyfin/             The gateway: the only module that talks HTTP to the Server.
+  my-list/              My List, which is Jellyfin's Favorites: `my-list.ts` is
+                        the store every screen reads, `use-my-list.ts` the
+                        context and hook, `my-list-toggle.tsx` the control on a
+                        card, `my-list-screen.tsx` the My List page.
   navigation/           Arrow keys and focus: `nearest.ts` the geometry,
                         `reveal.ts` how far a scroller must move, `focusable.ts`
                         what the arrows reach, `spatial-navigation.ts` the
@@ -276,9 +281,9 @@ is a Row's name wherever it is shown, and `BUILT_ROW_KINDS` is the kinds whose
 feature exists. Home draws the visible rows whose kind is built and leaves the
 rest out — an empty Row would look like something that failed, and the editor
 says "Not on Home yet" in words instead. **Adding a Row's feature** (#12 Continue
-Watching, #13 My List, #15 the suggestion Rows) is: a loader beside
-`new-on-jellyflick.ts`, a case in `HomeRowFor`, and the kind in
-`BUILT_ROW_KINDS`. The layout already carries it.
+Watching, #15 the suggestion Rows) is: a loader beside `new-on-jellyflick.ts`, a
+case in `HomeRowFor`, and the kind in `BUILT_ROW_KINDS`. The layout already
+carries it — My List (#13) was added exactly that way.
 
 The editor, `src/settings/home-layout-screen.tsx`:
 
@@ -292,6 +297,66 @@ The editor, `src/settings/home-layout-screen.tsx`:
   arrow keys at once, and they are reachable because `src/navigation/` reaches
   anything focusable.
 - **There is no Save button**, so there is none to leave unpressed.
+
+## My List
+
+My List **is** Jellyfin's Favorites, so it is the same list every other Jellyfin
+app shows: `/Items?isFavorite=true` reads it and `/UserFavoriteItems/{itemId}`
+adds and removes (the legacy `/Users/{userId}/FavoriteItems/{id}` is gone in
+12.x). Three gateway methods, `getFavouriteItems`, `addToFavourites` and
+`removeFromFavourites`.
+
+It is read **ordered by `Name`, not `SortName`**. A client that has just added a
+Title has only its name to place it by, and `SortName` strips articles, so the
+two orders would disagree about where "The Unfinished" goes.
+
+`src/my-list/my-list.ts` is one store, made once per (Server, User) in the shell
+and reaching every screen through `MyListProvider`. One store rather than a load
+per screen, because a Title added from a card on Home has to appear in the Row
+beside it, on the My List page and on every other card for the same Title at
+once. Its whole interface is `state`, `has`, `add`, `remove`, `load`, `unsaved`,
+`version` and `subscribe`.
+
+Three things about it are load-bearing, and all three were found by tests:
+
+- **A change shows before the Server has agreed to it**, and is taken back if
+  the Server refuses, with `unsaved()` to say so — a change that reverted itself
+  silently would look like the app losing track. An added Title is inserted
+  where its name puts it, which is where the Server's own order will have it, so
+  the list does not reshuffle a moment later.
+- **A read asked before a change is thrown away.** Otherwise the read comes back
+  with the list as it was and puts the Title straight back. The guard counts
+  *changes*, deliberately not publishes: a read asked before another read's
+  answer is still perfectly good, and discarding it loses an add made while the
+  first read was in flight.
+- **A subscription can only be made once a component has rendered.** A press in
+  that gap — a card pressed the moment it appeared — changes the store and would
+  never be drawn, so `useMyList` compares the `version()` it rendered with
+  against the one it subscribed to and catches up. Anything else that grows a
+  store with a subscription hook inherits this.
+
+**The control on a card** is `MyListToggle`: a real button with its own name
+("Add Arrival to My List") and `aria-pressed`, passed to `Row` through
+`cardControl`, which is the slot Play and More info will share once the enlarged
+hover card (#21) arrives. `home-rows.tsx` passes it to every Row on Home, so
+there is one place that decides what a card on Home offers.
+
+On a card in a Row that control is drawn **only while the pointer is over the
+card**, and that is not only a look: `spatial-navigation.ts` ignores anything
+with a zero-sized box, so a hidden control is not a stop the arrow keys step
+through and Right still takes the next card along the Row. The keyboard and the
+remote reach My List from the title page instead (story 70, #17). On the My List
+page the same control is always drawn and **is** a focus stop, on purpose: that
+page exists for managing the list, so taking something out of it has to work
+with a remote.
+
+**The My List page** is a grid (`.grid`, `auto-fill` columns) rather than a
+strip, so a long list wraps down the page instead of scrolling sideways, and it
+has no focus memory to keep — the page *is* the grid. An empty My List draws no
+Row on Home at all, where New on Jellyflick says so in words: an empty My List is
+where every User starts and is theirs to fill, so a notice on Home on every
+visit would be in the way. The page explains it instead, and also carries the
+"the Server would not say" message.
 
 ## Arrow keys, focus and Rows
 

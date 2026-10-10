@@ -51,6 +51,12 @@ export const es: Messages = {
   'home.newOnJellyflick.empty': 'Todavía no se ha añadido nada a tus bibliotecas.',
   'home.newOnJellyflick.unavailable': 'Jellyflick no pudo leer las novedades del servidor.',
 
+  'myList.loading': 'Buscando lo que has guardado…',
+  'myList.empty': 'Mi lista está vacía. Añade un título desde cualquier fila y lo encontrarás aquí.',
+  'myList.unavailable': 'Jellyflick no pudo leer Mi lista del servidor.',
+  'myList.unsaved': 'Jellyflick no pudo guardar ese cambio en el servidor.',
+  'myList.add': (p) => `Añadir ${p.name} a Mi lista`,
+  'myList.remove': (p) => `Quitar ${p.name} de Mi lista`,
   'home.empty': 'No se muestra ninguna fila en Inicio. Edita Inicio para elegir algunas.',
 
   'home.row.continueWatching': 'Seguir viendo',

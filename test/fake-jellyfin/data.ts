@@ -85,6 +85,16 @@ export type FakeJellyfinState = {
   libraries: FakeLibrary[];
   items: FakeItem[];
   /**
+   * Which items each User has marked as a favourite, by user id: Jellyfin's
+   * Favorites, which this app calls My List. Per User, as the real Server has
+   * it, so one User's list is never another's.
+   *
+   * Seeded empty, because an empty My List is where every User starts and
+   * because a Row on Home that appeared in every other test would get in their
+   * way. A test that needs a list patches this.
+   */
+  favourites: Record<string, string[]>;
+  /**
    * A status `AuthenticateByName` answers with whatever the credentials are, so
    * a test can see what a Server that is having a bad day looks like. Null is
    * the normal Server.
@@ -96,6 +106,18 @@ export type FakeJellyfinState = {
    * Server will not say what it holds. Null is the normal Server.
    */
   failLibraryQueriesWith: number | null;
+  /**
+   * A status `/Items` answers with when asked for a User's favourites, so a
+   * test can see what My List looks like when the Server will not say what is
+   * in it. Null is the normal Server.
+   */
+  failFavouriteQueriesWith: number | null;
+  /**
+   * A status the `/UserFavoriteItems` writes answer with, so a test can see
+   * what adding or removing looks like when the Server refuses it. Null is the
+   * normal Server.
+   */
+  failFavouriteWritesWith: number | null;
   /**
    * Stored `DisplayPreferences.CustomPrefs`, keyed
    * `<displayPreferencesId>|<client>|<userId>` — the three things the Server
@@ -116,6 +138,9 @@ export function createSampleData(): FakeJellyfinState {
   return {
     failAuthenticationWith: null,
     failLibraryQueriesWith: null,
+    failFavouriteQueriesWith: null,
+    failFavouriteWritesWith: null,
+    favourites: {},
     failDisplayPreferencesWith: null,
     displayPreferences: {},
     libraries: SAMPLE_LIBRARIES.map((library) => ({ ...library })),

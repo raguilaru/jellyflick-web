@@ -25,6 +25,13 @@ const DEFAULT_ROWS = [
   'Because You Watched',
 ];
 
+// The sample data is put back before each test as well as after: these tests
+// save a layout on the Server, and a save still in flight when the last test
+// ended lands after its own reset and changes the Home this one starts on.
+test.beforeEach(async ({ request }) => {
+  await request.delete(`${FAKE_JELLYFIN_URL}/__fake/state`);
+});
+
 test.afterEach(async ({ request }) => {
   await request.delete(`${FAKE_JELLYFIN_URL}/__fake/state`);
 });
@@ -40,6 +47,11 @@ async function signInAndLand(page: Page): Promise<void> {
 async function openTheEditor(page: Page): Promise<void> {
   await page.getByRole('link', { name: 'Edit Home' }).press('Enter');
   await expect(page.getByRole('heading', { name: 'Edit Home', level: 1 })).toBeVisible();
+  // The editor opens on the defaults and redraws when the Server's answer
+  // lands, which looks the same but is a different tree. A press in that gap is
+  // a press on a button that is about to be redrawn, so these journeys wait for
+  // the app to have finished talking to the Server before pressing anything.
+  await page.waitForLoadState('networkidle');
 }
 
 async function backToHome(page: Page): Promise<void> {
@@ -78,6 +90,9 @@ test('hiding a Row takes it off Home', async ({ page }) => {
 
   await openTheEditor(page);
   await page.getByRole('button', { name: 'Hide New on Jellyflick' }).press('Enter');
+  // Every Row whose feature is built, or Home would still be drawing one of
+  // them. The rest are in the layout but are not on Home yet.
+  await page.getByRole('button', { name: 'Hide My List' }).press('Enter');
   await backToHome(page);
 
   await expect(page.getByRole('list', { name: 'New on Jellyflick' })).toHaveCount(0);

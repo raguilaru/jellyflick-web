@@ -4,6 +4,7 @@ import type { BaseItemDtoQueryResult } from '@jellyfin/sdk/lib/generated-client/
 import type { DisplayPreferencesDto } from '@jellyfin/sdk/lib/generated-client/models/display-preferences-dto';
 import type { PublicSystemInfo } from '@jellyfin/sdk/lib/generated-client/models/public-system-info';
 import type { UserDto } from '@jellyfin/sdk/lib/generated-client/models/user-dto';
+import type { UserItemDataDto } from '@jellyfin/sdk/lib/generated-client/models/user-item-data-dto';
 import { buildAuthorizationHeader, type ServerIdentity } from './authorization';
 
 /**
@@ -62,6 +63,27 @@ export type JellyfinGateway = {
    * every library.
    */
   getLatestItems(options: LatestItemsOptions): Promise<BaseItemDto[]>;
+  /**
+   * `GET /Items?isFavorite=true` — the Titles in the token User's My List.
+   *
+   * My List *is* Jellyfin's Favorites, so this is the same list every other
+   * Jellyfin app shows: `isFavorite` is the Server's own filter over the whole
+   * library, and `/UserFavoriteItems` below is what puts things in it.
+   *
+   * Ordered by `Name`, ascending, and **not** by `SortName`: a client that
+   * inserts a Title it has just added has only the name to place it by, and
+   * `SortName` strips articles, so the two would disagree about where "The
+   * Unfinished" goes.
+   */
+  getFavouriteItems(options?: FavouriteItemsOptions): Promise<BaseItemDto[]>;
+  /**
+   * `POST /UserFavoriteItems/{itemId}` — adds an item to the token User's
+   * Favorites. The 12.x replacement for `/Users/{userId}/FavoriteItems/{id}`,
+   * which is gone (ADR 0001 bans the legacy routes anyway).
+   */
+  addToFavourites(itemId: string): Promise<UserItemDataDto>;
+  /** `DELETE /UserFavoriteItems/{itemId}` — takes one back out again. */
+  removeFromFavourites(itemId: string): Promise<UserItemDataDto>;
   /**
    * `GET /Items` — Titles across the whole Server, in name order.
    *
@@ -129,6 +151,10 @@ export type ItemImageOptions = {
 export type LatestItemsOptions = {
   /** The library to ask. Without one the Server answers across all of them. */
   parentId: string;
+  limit?: number;
+};
+
+export type FavouriteItemsOptions = {
   limit?: number;
 };
 
@@ -262,6 +288,29 @@ export function createJellyfinGateway(options: JellyfinGatewayOptions): Jellyfin
         })}`,
       ),
 
+    getFavouriteItems: (options = {}) =>
+      request<BaseItemDtoQueryResult>(
+        'GET',
+        `/Items${query({
+          isFavorite: true,
+          // My List is a list of Titles: a favourited album or Episode is not
+          // one, and the Server is the right place to leave them out.
+          includeItemTypes: TITLE_ITEM_TYPES,
+          // Without this the Server answers with the library folders.
+          recursive: true,
+          // `Name`, deliberately not `SortName`: see the note on the method.
+          sortBy: 'Name',
+          sortOrder: 'Ascending',
+          // Posters only: the default is every image type, at every size.
+          enableImageTypes: 'Primary',
+          imageTypeLimit: 1,
+          enableUserData: false,
+          // The list itself says how long it is, so the Server can skip a COUNT.
+          enableTotalRecordCount: false,
+          ...(options.limit === undefined ? {} : { limit: options.limit }),
+        })}`,
+      ).then((result) => result.Items ?? []),
+
     getTitles: (options = {}) =>
       request<BaseItemDtoQueryResult>(
         'GET',
@@ -286,6 +335,12 @@ export function createJellyfinGateway(options: JellyfinGatewayOptions): Jellyfin
           ...(options.limit === undefined ? {} : { limit: options.limit }),
         })}`,
       ).then((result) => result.Items ?? []),
+
+    addToFavourites: (itemId) =>
+      request<UserItemDataDto>('POST', `/UserFavoriteItems/${encodeURIComponent(itemId)}`),
+
+    removeFromFavourites: (itemId) =>
+      request<UserItemDataDto>('DELETE', `/UserFavoriteItems/${encodeURIComponent(itemId)}`),
 
     getTitleGenres: () =>
       request<BaseItemDtoQueryResult>(

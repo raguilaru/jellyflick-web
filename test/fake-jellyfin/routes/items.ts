@@ -3,11 +3,16 @@ import type { FakeRoute } from '../routing.ts';
 import { userForToken } from './users.ts';
 
 /**
- * `LibraryController` and `ImageController`.
+ * `ItemsController` and `ImageController`.
  *
  * `/Items/Latest` is the one that shapes the New on Jellyflick Row, and two of
  * its habits matter: it answers for **one** library at a time through
  * `parentId`, and it returns a **bare array**, not a `BaseItemDtoQueryResult`.
+ *
+ * `/Items` is the general query, and the real one takes thirty-odd parameters.
+ * This fake implements the ones a feature actually sends and refuses the rest
+ * with a 400 that says so, so an unimplemented parameter can never look like it
+ * was honoured.
  */
 export const itemRoutes: readonly FakeRoute[] = [
   {
@@ -64,9 +69,19 @@ export const itemRoutes: readonly FakeRoute[] = [
     method: 'GET',
     path: '/Items',
     handle: (request, state) => {
-      // A query across the libraries is a query about what one User can see.
-      if (userForToken(request.headers.authorization ?? '', state.users) === undefined) {
+      // A query across the libraries is a query about what one User can see —
+      // and `isFavorite` makes it a query about what one User has saved.
+      const user = userForToken(request.headers.authorization ?? '', state.users);
+      if (user === undefined) {
         return { status: 401, body: { error: 'No valid token.' } };
+      }
+
+      const favouritesOnly = request.query.get('isFavorite') === 'true';
+      if (favouritesOnly && state.failFavouriteQueriesWith !== null) {
+        return {
+          status: state.failFavouriteQueriesWith,
+          body: { error: 'The fake Jellyfin was told to fail favourite queries.' },
+        };
       }
 
       if (state.failLibraryQueriesWith !== null) {
@@ -88,11 +103,34 @@ export const itemRoutes: readonly FakeRoute[] = [
         };
       }
 
+      // `Name` and `SortName` are both asked for — My List by `Name`, because
+      // a client inserting a Title it just added has only the name to place it
+      // by, and Search by `SortName`. The real Server falls back to the name
+      // when an item has no sort name, and no sample item has one, so here the
+      // two orders are the same. Any other order is refused rather than
+      // quietly ignored.
+      const sortBy = request.query.get('sortBy');
+      const sortOrder = request.query.get('sortOrder');
+      if (
+        (sortBy !== null && sortBy !== 'Name' && sortBy !== 'SortName') ||
+        (sortOrder !== null && sortOrder !== 'Ascending')
+      ) {
+        return {
+          status: 400,
+          body: {
+            error:
+              'The fake Jellyfin only implements sortBy=Name or SortName, ascending. Implement the order your ticket needs in test/fake-jellyfin/routes/items.ts.',
+          },
+        };
+      }
+
       const includeItemTypes = csvOf(request.query.get('includeItemTypes'));
       const searchTerm = request.query.get('searchTerm');
       const genres = csvOf(request.query.get('genres'));
+      const favourites = state.favourites[user.Id] ?? [];
 
       const matching = state.items
+        .filter((item) => !favouritesOnly || favourites.includes(item.Id))
         .filter((item) => includeItemTypes.length === 0 || includeItemTypes.includes(item.Type))
         // The real Server's matching is cleverer than this; a substring of the
         // name is as much as a fake owes a client.
