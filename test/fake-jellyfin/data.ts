@@ -38,12 +38,19 @@ export type FakeUser = {
 export type FakeJellyfinState = {
   systemInfo: FakeSystemInfo;
   users: FakeUser[];
+  /**
+   * A status `AuthenticateByName` answers with whatever the credentials are, so
+   * a test can see what a Server that is having a bad day looks like. Null is
+   * the normal Server.
+   */
+  failAuthenticationWith: number | null;
 };
 
 const SERVER_ID = '0f1e2d3c4b5a69788796a5b4c3d2e1f0';
 
 export function createSampleData(): FakeJellyfinState {
   return {
+    failAuthenticationWith: null,
     users: [
       fakeUser({ Id: 'user-rafael', Name: 'Rafael', PrimaryImageTag: 'tag-rafael' }),
       fakeUser({ Id: 'user-marina', Name: 'Marina', PrimaryImageTag: 'tag-marina' }),

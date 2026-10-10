@@ -29,6 +29,13 @@ export const userRoutes: readonly FakeRoute[] = [
         return { status: 401, body: { error: 'No MediaBrowser authorization header.' } };
       }
 
+      if (state.failAuthenticationWith !== null) {
+        return {
+          status: state.failAuthenticationWith,
+          body: { error: 'The fake Jellyfin was told to fail authentication.' },
+        };
+      }
+
       const body = (request.body ?? {}) as { Username?: unknown; Pw?: unknown };
       const username = typeof body.Username === 'string' ? body.Username : '';
       // The field is `Pw`, not `Password`.
