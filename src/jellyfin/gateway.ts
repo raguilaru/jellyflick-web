@@ -1,6 +1,7 @@
 import type { AuthenticationResult } from '@jellyfin/sdk/lib/generated-client/models/authentication-result';
 import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models/base-item-dto';
 import type { BaseItemDtoQueryResult } from '@jellyfin/sdk/lib/generated-client/models/base-item-dto-query-result';
+import type { DisplayPreferencesDto } from '@jellyfin/sdk/lib/generated-client/models/display-preferences-dto';
 import type { PublicSystemInfo } from '@jellyfin/sdk/lib/generated-client/models/public-system-info';
 import type { UserDto } from '@jellyfin/sdk/lib/generated-client/models/user-dto';
 import { buildAuthorizationHeader, type ServerIdentity } from './authorization';
@@ -67,6 +68,35 @@ export type JellyfinGateway = {
    * changes when the image does and is otherwise cacheable forever.
    */
   itemImageUrl(itemId: string, imageType: ItemImageType, options?: ItemImageOptions): string;
+  /**
+   * `GET /DisplayPreferences/{id}` — where a User's Client Settings are kept.
+   *
+   * `client` is a **required** query parameter, and it partitions storage, so
+   * Jellyflick's settings never land in another client's. The Server mixes keys
+   * of its own into `CustomPrefs` when it answers; stripping them is the
+   * caller's, in `src/settings/client-settings.ts`.
+   */
+  getDisplayPreferences(options: DisplayPreferencesOptions): Promise<DisplayPreferencesDto>;
+  /**
+   * `POST /DisplayPreferences/{id}` — answers 204, not the stored DTO.
+   *
+   * The body carries the **whole** `CustomPrefs` set and the Server stores it
+   * as given, so every write is a read-modify-write.
+   */
+  saveDisplayPreferences(
+    options: DisplayPreferencesOptions & { preferences: DisplayPreferencesDto },
+  ): Promise<void>;
+};
+
+export type DisplayPreferencesOptions = {
+  /**
+   * The preferences' own id. Not a GUID: the Server MD5s anything that is not
+   * one, so a plain name is legal and stable.
+   */
+  id: string;
+  /** Required by the Server, and what keeps one client's settings its own. */
+  client: string;
+  userId: string;
 };
 
 /** The `ImageType` values this app asks for. */
@@ -139,6 +169,31 @@ export function createJellyfinGateway(options: JellyfinGatewayOptions): Jellyfin
     return (await response.json()) as T;
   }
 
+  /**
+   * A request whose answer has no body. `response.json()` on a 204 throws, so
+   * an endpoint that answers "No Content" needs its own shape rather than a
+   * `request<void>`.
+   */
+  async function requestWithoutAnswer(method: string, path: string, body?: unknown): Promise<void> {
+    let response: Response;
+    try {
+      response = await doFetch(`${serverAddress}${path}`, {
+        method,
+        headers: {
+          Accept: 'application/json',
+          Authorization: authorization,
+          ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+        },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      });
+    } catch (reason) {
+      throw new JellyfinUnreachableError(serverAddress, reason);
+    }
+    if (!response.ok) {
+      throw new JellyfinHttpError(method, path, response.status);
+    }
+  }
+
   return {
     serverAddress,
     authorizationHeader: () => authorization,
@@ -174,12 +229,30 @@ export function createJellyfinGateway(options: JellyfinGatewayOptions): Jellyfin
         })}`,
       ),
 
+    getDisplayPreferences: (options) =>
+      request<DisplayPreferencesDto>('GET', `/DisplayPreferences/${displayPreferencesPath(options)}`),
+
+    saveDisplayPreferences: (options) =>
+      requestWithoutAnswer(
+        'POST',
+        `/DisplayPreferences/${displayPreferencesPath(options)}`,
+        options.preferences,
+      ),
+
     itemImageUrl: (itemId, imageType, options = {}) =>
       `${serverAddress}/Items/${encodeURIComponent(itemId)}/Images/${imageType}${query({
         ...(options.tag === undefined ? {} : { tag: options.tag }),
         ...(options.maxWidth === undefined ? {} : { maxWidth: options.maxWidth }),
       })}`,
   };
+}
+
+/** The path and query both `/DisplayPreferences` calls share. */
+function displayPreferencesPath(options: DisplayPreferencesOptions): string {
+  return `${encodeURIComponent(options.id)}${query({
+    client: options.client,
+    userId: options.userId,
+  })}`;
 }
 
 /**
