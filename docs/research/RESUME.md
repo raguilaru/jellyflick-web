@@ -4,6 +4,55 @@ State of the `/implement-spec` run on the integration branch `feat/jellyflick-v1
 (draft PR #38). Update this whenever a wave lands, so a fresh session can pick the work
 up without re-deriving anything.
 
+## START HERE — the third session stopped at the 5-hour spending limit
+
+The host asked for the spend to be checked at every commit, and for the process to be
+written down if a ticket was unfinished when the limit neared. **That is what happened.**
+The third session stopped at **91% of the 5-hour window** (weekly 45%), with **#13 still
+in flight**. Nothing is broken and nothing is half-merged on the integration branch.
+
+**The integration branch is green.** Tip `46dfa67`, gate verified on fresh ports:
+`lint` 0, `typecheck` 0, `build` 0, 242 unit tests in 23 files, 168 Playwright tests
+(156 passed, 12 skipped, 0 failed), 65.12 kB / 21.94 kB gz. #36, #10 and #24 all landed
+and closed this session.
+
+### Do these, in this order
+
+1. **Check the 5-hour window before anything else** (it resets 2026-10-10 19:40 UTC). A
+   wave of three implementers plus the integrator's own gate runs costs roughly 25–30
+   points of it. If the window is fresh, three is comfortable; if not, launch one.
+2. **Deal with #13 first — it was mid-merge when the session ended.** Its implementer was
+   alive in `.claude/worktrees/ticket-13-my-list` with a **merge of `6eb34a2` in progress,
+   all conflicts already resolved and staged but not committed**, on top of its own four
+   commits (tip `7691ed8`). So:
+   - If the merge commit exists and the branch looks finished, treat it as a finished
+     branch: re-run its gate **on fresh ports** and merge it.
+   - If it is still sitting mid-merge with nothing since, the implementer died there.
+     `git -C .claude/worktrees/ticket-13-my-list status` and either commit the resolved
+     merge or `git merge --abort` and redo it deliberately. **Do not assume the staged
+     resolution is right** — check its tests pass before building on it.
+   - **It merged `6eb34a2`, which is pre-#24.** So #13 has #10 and #36 but **not** #24,
+     and merging it into the current tip will conflict with #24 in `src/home/row.tsx`,
+     `src/jellyfin/gateway.ts`, `src/shell/sections.ts` and
+     `test/fake-jellyfin/routes/items.ts`. The resolutions are written down under "In
+     flight right now" below — read that before resolving anything by hand.
+3. **Then launch the next wave** from the six-wide frontier below. #8, #11, #12, #15 and
+   #16 are all safe to run concurrently; **hold #14 until #13 has landed**, because both
+   touch `cardForTitle` in `src/home/row.tsx`.
+4. **Read trap 4 before running a single gate.** It cost this session a full false alarm.
+
+### Still owed after the tickets
+
+`code-review` over the whole branch, the git history rewrite in `decisions.md` §10 (**not
+while any implementer is in flight**), marking PR #38 ready, and removing the merged
+worktrees. The full list is at the bottom of this file.
+
+Two things a human may want to look at, neither of which any ticket owns:
+**the app icon is a plain generated "J"** that an agent produced because no design asset
+existed (`node scripts/make-icons.mjs` regenerates it), and **"Signed in as Rafael." is
+still scaffolding on Home** — several specs now assert it, so whoever removes it (#16 is
+the natural place) must update them.
+
 ## Status at the last stop (2026-10-10, third session)
 
 **Merged into `feat/jellyflick-v1`** (tip `5b81023`, draft PR #38 open):
