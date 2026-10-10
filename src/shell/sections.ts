@@ -33,9 +33,15 @@ export const SECTIONS: readonly Section[] = [
 export const BOTTOM_BAR_SECTION_IDS: readonly SectionId[] = ['home', 'search', 'my-list'];
 
 export function sectionsFor(ids: readonly SectionId[]): readonly Section[] {
-  return ids.map((id) => {
-    const section = SECTIONS.find((candidate) => candidate.id === id);
-    if (section === undefined) throw new Error(`No section is called ${id}.`);
-    return section;
-  });
+  return ids.map(sectionFor);
+}
+
+/**
+ * One section by its id. A section whose screen is its own module names itself
+ * this way, so its address is still written only here.
+ */
+export function sectionFor(id: SectionId): Section {
+  const section = SECTIONS.find((candidate) => candidate.id === id);
+  if (section === undefined) throw new Error(`No section is called ${id}.`);
+  return section;
 }

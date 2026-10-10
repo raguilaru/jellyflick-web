@@ -51,6 +51,14 @@ export const es: Messages = {
   'home.newOnJellyflick.empty': 'Todavía no se ha añadido nada a tus bibliotecas.',
   'home.newOnJellyflick.unavailable': 'Jellyflick no pudo leer las novedades del servidor.',
 
+  'search.heading': 'Buscar',
+  'search.fieldLabel': 'Busca una película o una serie',
+  'search.prompt': 'Escribe para buscar, o explora por género.',
+  'search.searching': 'Buscando…',
+  'search.results': 'Resultados',
+  'search.nothingFound': (p) => `Nada en este servidor coincide con «${p.term}».`,
+  'search.unavailable': 'Jellyflick no pudo buscar en el servidor ahora mismo.',
+
   'nav.sections': 'Secciones',
   'nav.home': 'Inicio',
   'nav.movies': 'Películas',

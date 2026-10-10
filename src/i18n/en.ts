@@ -55,6 +55,15 @@ export const en = {
   'home.newOnJellyflick.empty': 'Nothing has been added to your libraries yet.',
   'home.newOnJellyflick.unavailable': 'Jellyflick could not read what is new from the Server.',
 
+  'search.heading': 'Search',
+  'search.fieldLabel': 'Search for a Movie or Series',
+  'search.prompt': 'Type to search, or browse by genre.',
+  'search.searching': 'Searching…',
+  'search.results': 'Results',
+  'search.nothingFound': (p: { term: string }) =>
+    `Nothing on this Server matches “${p.term}”.`,
+  'search.unavailable': 'Jellyflick could not search the Server just now.',
+
   'nav.sections': 'Sections',
   'nav.home': 'Home',
   'nav.movies': 'Movies',
