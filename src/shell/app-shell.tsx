@@ -28,8 +28,8 @@ export type AppShellProps = {
  * top bar on anything wider than a phone, the bottom bar on a phone.
  *
  * What each section *contains* belongs to its own ticket: Movies and Series are
- * #7, My List #8 and Search #9, and each only has to point its route at its own
- * folder. Home is already its own screen.
+ * #23, My List #13 and Search #24, and each only has to point its route at its
+ * own folder. Home is already its own screen.
  */
 export function AppShell({ user, session, device, pictureUrl }: AppShellProps) {
   return (

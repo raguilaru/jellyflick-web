@@ -154,7 +154,7 @@ lines by hand instead of adding a polyfill.
 - **A section's address** lives once, in `SECTIONS` in `src/shell/sections.ts`,
   with the key of its translated name. Both navigation bars and the router read
   that list, so adding a section is one entry plus one route.
-- **Taking a section over** (Movies and Series are #7, My List #8, Search #9)
+- **Taking a section over** (Movies and Series are #23, My List #13, Search #24)
   means pointing its `<Route>` in `src/shell/app-shell.tsx` at your own folder
   under `src/` instead of `SectionPlaceholder`, and nothing else.
 - **The router is `preact-iso`**, imported as `preact-iso/router`, never the

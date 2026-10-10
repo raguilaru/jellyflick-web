@@ -15,7 +15,7 @@ export type BottomBarProps = {
  * which is the shape phone Users already know (story 61).
  *
  * The picture is not a control yet. Switching User and the settings screen are
- * their own tickets (#14, #35); until one of them lands, the picture says who
+ * their own tickets (#8, #11); until one of them lands, the picture says who
  * is watching and nothing more, so it is not something to land focus on.
  */
 export function BottomBar({ currentPath, user, pictureUrl }: BottomBarProps) {
