@@ -118,10 +118,11 @@ test('every request identifies itself with the MediaBrowser header and nothing l
   await page.getByLabel('Password').press('Enter');
   await expect(page.getByText('Signed in as Rafael.')).toBeVisible();
 
-  // `/UserImage` is loaded by the browser as an `<img src>`, not by the
-  // gateway, and the Server serves it anonymously, so it carries no header.
+  // Pictures and artwork are loaded by the browser as an `<img src>`, not by
+  // the gateway, and the Server serves them anonymously, so they carry no
+  // header.
   const seen = (await recordedRequests(request)).filter(
-    (entry) => !entry.path.startsWith('/UserImage'),
+    (entry) => !entry.path.startsWith('/UserImage') && !/^\/Items\/[^/]+\/Images\//.test(entry.path),
   );
   expect(seen.length).toBeGreaterThan(0);
   for (const entry of seen) {
