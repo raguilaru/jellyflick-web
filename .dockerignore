@@ -1,0 +1,18 @@
+# Keep the build context small: the arm64 stage is built under emulation, so
+# every byte sent to the daemon is paid for twice.
+.git
+.github
+.claude
+.agents
+node_modules
+dist
+server-dist
+coverage
+test-results
+playwright-report
+.vite
+.env.local
+*.log
+.DS_Store
+docs
+*.md
