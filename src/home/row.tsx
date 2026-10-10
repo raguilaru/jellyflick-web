@@ -23,6 +23,7 @@
  * a card, which `reveal.ts` works out. Nothing here uses `scroll-snap-*`: ADR
  * 0002 puts it at Chrome 69, one above the floor, and it ships raw.
  */
+import type { ComponentChildren } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { FOCUS_GROUP_ATTRIBUTE } from '../navigation/focusable';
 import { scrollToReveal } from '../navigation/reveal';
@@ -41,6 +42,13 @@ export type RowProps = {
   cards: readonly RowCard[];
   /** What pressing a card does. A Row with no handler is browsable, not pressable. */
   onCardPress?: (card: RowCard) => void;
+  /**
+   * A control drawn over each card's artwork — the My List toggle (#13), and
+   * Play and More info once the enlarged hover card (#21) arrives. It is given
+   * per card rather than built here, because a Row knows nothing about what can
+   * be done to a Title.
+   */
+  cardControl?: (card: RowCard) => ComponentChildren;
 };
 
 /**
@@ -49,7 +57,7 @@ export type RowProps = {
  */
 const CARD_MARGIN = 24;
 
-export function Row({ heading, cards, onCardPress }: RowProps) {
+export function Row({ heading, cards, onCardPress, cardControl }: RowProps) {
   const headingId = `row-${slugOf(heading)}`;
   const strip = useRef<HTMLUListElement | null>(null);
   // Which card the Row remembers. Clamped rather than reset, so a Row that
@@ -82,8 +90,9 @@ export function Row({ heading, cards, onCardPress }: RowProps) {
             }}
             onClick={() => onCardPress?.(card)}
           >
-            <Artwork card={card} />
+            <CardArtwork card={card} />
             <span class="card__name">{card.name}</span>
+            {cardControl?.(card)}
           </li>
         ))}
       </ul>
@@ -166,8 +175,11 @@ function scrollSmoothly(element: Element, left: number): void {
 /**
  * The Title's artwork, or nothing at all when the Server has none: the card
  * already carries the name, so an empty box would say less than the name does.
+ *
+ * Exported because a card is not only a Row's: the My List page lays the same
+ * cards out as a grid.
  */
-function Artwork({ card }: { card: RowCard }) {
+export function CardArtwork({ card }: { card: RowCard }) {
   if (card.artworkUrl === undefined) {
     return <span class="card__artwork card__artwork--none" aria-hidden="true" />;
   }

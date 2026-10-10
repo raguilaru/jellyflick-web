@@ -55,6 +55,15 @@ export const en = {
   'home.newOnJellyflick.empty': 'Nothing has been added to your libraries yet.',
   'home.newOnJellyflick.unavailable': 'Jellyflick could not read what is new from the Server.',
 
+  // My List is Jellyfin's Favorites. The Row on Home and the page share the
+  // section's own name, `nav.myList`, so there is one string for one list.
+  'myList.loading': 'Looking for what you have saved…',
+  'myList.empty': 'Nothing is in My List yet. Add a Title from any Row to find it here.',
+  'myList.unavailable': 'Jellyflick could not read My List from the Server.',
+  'myList.unsaved': 'Jellyflick could not save that change on the Server.',
+  'myList.add': (p: { name: string }) => `Add ${p.name} to My List`,
+  'myList.remove': (p: { name: string }) => `Remove ${p.name} from My List`,
+
   'nav.sections': 'Sections',
   'nav.home': 'Home',
   'nav.movies': 'Movies',

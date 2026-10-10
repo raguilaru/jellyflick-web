@@ -32,6 +32,14 @@ export const SECTIONS: readonly Section[] = [
  */
 export const BOTTOM_BAR_SECTION_IDS: readonly SectionId[] = ['home', 'search', 'my-list'];
 
+/**
+ * One section's address. A screen's own route reads it from here rather than
+ * writing the path again, so a section's address stays written once.
+ */
+export function pathOf(id: SectionId): string {
+  return sectionsFor([id])[0]?.path ?? HOME_PATH;
+}
+
 export function sectionsFor(ids: readonly SectionId[]): readonly Section[] {
   return ids.map((id) => {
     const section = SECTIONS.find((candidate) => candidate.id === id);

@@ -255,6 +255,66 @@ body {
   display: grid;
   gap: var(--space-1);
   min-width: 0;
+  /* The card's own controls sit over its artwork. */
+  position: relative;
+}
+
+/*
+ * A grid of the same cards, for a page that shows a whole list rather than as
+ * much of one as fits on a line. `auto-fill` with a minimum column is how it
+ * reflows from a phone to a TV without a breakpoint; grid `gap` is Chrome 66,
+ * so no fallback is needed, and ADR 0002 bans container queries anyway.
+ */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--space-4) var(--space-3);
+  margin: 0;
+  padding: var(--space-2) 0;
+  list-style: none;
+  justify-items: start;
+}
+
+/*
+ * A control drawn over a card's artwork: the My List toggle.
+ *
+ * On a card in a Row it is there only while the pointer is over the card. That
+ * is not only a look: `src/navigation/spatial-navigation.ts` ignores anything
+ * with a zero-sized box, so a hidden control is not a stop the arrow keys have
+ * to step through, and Right still takes the next card along the Row. The
+ * keyboard and the remote reach My List from the title page (#17); the hover
+ * card (#21) is where this button finally belongs beside Play and More info.
+ *
+ * `.card--managed` is a card on a page for managing the list, where the control
+ * is always drawn and is a focus stop the arrow keys reach on purpose.
+ */
+.card__control {
+  display: none;
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--surface-line);
+  border-radius: 50%;
+  background: var(--surface-base);
+  color: var(--text-strong);
+  font: inherit;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.card:hover > .card__control,
+.card--managed > .card__control {
+  display: block;
+}
+
+.card__control[aria-pressed='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
 }
 
 /* A fixed 2:3 poster box rather than `aspect-ratio`, which ships raw at 88. */

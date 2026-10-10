@@ -1,11 +1,15 @@
 import { LocationProvider, Route, Router, useLocation } from 'preact-iso/router';
+import { useEffect, useMemo } from 'preact/hooks';
 import type { DeviceLayer } from '../device/types';
 import { HomeScreen } from '../home/home-screen';
+import { createMyList, type MyList } from '../my-list/my-list';
+import { MyListScreen } from '../my-list/my-list-screen';
+import { MyListProvider } from '../my-list/use-my-list';
 import type { Session, SignedInUser } from '../session/session';
 import { useBackHandler } from './back';
 import { useWideScreen } from './layout';
 import { BottomBar } from './bottom-bar';
-import { HOME_PATH, SECTIONS } from './sections';
+import { HOME_PATH, pathOf, SECTIONS } from './sections';
 import { SectionPlaceholder, UnknownSection } from './section-placeholder';
 import { TopBar } from './top-bar';
 
@@ -28,13 +32,20 @@ export type AppShellProps = {
  * top bar on anything wider than a phone, the bottom bar on a phone.
  *
  * What each section *contains* belongs to its own ticket: Movies and Series are
- * #23, My List #13 and Search #24, and each only has to point its route at its
- * own folder. Home is already its own screen.
+ * #23 and Search #24, and each only has to point its route at its own folder.
+ * Home and My List are already their own screens.
+ *
+ * My List is the one piece of state the shell holds rather than a screen: the
+ * Row on Home, the My List page and every card's toggle have to agree about it
+ * and change together, so the store is made here and reaches them all through
+ * `MyListProvider`.
  */
 export function AppShell({ user, session, device, pictureUrl }: AppShellProps) {
   return (
     <LocationProvider>
-      <ShellFrame user={user} session={session} device={device} pictureUrl={pictureUrl} />
+      <MyListProvider value={useLoadedMyList(session, user)}>
+        <ShellFrame user={user} session={session} device={device} pictureUrl={pictureUrl} />
+      </MyListProvider>
     </LocationProvider>
   );
 }
@@ -51,7 +62,10 @@ function ShellFrame({ user, session, device, pictureUrl }: AppShellProps) {
 
       <Router>
         <Route path={HOME_PATH} component={HomeScreen} user={user} session={session} />
-        {SECTIONS.filter((section) => section.path !== HOME_PATH).map((section) => (
+        <Route path={MY_LIST_PATH} component={MyListScreen} />
+        {SECTIONS.filter(
+          (section) => section.path !== HOME_PATH && section.path !== MY_LIST_PATH,
+        ).map((section) => (
           <Route
             key={section.id}
             path={section.path}
@@ -65,4 +79,25 @@ function ShellFrame({ user, session, device, pictureUrl }: AppShellProps) {
       {wide ? null : <BottomBar currentPath={path} user={user} pictureUrl={pictureUrl} />}
     </div>
   );
+}
+
+/** The section the My List page answers for, so the route and the bars agree. */
+const MY_LIST_PATH = pathOf('my-list');
+
+/**
+ * One My List store per (Server, User), read from the Server as soon as the
+ * shell is on the screen. A different User gets a different store, so one
+ * User's list can never be left behind in another's.
+ */
+function useLoadedMyList(session: Session, user: SignedInUser): MyList {
+  const serverAddress = session.gateway().serverAddress;
+  // The gateway is rebuilt on every render, so who it belongs to is the
+  // dependency rather than the object itself.
+  const myList = useMemo(() => createMyList(session.gateway()), [serverAddress, user.userId]);
+
+  useEffect(() => {
+    void myList.load();
+  }, [myList]);
+
+  return myList;
 }

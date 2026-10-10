@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'preact/hooks';
 import { useTranslate } from '../i18n/index';
+import { MyListToggle } from '../my-list/my-list-toggle';
+import { useMyList } from '../my-list/use-my-list';
+import type { RowCard } from './row';
 import type { Session, SignedInUser } from '../session/session';
 import { loadNewOnJellyflick, type NewOnJellyflickResult } from './new-on-jellyflick';
 import { Row } from './row';
@@ -10,14 +13,19 @@ export type HomeScreenProps = {
 };
 
 /**
- * Where a signed-in User lands: the New on Jellyflick Row, and for now nothing
- * above it. The Billboard, the other Rows and the Home Layout are each their
- * own ticket. The wordmark and the navigation around this screen are the
- * shell's.
+ * Where a signed-in User lands: the New on Jellyflick Row, the My List Row
+ * below it, and for now nothing above them. The Billboard is its own ticket,
+ * and so is the Home Layout (#10) that will let a User choose which Rows are
+ * here and in what order — until it lands, this is the default Layout, written
+ * out.
+ *
+ * Every card carries the My List toggle, which is how a Title gets into My List
+ * in the first place (stories 40 and 52).
  */
 export function HomeScreen({ user, session }: HomeScreenProps) {
   const t = useTranslate();
   const gateway = session.gateway();
+  const myList = useMyList();
   const [newOnJellyflick, setNewOnJellyflick] = useState<NewOnJellyflickResult | undefined>(
     undefined,
   );
@@ -37,6 +45,9 @@ export function HomeScreen({ user, session }: HomeScreenProps) {
     // address is the dependency rather than the gateway itself.
   }, [gateway.serverAddress, user.userId]);
 
+  const control = (card: RowCard) => <MyListToggle card={card} />;
+  const myListState = myList.state();
+
   return (
     <main class="screen">
       <p class="notice">{t('home.signedInAs', { name: user.name })}</p>
@@ -52,8 +63,23 @@ export function HomeScreen({ user, session }: HomeScreenProps) {
         // what is actually the case.
         <p class="notice">{t('home.newOnJellyflick.empty')}</p>
       ) : (
-        <Row heading={t('home.newOnJellyflick')} cards={newOnJellyflick.titles} />
+        <Row
+          heading={t('home.newOnJellyflick')}
+          cards={newOnJellyflick.titles}
+          cardControl={control}
+        />
       )}
+
+      {/*
+        An empty My List is where every User starts, and a Row saying so on
+        every visit to Home would be in the way — the My List page is where it
+        explains itself. A Server that will not say what is in the list is the
+        same: Home shows the rest of itself and the page carries the problem.
+        The heading is the section's own name, so there is one string for both.
+      */}
+      {myListState.outcome === 'list' && myListState.titles.length > 0 ? (
+        <Row heading={t('nav.myList')} cards={myListState.titles} cardControl={control} />
+      ) : null}
     </main>
   );
 }
