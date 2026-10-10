@@ -91,6 +91,18 @@ export type FakeJellyfinState = {
    * Server will not say what it holds. Null is the normal Server.
    */
   failLibraryQueriesWith: number | null;
+  /**
+   * Stored `DisplayPreferences.CustomPrefs`, keyed
+   * `<displayPreferencesId>|<client>|<userId>` — the three things the Server
+   * partitions them by. This is where the Client Settings store's writes land.
+   */
+  displayPreferences: Record<string, Record<string, string | null>>;
+  /**
+   * A status the `/DisplayPreferences` endpoints answer with whatever was
+   * asked, so a test can see a User whose settings the Server will not hand
+   * over or keep. Null is the normal Server.
+   */
+  failDisplayPreferencesWith: number | null;
 };
 
 const SERVER_ID = '0f1e2d3c4b5a69788796a5b4c3d2e1f0';
@@ -99,6 +111,8 @@ export function createSampleData(): FakeJellyfinState {
   return {
     failAuthenticationWith: null,
     failLibraryQueriesWith: null,
+    failDisplayPreferencesWith: null,
+    displayPreferences: {},
     libraries: SAMPLE_LIBRARIES.map((library) => ({ ...library })),
     items: SAMPLE_ITEMS.map((item) => ({ ...item })),
     users: [
