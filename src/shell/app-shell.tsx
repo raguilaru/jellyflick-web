@@ -9,6 +9,8 @@ import { SearchScreen } from '../search/search-screen';
 import type { Session, SignedInUser } from '../session/session';
 import { HOME_LAYOUT_PATH, HomeLayoutScreen } from '../settings/home-layout-screen';
 import { SettingsProvider } from '../settings/settings-provider';
+import { TITLE_PATH } from '../title/title-page';
+import { TitleScreen } from '../title/title-screen';
 import { useBackHandler } from './back';
 import { useWideScreen } from './layout';
 import { BottomBar } from './bottom-bar';
@@ -101,6 +103,10 @@ function ShellFrame({ user, session, device, pictureUrl }: AppShellProps) {
         {/* Not a section: it is reached from Home, and later from the settings
             screen (#11/#35), so it is in neither navigation bar. */}
         <Route path={HOME_LAYOUT_PATH} component={HomeLayoutScreen} />
+        {/* Nor is this one, for the same reason: a title page is reached from a
+            card, never from a bar, so it has an address of its own and no
+            place in `SECTIONS` (#17). */}
+        <Route path={TITLE_PATH} component={TitleScreen} session={session} />
         <Route default component={UnknownSection} />
       </Router>
 

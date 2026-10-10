@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { useOpenTitle } from '../home/home-rows';
 import { Row } from '../home/row';
 import { useTranslate } from '../i18n/index';
 import { FOCUSABLE_SELECTOR, groupOf, tabStopIn } from '../navigation/focusable';
@@ -112,6 +113,7 @@ function SearchResults({
   results: TitlesResult | undefined;
 }) {
   const t = useTranslate();
+  const openTitle = useOpenTitle();
 
   if (results === undefined) return <p class="notice">{t('search.searching')}</p>;
   if (results.outcome === 'unavailable') {
@@ -126,7 +128,11 @@ function SearchResults({
   if (results.titles.length === 0) {
     return <p class="notice">{t('search.nothingFound', { term })}</p>;
   }
-  return <Row heading={t('search.results')} cards={results.titles} />;
+  // Opening a result is the same thing as opening a card on Home: its title
+  // page (#17). #7 and #24 both left this handler waiting for one to exist.
+  return (
+    <Row heading={t('search.results')} cards={results.titles} onCardPress={openTitle} />
+  );
 }
 
 /**
