@@ -52,6 +52,21 @@ export type PlaybackTargets = {
   readonly pictureInPicture: boolean;
 };
 
+/**
+ * Durable key/value storage on this device, holding what must survive a reload:
+ * the Server address, and each signed-in User's token and DeviceId.
+ *
+ * It is part of the device layer because it is the device that provides it, and
+ * because a browser can refuse it outright — a private window, or site data
+ * blocked. An implementation that cannot store anything still answers every
+ * call, so a User who cannot be remembered simply signs in again.
+ */
+export type DeviceStorage = {
+  read(key: string): string | undefined;
+  write(key: string, value: string): void;
+  remove(key: string): void;
+};
+
 export type DeviceLayer = {
   /** Identifies the implementation in logs and tests, e.g. `browser`. */
   readonly name: string;
@@ -67,6 +82,9 @@ export type DeviceLayer = {
 
   /** Maps a keyboard or remote-control event onto a logical key. */
   keyFor(event: Pick<KeyboardEvent, 'key' | 'keyCode'>): DeviceKey;
+
+  /** Device storage. The same instance every call. */
+  storage(): DeviceStorage;
 
   videoCapabilities(): VideoCapabilities;
   subtitleCapabilities(): SubtitleCapabilities;
