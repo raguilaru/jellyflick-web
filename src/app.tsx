@@ -199,10 +199,17 @@ export function App({ config, device, messages }: AppProps) {
         /*
          * Keyed by the User, so switching User builds the shell again from
          * nothing rather than handing the next User the screens the last one
-         * was looking at. Everything per-User hangs below here — the Client
-         * Settings and so the Home Layout (#10), My List (#13), and whatever a
-         * later ticket adds — and one `key` is the whole guarantee, instead of
-         * every one of them having to remember to reset itself.
+         * was looking at.
+         *
+         * Two things already happen to be true: #10's settings provider and
+         * #13's My List store are both made per (Server, User) and so reset
+         * themselves, and switching passes through `resuming`, which unmounts
+         * the shell for the length of a round trip anyway. The key is here so
+         * that neither has to stay true — a later ticket that switches User
+         * without a round trip, or hangs per-User state below the shell
+         * without keying it, gets the guarantee for free rather than finding
+         * out the hard way. `switching-user-leaves-nothing-behind.test.tsx` is
+         * what holds it.
          */
         <AppShell
           key={who.user.userId}
