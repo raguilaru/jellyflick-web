@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'preact/hooks';
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'preact/hooks';
 import { useLocation } from 'preact-iso/router';
 import type { DeviceLayer } from '../device/types';
 import { HOME_PATH } from './sections';
@@ -9,16 +9,6 @@ import { HOME_PATH } from './sections';
  */
 const ROOT_ENTRY = 'jellyflickRoot';
 
-/**
- * The one Back handler. The browser's back button and the Back key on a remote
- * end in the same place, because the key does nothing of its own: it calls
- * `history.back()`, which is the back button.
- *
- * Only one step is ever its own: Back on the entry the app was opened on has
- * nowhere of ours to go, so it does not leave Jellyflick. From a section that
- * was opened directly — a bookmark, a shared address, a reload — it goes to
- * Home, replacing that entry rather than stacking another one on top of it.
- */
 /**
  * What Back has to do before it is allowed to be a navigation at all: the
  * overlays over the screen, innermost last.
@@ -36,13 +26,18 @@ const overlays: (() => void)[] = [];
 /**
  * Claims Back while an overlay is open. The claim is given up when the overlay
  * closes or goes away, so nothing has to remember to release it.
+ *
+ * A **layout** effect, deliberately: a plain one is deferred, and an overlay
+ * that is on the screen without having claimed Back yet is an overlay the
+ * first Back press walks straight past, navigating the screen behind it and
+ * leaving it stranded. The claim has to land with the DOM, not after it.
  */
 export function useBackClaim(open: boolean, close: () => void): void {
   // The newest value of the callback, so a claim never calls a stale one.
   const current = useRef(close);
   current.current = close;
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open) return;
     const claim = (): void => {
       current.current();
@@ -55,6 +50,16 @@ export function useBackClaim(open: boolean, close: () => void): void {
   }, [open]);
 }
 
+/**
+ * The one Back handler. The browser's back button and the Back key on a remote
+ * end in the same place, because the key does nothing of its own: it calls
+ * `history.back()`, which is the back button.
+ *
+ * Only one step is ever its own: Back on the entry the app was opened on has
+ * nowhere of ours to go, so it does not leave Jellyflick. From a section that
+ * was opened directly — a bookmark, a shared address, a reload — it goes to
+ * Home, replacing that entry rather than stacking another one on top of it.
+ */
 export function useBackHandler(device: DeviceLayer): void {
   const { path, route } = useLocation();
 
