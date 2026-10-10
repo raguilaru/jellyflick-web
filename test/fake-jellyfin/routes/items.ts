@@ -3,13 +3,77 @@ import type { FakeRoute } from '../routing.ts';
 import { userForToken } from './users.ts';
 
 /**
- * `LibraryController` and `ImageController`.
+ * `ItemsController` and `ImageController`.
  *
  * `/Items/Latest` is the one that shapes the New on Jellyflick Row, and two of
  * its habits matter: it answers for **one** library at a time through
  * `parentId`, and it returns a **bare array**, not a `BaseItemDtoQueryResult`.
+ *
+ * `/Items` is the general query, and the real one takes thirty-odd parameters.
+ * This fake implements the ones a feature actually sends and refuses the rest
+ * with a 400 that says so, so an unimplemented parameter can never look like it
+ * was honoured.
  */
 export const itemRoutes: readonly FakeRoute[] = [
+  {
+    method: 'GET',
+    path: '/Items',
+    handle: (request, state) => {
+      // Whose favourites, whose parental controls: the Server wants a token.
+      const user = userForToken(request.headers.authorization ?? '', state.users);
+      if (user === undefined) {
+        return { status: 401, body: { error: 'No valid token.' } };
+      }
+
+      // My List is the only `/Items` query any feature makes so far. Anything
+      // else is refused rather than answered with the whole library.
+      if (request.query.get('isFavorite') !== 'true') {
+        return {
+          status: 400,
+          body: {
+            error:
+              'The fake Jellyfin only implements /Items?isFavorite=true. Implement the query your ticket needs in test/fake-jellyfin/routes/items.ts.',
+          },
+        };
+      }
+
+      if (state.failFavouriteQueriesWith !== null) {
+        return {
+          status: state.failFavouriteQueriesWith,
+          body: { error: 'The fake Jellyfin was told to fail favourite queries.' },
+        };
+      }
+
+      const sortBy = request.query.get('sortBy');
+      if (sortBy !== null && sortBy !== 'Name') {
+        return {
+          status: 400,
+          body: {
+            error: `The fake Jellyfin only implements sortBy=Name, not ${sortBy}. Implement it in test/fake-jellyfin/routes/items.ts.`,
+          },
+        };
+      }
+
+      const favourites = state.favourites[user.Id] ?? [];
+      const kinds = csvOf(request.query.get('includeItemTypes'));
+      const descending = request.query.get('sortOrder') === 'Descending';
+
+      const items = state.items
+        .filter((item) => favourites.indexOf(item.Id) !== -1)
+        .filter((item) => kinds.length === 0 || kinds.indexOf(item.Type) !== -1)
+        .sort((left, right) =>
+          descending ? right.Name.localeCompare(left.Name) : left.Name.localeCompare(right.Name),
+        )
+        .slice(0, limitOf(request.query.get('limit')))
+        .map(servedViewOf);
+
+      return {
+        status: 200,
+        body: { Items: items, TotalRecordCount: items.length, StartIndex: 0 },
+      };
+    },
+  },
+
   {
     method: 'GET',
     path: '/Items/Latest',
@@ -81,6 +145,12 @@ export const itemRoutes: readonly FakeRoute[] = [
 function imageTagOf(item: FakeItem | undefined, imageType: string): string | undefined {
   if (item === undefined) return undefined;
   return item.ImageTags?.[imageType];
+}
+
+/** One of Jellyfin's CSV parameters, as the list it stands for. */
+function csvOf(raw: string | null): string[] {
+  if (raw === null) return [];
+  return raw.split(',').filter((value) => value.length > 0);
 }
 
 /** Jellyfin's `limit`, which is optional and means "everything" when absent. */

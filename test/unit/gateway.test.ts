@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { createJellyfinGateway } from '../../src/jellyfin/gateway';
-import { fakeRequests } from '../fake-jellyfin/control';
+import { fakeRequests, resetFakeState, setFakeState } from '../fake-jellyfin/control';
 import { SAMPLE_PASSWORD } from '../fake-jellyfin/data';
 import { fakeJellyfinUrl } from '../fake-jellyfin/url';
 
@@ -12,6 +12,9 @@ const identity = {
 
 /** A token the fake accepts for Rafael: the Server issues one per DeviceId. */
 const tokenFor = (deviceId: string) => `token-user-rafael-${deviceId}`;
+
+// The favourite tests write to the Server, so the sample data goes back.
+afterEach(resetFakeState);
 
 describe('the Jellyfin gateway', () => {
   it('reads the Server name and version from system info', async () => {
@@ -187,6 +190,52 @@ describe('the Jellyfin gateway', () => {
     expect(
       gateway.itemImageUrl('series-bluey', 'Primary', { tag: 'tag-bluey', maxWidth: 400 }),
     ).toBe('http://server.test/Items/series-bluey/Images/Primary?tag=tag-bluey&maxWidth=400');
+  });
+
+  it('reads the Titles in a User’s My List, by name', async () => {
+    await setFakeState({
+      favourites: { 'user-rafael': ['movie-heat', 'movie-arrival', 'album-nocturnes'] },
+    });
+    const gateway = createJellyfinGateway({
+      serverAddress: fakeJellyfinUrl(),
+      deviceId: 'reads-my-list',
+      ...identity,
+      token: tokenFor('reads-my-list'),
+    });
+
+    const favourites = await gateway.getFavouriteItems();
+
+    // By name, and Movies and Series only: a favourited album is not a Title.
+    expect(favourites.map((item) => item.Id)).toEqual(['movie-arrival', 'movie-heat']);
+  });
+
+  it('adds an item to the User’s favourites on the Server', async () => {
+    const gateway = createJellyfinGateway({
+      serverAddress: fakeJellyfinUrl(),
+      deviceId: 'adds-a-favourite',
+      ...identity,
+      token: tokenFor('adds-a-favourite'),
+    });
+
+    await gateway.addToFavourites('movie-paddington');
+
+    expect((await gateway.getFavouriteItems()).map((item) => item.Id)).toEqual([
+      'movie-paddington',
+    ]);
+  });
+
+  it('removes an item from the User’s favourites on the Server', async () => {
+    await setFakeState({ favourites: { 'user-rafael': ['movie-heat', 'movie-arrival'] } });
+    const gateway = createJellyfinGateway({
+      serverAddress: fakeJellyfinUrl(),
+      deviceId: 'removes-a-favourite',
+      ...identity,
+      token: tokenFor('removes-a-favourite'),
+    });
+
+    await gateway.removeFromFavourites('movie-heat');
+
+    expect((await gateway.getFavouriteItems()).map((item) => item.Id)).toEqual(['movie-arrival']);
   });
 
   it('reports an unreachable Server as a transport failure', async () => {
