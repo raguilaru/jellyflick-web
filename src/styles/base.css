@@ -93,15 +93,6 @@ body {
   padding: var(--space-4);
 }
 
-/*
- * Content from the top rather than stretched down the screen: what a screen
- * inside the app shell wants, Home and every section placeholder included.
- */
-.screen--top {
-  align-content: start;
-  gap: var(--space-4);
-}
-
 .screen--centred {
   align-content: center;
   justify-items: center;
@@ -229,6 +220,10 @@ body {
  * one. `grid-auto-flow: column` with a fixed column width gives the horizontal
  * strip; `overflow-x` scrolls it. No `scroll-snap-*`, which is Chrome 69, and
  * no `aspect-ratio`, which is Chrome 88 — the poster is a fixed 2:3 box.
+ *
+ * A card is a focus stop, so the strip has to have room for the focus ring:
+ * `padding` makes it, and the matching negative `margin` keeps the first card
+ * lined up with the Row's heading all the same.
  */
 .row {
   display: grid;
@@ -248,8 +243,8 @@ body {
   grid-auto-flow: column;
   grid-auto-columns: 150px;
   gap: var(--space-3);
-  margin: 0;
-  padding: 0 0 var(--space-2);
+  margin: 0 calc(var(--space-2) * -1);
+  padding: var(--space-2);
   list-style: none;
   overflow-x: auto;
   /* A Row at its end does not drag the page with it. */
@@ -339,10 +334,16 @@ body {
 }
 
 /*
- * Every focus on a TV is keyboard focus, so `:focus` carries the ring and
- * `:focus-visible` only takes it away again for pointer users where the browser
- * understands it. `@supports selector()` is Chrome 83, so on Chromium 68 the
- * block is skipped and the plain ring stays — which is the wanted behaviour.
+ * The focus highlight. Every focus on a TV is keyboard focus, so `:focus`
+ * carries the ring, and it is taken away again only while the User is driving
+ * with a pointer (stories 54 and 65).
+ *
+ * `:focus-visible` would be the browser's own answer and is Chrome 86, well
+ * above the floor, so `src/navigation/input-modality.ts` writes the latest kind
+ * of input on the root element instead and these rules read it. Nothing written
+ * means a keyboard, so the ring is there from the first keypress rather than
+ * after it. Selector lists are written out: `:is()` and `:where()` are Chrome
+ * 88 and ship raw, which would drop the whole rule on the target.
  */
 a:focus,
 button:focus,
@@ -354,25 +355,16 @@ textarea:focus,
   outline-offset: 2px;
 }
 
-@supports selector(:focus-visible) {
-  a:focus,
-  button:focus,
-  input:focus,
-  select:focus,
-  textarea:focus,
-  [tabindex]:focus {
-    outline: none;
-  }
-
-  a:focus-visible,
-  button:focus-visible,
-  input:focus-visible,
-  select:focus-visible,
-  textarea:focus-visible,
-  [tabindex]:focus-visible {
-    outline: 3px solid var(--accent);
-    outline-offset: 2px;
-  }
+/*
+ * A field keeps its ring whatever the User is driving with, because something
+ * has to say where the typing is going. This is what `:focus-visible` itself
+ * does, and it is the one place a pointer still gets a highlight.
+ */
+html[data-input='pointer'] a:focus,
+html[data-input='pointer'] button:focus,
+html[data-input='pointer'] select:focus,
+html[data-input='pointer'] [tabindex]:focus {
+  outline: none;
 }
 
 /*
@@ -383,6 +375,16 @@ textarea:focus,
  */
 .shell {
   min-height: 100vh;
+}
+
+/*
+ * A screen inside the shell runs from the top rather than being stretched down
+ * the viewport, which is what Home and every section wants. It is the shell's
+ * doing rather than each screen's, so no screen has to remember to ask.
+ */
+.shell .screen {
+  align-content: start;
+  gap: var(--space-4);
 }
 
 /* Room for the phone's bottom bar, which is fixed and would cover content. */

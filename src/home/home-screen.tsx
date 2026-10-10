@@ -38,7 +38,7 @@ export function HomeScreen({ user, session }: HomeScreenProps) {
   }, [gateway.serverAddress, user.userId]);
 
   return (
-    <main class="screen screen--top">
+    <main class="screen">
       <p class="notice">{t('home.signedInAs', { name: user.name })}</p>
 
       {newOnJellyflick === undefined ? (

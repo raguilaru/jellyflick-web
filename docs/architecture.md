@@ -30,10 +30,14 @@ src/
   device/               The device layer: `types.ts` is the interface,
                         `browser.ts` the implementation that ships now.
   home/                 Where a signed-in User lands: `row.tsx` is the Row and
-                        its card, one module per Row beside it. The Billboard,
-                        the shell and the navigation are still to come.
+                        its card, one module per Row beside it. The Billboard
+                        is still to come.
   i18n/                 `en.ts` is the key set, `es.ts` is typed against it.
   jellyfin/             The gateway: the only module that talks HTTP to the Server.
+  navigation/           Arrow keys and focus: `nearest.ts` the geometry,
+                        `reveal.ts` how far a scroller must move, `focusable.ts`
+                        what the arrows reach, `spatial-navigation.ts` the
+                        wiring, `input-modality.ts` the focus highlight.
   session/              Session & Users: the Server address and the signed-in
                         Users in device storage, plus the sign-in screen.
   shell/                The app once a User is signed in: `sections.ts` is the
@@ -62,6 +66,9 @@ Where new code belongs:
   Server, in the Client Settings store (#10).
 - **A screen or a feature** → its own folder under `src/`, holding its logic and
   its components together (`connect/` is the pattern).
+- **A new focusable thing** → nothing. The arrow keys find anything focusable by
+  themselves. A new *strip* that should be entered where focus left it marks
+  itself with `FOCUS_GROUP_ATTRIBUTE` and keeps one tab stop, as `Row` does.
 
 ## Running the tests
 
@@ -154,7 +161,7 @@ lines by hand instead of adding a polyfill.
 - **A section's address** lives once, in `SECTIONS` in `src/shell/sections.ts`,
   with the key of its translated name. Both navigation bars and the router read
   that list, so adding a section is one entry plus one route.
-- **Taking a section over** (Movies and Series are #7, My List #8, Search #9)
+- **Taking a section over** (Movies and Series are #23, My List #13, Search #24)
   means pointing its `<Route>` in `src/shell/app-shell.tsx` at your own folder
   under `src/` instead of `SectionPlaceholder`, and nothing else.
 - **The router is `preact-iso`**, imported as `preact-iso/router`, never the
@@ -162,7 +169,10 @@ lines by hand instead of adding a polyfill.
   entries, so a section can be bookmarked, shared and reloaded — which is why
   the container answers an unknown path with `index.html` and a 200. Note that
   it calls `scrollTo(0, 0)` on a push: a Row that restores its scroll position
-  will have to work around that.
+  will have to work around that. Nothing does yet — a Row remembers where focus
+  was for as long as it is on the screen, and leaving a section unmounts it, so
+  Home comes back from the Server rather than from memory. Whoever makes a
+  section's state outlive a navigation inherits this.
 - **One navigation bar is in the document at a time** — the top bar above 768px,
   the bottom bar below it — chosen in JavaScript in `src/shell/layout.ts`, so
   there is never a second copy of every link for a screen reader or a test to
@@ -180,6 +190,66 @@ lines by hand instead of adding a polyfill.
   The licence has to travel with the file, so `public/fonts/bebas-neue-OFL.txt`
   ships with the app and the family still wants crediting on an about screen.
 
+## Arrow keys, focus and Rows
+
+`src/navigation/` is spatial navigation: every screen driveable with the arrow
+keys, Enter and Back (stories 64 and 65). It is installed once, in `src/app.tsx`,
+so signing in works on a remote as well as Home does. Back is *not* part of it —
+that is `src/shell/back.ts`, because it is the browser's back button as much as
+it is a key.
+
+- **Keys arrive as the device layer's logical keys**, through `device.keyFor`, so
+  the webOS port maps a remote once in `src/device/` and nothing here changes.
+- **The geometry is `nearest.ts`**, one pure function of boxes: the candidate
+  furthest in the pressed direction loses to the nearest one, and a step across
+  that direction's axis costs eight pixels for every one along it. That weighting
+  is what makes a Row read as a line — Right takes the next card along however
+  close the Row underneath sits, and Down takes the card lined up below rather
+  than the one nearest as the crow flies.
+- **A Row's memory is its tab stop.** The card focus was last on holds
+  `tabindex="0"` and the rest hold `-1`, so Tab steps from Row to Row instead of
+  through twenty cards, and the arrows arriving from another Row land where they
+  left off. One fact read two ways, and no store to keep in sync. A strip opts in
+  by marking itself `data-focus-group` (`FOCUS_GROUP_ATTRIBUTE`).
+- **Moving *inside* a group is plain geometry**, or Left and Right could never
+  leave the card the Row remembers.
+- **The page's own flow is tried before anything fixed.** The phone's bottom bar
+  is fixed to the bottom of the screen, which makes it the nearest thing
+  downwards from anywhere on the page; without this rule Down would never reach
+  the next Row. From inside a fixed overlay — the player, a title-page pop-up —
+  the overlay is the flow, so the rule keeps working as the app grows.
+- **A Row scrolls because focus moves**, not because it snaps: ADR 0002 puts
+  `scroll-snap-*` at Chrome 69, one above the floor. `reveal.ts` is the
+  arithmetic, on one axis, and it serves both — the Row scrolls itself sideways
+  to its focused card, and `spatial-navigation.ts` scrolls the page to the
+  focused Row with a margin that clears both bars. `scrollTo({ behavior })` is
+  Chrome 61, and a device without it falls back to a jump.
+- **A Row also scrolls by touch and by wheel.** Touch and a sideways wheel are
+  `overflow-x: auto` doing its job. A plain downward wheel is turned sideways in
+  `row.tsx`, because a mouse has no sideways wheel — but only while the Row has
+  somewhere to go, so a Row at either end hands the page back its scroll and can
+  never trap it. That listener cannot be passive.
+- **A card is a focus stop, not a button.** What pressing one opens is #17's, so
+  `Row` takes an `onCardPress` and Enter clicks the focused card; a Row given no
+  handler is browsable and not pressable. Enter deliberately leaves a real link,
+  button or field alone — the browser presses those itself, and a second click
+  here would press them twice.
+- **The focus highlight is hand-rolled `:focus-visible`.** That selector is
+  Chrome 86, so `input-modality.ts` writes the latest kind of input on the root
+  element as `data-input` and `base.css` takes the ring away under
+  `html[data-input='pointer']`. Nothing written means a keyboard, which is what a
+  TV always is, so the ring is there from the first press rather than after it. A
+  field keeps its ring whatever the User is driving with, because something has
+  to say where the typing goes.
+- **What a test can see.** happy-dom gives every element a zero-sized rectangle,
+  so no unit test can check where focus goes: the arithmetic is pinned down in
+  `test/unit/nearest-in-direction.test.ts` and
+  `test/unit/revealing-the-focused-item.test.ts`, the Row's memory in
+  `test/unit/rows-remember-where-focus-was.test.tsx`, and everything about a laid
+  out screen in `test/e2e/arrow-key-navigation.spec.ts`, which runs in the
+  keyboard-only project too.
+
+
 ## Chromium 68 constraints that will bite
 
 ADR 0002 sets the floor. These are the traps inside it.
@@ -193,8 +263,10 @@ ADR 0002 sets the floor. These are the traps inside it.
 - **CSS needing hand-written fallbacks**, because the minifier leaves them raw:
   flex `gap` (84 — silently does nothing; use grid, where `gap` is 66, or
   `* + *` margins), `aspect-ratio` (88 — padding-ratio box), `:focus-visible`
-  (86 — style `:focus` and remove it inside `@supports selector(:focus-visible)`,
-  as `base.css` does), `scroll-snap-*` (69 — scroll rows from JS instead),
+  (86 — style `:focus` and take the ring away again under
+  `html[data-input='pointer']`, which `src/navigation/input-modality.ts` writes),
+  `scroll-snap-*` (69 — rows are scrolled from JS instead, by
+  `src/navigation/reveal.ts`),
   `:has()` (105), the `inset` shorthand (87), `backdrop-filter` (76).
   **`:where()` and `:is()` ship raw too** (88 and 88), and a rule using one is
   dropped whole on the target — write selector lists out.
