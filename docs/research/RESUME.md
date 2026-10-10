@@ -4,6 +4,40 @@ State of the `/implement-spec` run on the integration branch `feat/jellyflick-v1
 (draft PR #38). Update this whenever a wave lands, so a fresh session can pick the work
 up without re-deriving anything.
 
+## Status at the last stop (2026-10-10)
+
+**Merged into `feat/jellyflick-v1`** (tip pushed, draft PR #38 open):
+
+| Ticket | State |
+|---|---|
+| #2 Connect to a Server | merged |
+| #3 Sign in with a password | merged |
+| #5 Deployable container | merged |
+
+Gate on the integration branch at that point: `lint` and `typecheck` clean,
+**115 unit tests**, **33 Playwright tests** across desktop/phone/keyboard-only, and a
+`chrome68` build.
+
+**The frontier is #4 and #6** — both unblocked by #3, neither started. #6 was launched
+and stopped before it committed anything; its branch holds no work. #7 needs both.
+
+**Not yet done, and owed:** every ticket from #4 onward, the `code-review` pass over the
+integration branch, the history rewrite in `decisions.md` §10, marking PR #38 ready, and
+removing the agent worktrees.
+
+### If you resume #4 and #6 together
+
+They collide on the Home screen. Split ownership explicitly: **#6 owns** the theme,
+wordmark, routing, the two navigation bars and the Back handler, keeping Home a thin
+placeholder; **#4 owns** Home's contents and adds the first real Row. Tell each that the
+other is in flight.
+
+### Tickets whose acceptance boxes cannot be ticked as written
+
+- **#5, second box** — it says the entrypoint writes the MDBList key into the runtime
+  config. ADR 0004 forbids the key reaching the browser, so the box is superseded. Say so
+  when closing the ticket rather than ticking it.
+
 ## Where the work lives
 
 - **Integration branch**: `feat/jellyflick-v1`, pushed, draft PR #38 open against `main`.
