@@ -24,6 +24,8 @@
  * 0002 puts it at Chrome 69, one above the floor, and it ships raw.
  */
 import { useEffect, useRef, useState } from 'preact/hooks';
+import type { Title } from '../catalogue/catalogue';
+import type { JellyfinGateway } from '../jellyfin/gateway';
 import { FOCUS_GROUP_ATTRIBUTE } from '../navigation/focusable';
 import { scrollToReveal } from '../navigation/reveal';
 
@@ -48,6 +50,32 @@ export type RowProps = {
  * card at the edge of the screen shows that there is more Row beyond it.
  */
 const CARD_MARGIN = 24;
+
+/**
+ * How wide a card's artwork is asked for. Wide enough for a card on a 1080p TV
+ * at twice the pixel density, and far narrower than the poster the Server holds.
+ */
+const ARTWORK_WIDTH = 400;
+
+/**
+ * One Title as a card. Every Row shows the same card, so turning a Title into
+ * one is the card's own business rather than each Row's: the artwork URL is
+ * built the same way, at the same width, wherever a card appears.
+ */
+export function cardForTitle(gateway: JellyfinGateway, title: Title): RowCard {
+  return {
+    titleId: title.itemId,
+    name: title.name,
+    ...(title.artwork === undefined
+      ? {}
+      : {
+          artworkUrl: gateway.itemImageUrl(title.artwork.itemId, 'Primary', {
+            tag: title.artwork.imageTag,
+            maxWidth: ARTWORK_WIDTH,
+          }),
+        }),
+  };
+}
 
 export function Row({ heading, cards, onCardPress }: RowProps) {
   const headingId = `row-${slugOf(heading)}`;

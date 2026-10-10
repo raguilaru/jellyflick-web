@@ -80,6 +80,22 @@ export const en = {
   'homeLayout.nothingToAdd': 'Every Row is already on Home.',
   'homeLayout.notSaved': 'Jellyflick could not save that change to the Server.',
 
+  'search.heading': 'Search',
+  'search.fieldLabel': 'Search for a Movie or Series',
+  'search.searching': 'Searching…',
+  'search.results': 'Results',
+  'search.nothingFound': (p: { term: string }) =>
+    `Nothing on this Server matches “${p.term}”.`,
+  'search.unavailable': 'Jellyflick could not search the Server just now.',
+  'search.genresHeading': 'Browse by genre',
+  'search.genresLoading': 'Looking for genres…',
+  'search.genresEmpty': 'Nothing in your libraries is in a genre yet.',
+  'search.genresUnavailable': 'Jellyflick could not read the genres from the Server.',
+  'search.allGenres': 'All genres',
+  'search.genreEmpty': (p: { genre: string }) => `There is nothing in ${p.genre} yet.`,
+  'search.genreUnavailable': (p: { genre: string }) =>
+    `Jellyflick could not read what is in ${p.genre}.`,
+
   'nav.sections': 'Sections',
   'nav.home': 'Home',
   'nav.movies': 'Movies',

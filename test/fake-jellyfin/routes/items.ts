@@ -62,6 +62,62 @@ export const itemRoutes: readonly FakeRoute[] = [
 
   {
     method: 'GET',
+    path: '/Items',
+    handle: (request, state) => {
+      // A query across the libraries is a query about what one User can see.
+      if (userForToken(request.headers.authorization ?? '', state.users) === undefined) {
+        return { status: 401, body: { error: 'No valid token.' } };
+      }
+
+      if (state.failLibraryQueriesWith !== null) {
+        return {
+          status: state.failLibraryQueriesWith,
+          body: { error: 'The fake Jellyfin was told to fail library queries.' },
+        };
+      }
+
+      // The real Server answers with the library folders themselves without
+      // it, which is never what a client asking for Titles meant.
+      if (request.query.get('recursive') !== 'true') {
+        return {
+          status: 400,
+          body: {
+            error:
+              'The fake Jellyfin only implements recursive=true. Implement the non-recursive form in test/fake-jellyfin/routes/items.ts if a ticket needs it.',
+          },
+        };
+      }
+
+      const includeItemTypes = csvOf(request.query.get('includeItemTypes'));
+      const searchTerm = request.query.get('searchTerm');
+      const genres = csvOf(request.query.get('genres'));
+
+      const matching = state.items
+        .filter((item) => includeItemTypes.length === 0 || includeItemTypes.includes(item.Type))
+        // The real Server's matching is cleverer than this; a substring of the
+        // name is as much as a fake owes a client.
+        .filter(
+          (item) =>
+            searchTerm === null ||
+            item.Name.toLowerCase().includes(searchTerm.toLowerCase()),
+        )
+        .filter(
+          (item) => genres.length === 0 || genres.some((genre) => hasGenre(item, genre)),
+        )
+        .sort((left, right) => left.Name.localeCompare(right.Name))
+        .slice(0, limitOf(request.query.get('limit')))
+        .map(servedViewOf);
+
+      // A query result, not a bare array: `/Items/Latest` is the odd one out.
+      return {
+        status: 200,
+        body: { Items: matching, TotalRecordCount: matching.length, StartIndex: 0 },
+      };
+    },
+  },
+
+  {
+    method: 'GET',
     path: '/Items/:itemId/Images/:imageType',
     handle: (_request, state, params) => {
       const itemId = params.itemId ?? '';
@@ -81,6 +137,19 @@ export const itemRoutes: readonly FakeRoute[] = [
 function imageTagOf(item: FakeItem | undefined, imageType: string): string | undefined {
   if (item === undefined) return undefined;
   return item.ImageTags?.[imageType];
+}
+
+/** A comma-delimited query parameter, which is how Jellyfin takes every list. */
+function csvOf(raw: string | null): string[] {
+  if (raw === null) return [];
+  return raw
+    .split(',')
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+}
+
+function hasGenre(item: FakeItem, genre: string): boolean {
+  return (item.Genres ?? []).some((candidate) => candidate.toLowerCase() === genre.toLowerCase());
 }
 
 /** Jellyfin's `limit`, which is optional and means "everything" when absent. */

@@ -177,6 +177,71 @@ describe('the Jellyfin gateway', () => {
     expect(latest.map((item) => item.Id)).toEqual(['episode-bluey-s2e3']);
   });
 
+  it('searches the whole Server for Titles matching a term', async () => {
+    const gateway = createJellyfinGateway({
+      serverAddress: fakeJellyfinUrl(),
+      deviceId: 'searches',
+      ...identity,
+      token: tokenFor('searches'),
+    });
+
+    const found = await gateway.getTitles({ searchTerm: 'he' });
+
+    expect(found.map((item) => item.Name)).toEqual(['Heat', 'The Unfinished']);
+  });
+
+  it('leaves everything that is not a Movie or a Series out of a search', async () => {
+    const gateway = createJellyfinGateway({
+      serverAddress: fakeJellyfinUrl(),
+      deviceId: 'searches-titles-only',
+      ...identity,
+      token: tokenFor('searches-titles-only'),
+    });
+
+    // A stray video file and a music album, both of which the Server would
+    // match on the name if it were asked for every kind of item.
+    expect(await gateway.getTitles({ searchTerm: 'Holiday' })).toEqual([]);
+    expect(await gateway.getTitles({ searchTerm: 'Nocturnes' })).toEqual([]);
+  });
+
+  it('lists the genres the Server’s Movies and Series are in, in name order', async () => {
+    const gateway = createJellyfinGateway({
+      serverAddress: fakeJellyfinUrl(),
+      deviceId: 'lists-genres',
+      ...identity,
+      token: tokenFor('lists-genres'),
+    });
+
+    const genres = await gateway.getTitleGenres();
+
+    // Classical belongs to the music album alone, so it is not a genre of
+    // anything this app shows.
+    expect(genres.map((genre) => genre.Name)).toEqual([
+      'Comedy',
+      'Crime',
+      'Drama',
+      'Family',
+      'Science Fiction',
+      'Thriller',
+    ]);
+  });
+
+  it('reads the Titles in one genre, whether they are Movies or Series', async () => {
+    const gateway = createJellyfinGateway({
+      serverAddress: fakeJellyfinUrl(),
+      deviceId: 'reads-a-genre',
+      ...identity,
+      token: tokenFor('reads-a-genre'),
+    });
+
+    const inFamily = await gateway.getTitles({ genre: 'Family' });
+
+    expect(inFamily.map((item) => [item.Name, item.Type])).toEqual([
+      ['Bluey', 'Series'],
+      ['Paddington', 'Movie'],
+    ]);
+  });
+
   it('builds an item image URL from the id, the image type and the tag', () => {
     const gateway = createJellyfinGateway({
       serverAddress: 'http://server.test',

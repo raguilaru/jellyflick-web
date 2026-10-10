@@ -63,6 +63,24 @@ export type JellyfinGateway = {
    */
   getLatestItems(options: LatestItemsOptions): Promise<BaseItemDto[]>;
   /**
+   * `GET /Items` — Titles across the whole Server, in name order.
+   *
+   * It is "Titles" rather than "items" because the query always asks for
+   * `Movie,Series` and nothing else: Episodes, Seasons, music and stray video
+   * files are the Server's to leave out, not a screen's to filter. `recursive`
+   * is on, or the Server answers with the library folders themselves.
+   */
+  getTitles(options?: TitlesQueryOptions): Promise<BaseItemDto[]>;
+  /**
+   * `GET /Genres` — the distinct genres the Server's Movies and Series are in,
+   * in name order. The Server does the collecting, so a client never reads
+   * every Title to find out what genres there are.
+   *
+   * Note there is no `recursive` on this endpoint: it is already the set across
+   * everything the User can see.
+   */
+  getTitleGenres(): Promise<BaseItemDto[]>;
+  /**
    * The URL of one of an item's images. Anonymous on the Server, so an
    * `<img src>` needs no token. The tag is the cache-buster: with it the URL
    * changes when the image does and is otherwise cacheable forever.
@@ -114,11 +132,26 @@ export type LatestItemsOptions = {
   limit?: number;
 };
 
+export type TitlesQueryOptions = {
+  /** Jellyfin's own matching, which is more than a substring of the name. */
+  searchTerm?: string;
+  /** A genre *name*, which is what `genres` takes; `genreIds` takes GUIDs. */
+  genre?: string;
+  limit?: number;
+};
+
 export type JellyfinGatewayOptions = ServerIdentity & {
   serverAddress: string;
   /** Defaults to the global `fetch`. */
   fetch?: typeof globalThis.fetch;
 };
+
+/**
+ * The only `BaseItemKind`s this app shows, as `includeItemTypes` takes them.
+ * Every Title query carries it, so "only Movies and Series" is one fact in one
+ * place rather than a filter on each screen.
+ */
+const TITLE_ITEM_TYPES = 'Movie,Series';
 
 /** A request that reached the Server but came back with a non-2xx status. */
 export class JellyfinHttpError extends Error {
@@ -228,6 +261,46 @@ export function createJellyfinGateway(options: JellyfinGatewayOptions): Jellyfin
           ...(options.limit === undefined ? {} : { limit: options.limit }),
         })}`,
       ),
+
+    getTitles: (options = {}) =>
+      request<BaseItemDtoQueryResult>(
+        'GET',
+        `/Items${query({
+          // Only the two kinds the app shows, so the Server never sends an
+          // Episode, a Season, an album or a stray video file at all.
+          includeItemTypes: TITLE_ITEM_TYPES,
+          // Without this the Server answers with the library folders.
+          recursive: true,
+          // Name order, so a term that matches several Titles comes back the
+          // same way twice. Positionally paired with `sortBy`.
+          sortBy: 'SortName',
+          sortOrder: 'Ascending',
+          // Posters only: the default is every image type, at every size.
+          enableImageTypes: 'Primary',
+          imageTypeLimit: 1,
+          enableUserData: false,
+          // Nothing shows a total, and asking for one costs the Server a COUNT.
+          enableTotalRecordCount: false,
+          ...(options.searchTerm === undefined ? {} : { searchTerm: options.searchTerm }),
+          ...(options.genre === undefined ? {} : { genres: options.genre }),
+          ...(options.limit === undefined ? {} : { limit: options.limit }),
+        })}`,
+      ).then((result) => result.Items ?? []),
+
+    getTitleGenres: () =>
+      request<BaseItemDtoQueryResult>(
+        'GET',
+        `/Genres${query({
+          // The genres of the Titles this app shows, so a music-only genre is
+          // never offered as something to browse.
+          includeItemTypes: TITLE_ITEM_TYPES,
+          sortBy: 'SortName',
+          sortOrder: 'Ascending',
+          // A genre is browsed by its name, so its own artwork is not wanted.
+          enableImages: false,
+          enableTotalRecordCount: false,
+        })}`,
+      ).then((result) => result.Items ?? []),
 
     getDisplayPreferences: (options) =>
       request<DisplayPreferencesDto>('GET', `/DisplayPreferences/${displayPreferencesPath(options)}`),

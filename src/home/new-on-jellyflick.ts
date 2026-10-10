@@ -1,7 +1,7 @@
 import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models/base-item-dto';
 import { catalogueItemFrom, titleOf, type Title } from '../catalogue/catalogue';
 import type { JellyfinGateway } from '../jellyfin/gateway';
-import type { RowCard } from './row';
+import { cardForTitle, type RowCard } from './row';
 
 /**
  * New on Jellyflick: the newest Titles across all libraries, newest first, with
@@ -16,12 +16,6 @@ import type { RowCard } from './row';
 
 /** How many Titles the Row shows. */
 export const NEW_ON_JELLYFLICK_LIMIT = 20;
-
-/**
- * How wide a card's artwork is asked for. Wide enough for a card on a 1080p TV
- * at twice the pixel density, and far narrower than the poster the Server holds.
- */
-const ARTWORK_WIDTH = 400;
 
 /**
  * The libraries that can hold a Title. A library of mixed content has no
@@ -69,7 +63,7 @@ export async function loadNewOnJellyflick(
 
   return {
     outcome: 'row',
-    titles: mergeNewOnJellyflick(latest, limit).map((title) => cardFor(gateway, title)),
+    titles: mergeNewOnJellyflick(latest, limit).map((title) => cardForTitle(gateway, title)),
   };
 }
 
@@ -79,21 +73,6 @@ function holdsTitles(library: BaseItemDto): boolean {
   // Movies and Series among the rest, so it is asked.
   if (typeof collectionType !== 'string') return true;
   return LIBRARIES_WITH_TITLES.indexOf(collectionType) !== -1;
-}
-
-function cardFor(gateway: JellyfinGateway, title: Title): RowCard {
-  return {
-    titleId: title.itemId,
-    name: title.name,
-    ...(title.artwork === undefined
-      ? {}
-      : {
-          artworkUrl: gateway.itemImageUrl(title.artwork.itemId, 'Primary', {
-            tag: title.artwork.imageTag,
-            maxWidth: ARTWORK_WIDTH,
-          }),
-        }),
-  };
 }
 
 /**

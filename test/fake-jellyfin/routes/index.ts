@@ -1,5 +1,6 @@
 import type { FakeRoute } from '../routing.ts';
 import { displayPreferencesRoutes } from './display-preferences.ts';
+import { genreRoutes } from './genres.ts';
 import { itemRoutes } from './items.ts';
 import { systemRoutes } from './system.ts';
 import { userRoutes } from './users.ts';
@@ -17,5 +18,6 @@ export const jellyfinRoutes: readonly FakeRoute[] = [
   ...userRoutes,
   ...userViewRoutes,
   ...itemRoutes,
+  ...genreRoutes,
   ...displayPreferencesRoutes,
 ];

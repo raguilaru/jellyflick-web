@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/preact';
 import { App } from '../../src/app';
 import { en } from '../../src/i18n/en';
 import { inMemoryDeviceStorage, testDeviceLayer } from '../device/profiles';
-import { resetFakeState, setFakeState } from '../fake-jellyfin/control';
+import { fakeWrites, resetFakeState, setFakeState } from '../fake-jellyfin/control';
 import { SAMPLE_PASSWORD } from '../fake-jellyfin/data';
 import { fakeJellyfinUrl } from '../fake-jellyfin/url';
 
@@ -20,11 +20,28 @@ import { fakeJellyfinUrl } from '../fake-jellyfin/url';
  */
 
 afterEach(async () => {
+  // A save is a round trip the editor does not wait for, so one can still be in
+  // flight when a test ends. Put the sample data back before it lands and the
+  // save arrives afterwards, leaking a hidden Row into whatever runs next —
+  // which is a different *file*, because Vitest runs them one at a time against
+  // one fake Jellyfin.
+  await savesHaveLanded();
   await resetFakeState();
   // The editor is a real address, and these tests really navigate to it, so
   // the next test would otherwise start on the screen the last one left.
   history.replaceState(null, '', '/');
 });
+
+/** Waits until the fake Jellyfin has stopped receiving writes. */
+async function savesHaveLanded(): Promise<void> {
+  let seen = -1;
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const writes = await fakeWrites();
+    if (writes.length === seen) return;
+    seen = writes.length;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+}
 
 async function signInAndLand() {
   render(
