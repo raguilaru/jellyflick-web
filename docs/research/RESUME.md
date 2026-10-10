@@ -4,9 +4,9 @@ State of the `/implement-spec` run on the integration branch `feat/jellyflick-v1
 (draft PR #38). Update this whenever a wave lands, so a fresh session can pick the work
 up without re-deriving anything.
 
-## Status at the last stop (2026-10-10, second session)
+## Status at the last stop (2026-10-10, third session)
 
-**Merged into `feat/jellyflick-v1`** (tip `49fed11`, draft PR #38 open):
+**Merged into `feat/jellyflick-v1`** (tip `1c54103`, draft PR #38 open):
 
 | Ticket | State |
 |---|---|
@@ -17,18 +17,40 @@ up without re-deriving anything.
 | #6 App shell | merged at `8225247`, issue closed |
 | #7 Rows and arrow-key navigation | merged at `49fed11`, issue closed |
 
-Gate on the integration tip `49fed11`, each step's exit code checked individually:
-`lint` 0, `typecheck` 0, **173 unit tests** in 18 files, **114 Playwright tests — 102
-passed, 12 skipped, 0 failed**, `chrome68` build 53.18 kB / 18.84 kB gz. Independently
-re-run by the integrator, not taken from the implementers' reports.
+Gate re-run on the integration tip `1c54103` at the start of the third session, each
+step's exit code checked individually: `lint` 0, `typecheck` 0, **173 unit tests** in 18
+files, **114 Playwright tests — 102 passed, 12 skipped, 0 failed**, `chrome68` build
+53.18 kB / 18.84 kB gz. Identical to the second session's numbers on `49fed11`, which
+confirms the two doc/config commits since then changed nothing. Independently re-run by
+the integrator, not taken from the implementers' reports.
 
 The 12 e2e skips are all deliberate viewport/pointer gating: #6's 7 (3 wide-screen tests
 skipped on `phone`, 2 phone tests skipped on `desktop` and `keyboard-only`) plus #7's 5
 (1 phone-only test skipped on `desktop` and `keyboard-only`, 3 pointer tests skipped on
 `keyboard-only`).
 
-**Nothing is in flight.** No implementers are running; no worktree holds uncommitted
-work. Three waves have landed this session (#4, #6, #7), all verified by the integrator.
+### In flight right now — three implementers on #10, #13 and #36
+
+Launched in the third session from base `1c54103`, each in its own worktree, each driving
+the `tdd` skill, each briefed with pointers only:
+
+| Ticket | Branch | Worktree | `APP_PORT` / `FAKE_JELLYFIN_PORT` |
+|---|---|---|---|
+| #10 Client Settings and Home Layout | `ticket/10-client-settings-and-home-layout` | `.claude/worktrees/ticket-10-client-settings` | 4210 / 8810 |
+| #13 My List | `ticket/13-my-list` | `.claude/worktrees/ticket-13-my-list` | 4213 / 8813 |
+| #36 Installable app | `ticket/36-installable-app` | `.claude/worktrees/ticket-36-installable-app` | 4236 / 8836 |
+
+None of the three had reported as of the last write of this file. **Their context may be
+gone but their branches are not** — see "Recovering an interrupted implementer" below,
+and check each branch before assuming it is empty or correct.
+
+#8, #14 and #24 were deliberately held back rather than launched: six concurrent
+implementers would thrash one machine, and holding them keeps the merge conflicts
+reviewable. They are the next wave, still `blocked_by: 0`.
+
+Expect #10 and #13 to conflict on Home — #10 owns which Rows appear and in what order,
+#13 adds a Row to it. That is inherent to wave 5, not a mistake; merge the first cleanly
+and expect to resolve the second by hand.
 
 ### The frontier is six tickets wide, and verified open
 
@@ -36,12 +58,12 @@ work. Three waves have landed this session (#4, #6, #7), all verified by the int
 
 | Ticket | Needs | Note |
 |---|---|---|
-| #8 Several Users and the User Picker | #6 | unblocked since the last wave, unstarted |
-| #36 Installable app | #6 | unblocked since the last wave, unstarted |
-| #10 Client Settings and Home Layout | #7 | **critical path** — 2 → 3 → 6 → 7 → 10 → … |
-| #13 My List | #7 | gates #17, which gates the whole player chain |
-| #14 Title Labels | #7 | |
-| #24 Search | #7 | |
+| #8 Several Users and the User Picker | #6 | unstarted — next wave |
+| #36 Installable app | #6 | **in flight** (third session) |
+| #10 Client Settings and Home Layout | #7 | **in flight** — critical path, 2 → 3 → 6 → 7 → 10 → … |
+| #13 My List | #7 | **in flight** — gates #17, which gates the whole player chain |
+| #14 Title Labels | #7 | unstarted — next wave |
+| #24 Search | #7 | unstarted — next wave |
 
 #10 and #13 are the two that unlock the most: #10 opens wave 6 (#11, #12, #15, #16) and
 #13 gates #17 → #25 → #26 → #27 → #28, the deepest remaining chain. **Give any two
@@ -257,14 +279,19 @@ branch is correct — check its tests pass before building on it.
 
 ## Still owed at the end of the run
 
-1. Every ticket from #8 onward. Six are unblocked and unstarted: #8, #36, #10, #13,
-   #14, #24.
+1. Every ticket from #8 onward. #10, #13 and #36 are in flight; #8, #14 and #24 are
+   unblocked and unstarted; everything from #9, #11, #12, #15, #16 onward is still gated.
 2. `code-review` over the whole integration branch, with findings fixed in one implementer.
 3. **The git history rewrite** described in `decisions.md` §10 — removing the inspiration
    product's name from the root commit. Must happen with no implementers in flight, and
    the host must then ask GitHub Support to purge the stale objects.
 4. Mark PR #38 ready for review.
-5. Remove the agent worktrees (`git worktree list`, then `git worktree remove`). As of this
-   session that is three stale `agent-*` worktrees from the first session plus
-   `ticket-4-new-on-home`, `ticket-6-app-shell` and `ticket-7-rows-and-arrows`, all three
-   merged and safe to remove.
+5. Remove the implementer worktrees (`git worktree list`, then `git worktree remove`).
+   **Done for every worktree merged so far**: the three stale `agent-*` worktrees from the
+   first session and `ticket-4-new-on-home`, `ticket-6-app-shell`,
+   `ticket-7-rows-and-arrows` were removed in the third session, each verified clean
+   (`git status --short` empty) and fully merged (`git rev-list --count <branch>
+   ^feat/jellyflick-v1` = 0) first. The branches were kept. Still to remove when they
+   merge: `ticket-10-client-settings`, `ticket-13-my-list`, `ticket-36-installable-app`.
+   **Leave `implement-spec-88c250` and `remote-setup-2e9b22` alone — they belong to other
+   Claude sessions, not this run.**
