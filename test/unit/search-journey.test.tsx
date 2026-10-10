@@ -144,6 +144,83 @@ describe('a User searching for something to watch', () => {
   });
 });
 
+describe('a User driving Search with arrow keys only', () => {
+  it('starts with the typing, so the first key goes into the field', async () => {
+    const field = await openSearch();
+
+    expect(document.activeElement).toBe(field);
+  });
+
+  it('leaves the field for the results by pressing Down', async () => {
+    const field = await openSearch();
+
+    await type(field, 'he');
+    await waitFor(() => expect(cardNames('Results')).toEqual(['Heat', 'The Unfinished']));
+
+    fireEvent.keyDown(field, { key: 'ArrowDown' });
+
+    expect(document.activeElement).toBe(screen.getByRole('listitem', { name: 'Heat' }));
+  });
+
+  it('leaves the field for the results by pressing Enter, as a remote does', async () => {
+    const field = await openSearch();
+
+    await type(field, 'he');
+    await waitFor(() => expect(cardNames('Results')).toEqual(['Heat', 'The Unfinished']));
+
+    fireEvent.keyDown(field, { key: 'Enter' });
+
+    expect(document.activeElement).toBe(screen.getByRole('listitem', { name: 'Heat' }));
+  });
+
+  it('keeps Left and Right for the caret, so a term can still be edited', async () => {
+    const field = await openSearch();
+
+    await type(field, 'he');
+    await waitFor(() => expect(cardNames('Results')).toEqual(['Heat', 'The Unfinished']));
+
+    fireEvent.keyDown(field, { key: 'ArrowLeft' });
+    fireEvent.keyDown(field, { key: 'ArrowRight' });
+
+    expect(document.activeElement).toBe(field);
+  });
+
+  it('stays in the field when there are no results to go to', async () => {
+    const field = await openSearch();
+
+    await type(field, 'zzz');
+    await screen.findByText('Nothing on this Server matches “zzz”.');
+
+    fireEvent.keyDown(field, { key: 'ArrowDown' });
+
+    expect(document.activeElement).toBe(field);
+  });
+
+  // Backspace is Back on a remote and an edit in a field, and the field has to
+  // win. `src/shell/back.ts` already leaves a field alone; this is the guard
+  // that says so, because Search is the screen where it would be noticed.
+  it('edits the term rather than leaving Search when Backspace is pressed', async () => {
+    const field = await openSearch();
+
+    await type(field, 'he');
+    await waitFor(() => expect(cardNames('Results')).toEqual(['Heat', 'The Unfinished']));
+
+    fireEvent.keyDown(field, { key: 'Backspace' });
+
+    expect(window.location.pathname).toBe('/search');
+    expect(document.activeElement).toBe(field);
+  });
+
+  it('goes down from the field into the genres when nothing is typed', async () => {
+    const field = await openSearch();
+    const comedy = await screen.findByRole('button', { name: 'Comedy' });
+
+    fireEvent.keyDown(field, { key: 'ArrowDown' });
+
+    expect(document.activeElement).toBe(comedy);
+  });
+});
+
 describe('a User who does not know what they want', () => {
   it('is offered the genres the Server’s Movies and Series are in', async () => {
     await openSearch();

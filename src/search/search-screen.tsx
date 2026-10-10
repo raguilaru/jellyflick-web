@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Row } from '../home/row';
 import { useTranslate } from '../i18n/index';
+import { FOCUSABLE_SELECTOR, groupOf, tabStopIn } from '../navigation/focusable';
 import type { JellyfinGateway } from '../jellyfin/gateway';
 import type { Session } from '../session/session';
 import { BrowseByGenre } from './genres';
@@ -27,6 +28,13 @@ export const SEARCH_DEBOUNCE_MS = 250;
  * next answer is on its way — a strip that emptied between every keystroke
  * would flicker. An answer that arrives after a later one has been asked for is
  * dropped, so the slowest reply cannot overwrite the newest.
+ *
+ * On a remote the flow is the field first and then the results, so the field
+ * takes focus when the screen opens and Down or Enter hands focus on to what is
+ * below it. That handing on is the field's own, deliberately: a field owns its
+ * arrow keys — Left and Right move the caret — so `spatial-navigation.ts` keeps
+ * out of a field altogether, and a screen that wants a key back has to take it
+ * before that handler rather than add a second one.
  */
 export function SearchScreen({ session }: SearchScreenProps) {
   const t = useTranslate();
@@ -34,6 +42,13 @@ export function SearchScreen({ session }: SearchScreenProps) {
   const [term, setTerm] = useState('');
   const settled = useDebounced(term, SEARCH_DEBOUNCE_MS);
   const results = useSearch(gateway, settled);
+  const field = useRef<HTMLInputElement | null>(null);
+
+  // The screen opens on the typing, so the first key a User presses goes where
+  // they expect — and on a TV, where it brings up the on-screen keyboard.
+  useEffect(() => {
+    field.current?.focus();
+  }, []);
 
   return (
     <main class="screen">
@@ -48,9 +63,18 @@ export function SearchScreen({ session }: SearchScreenProps) {
           id={FIELD_ID}
           type="search"
           autoComplete="off"
+          ref={field}
           value={term}
           onInput={(event) => {
             setTerm((event.target as HTMLInputElement).value);
+          }}
+          onKeyDown={(event) => {
+            // Down and Enter are the two ways off a field and into what it
+            // found. Everything else stays the field's: Left and Right are the
+            // caret's, Backspace is an edit, and Up has the bar above it.
+            if (event.key !== 'ArrowDown' && event.key !== 'Enter') return;
+            if (!focusAfter(event.currentTarget)) return;
+            event.preventDefault();
           }}
         />
       </div>
@@ -125,6 +149,32 @@ function useSearch(gateway: JellyfinGateway, searchTerm: string): TitlesResult |
   }, [gateway.serverAddress, searchTerm]);
 
   return results;
+}
+
+/**
+ * Moves focus to the first thing after the field on this screen, and answers
+ * whether there was one: the strip of results, or the genres when nothing has
+ * been typed. Document order rather than geometry, because on this screen the
+ * field runs the width of it and what is below is the only way on — and
+ * because arriving in a strip should land on the card it remembers, which is
+ * what `tabStopIn` is.
+ */
+function focusAfter(field: HTMLElement): boolean {
+  const screen = field.closest('main');
+  if (screen === null) return false;
+
+  const items: HTMLElement[] = [];
+  screen.querySelectorAll(FOCUSABLE_SELECTOR).forEach((element) => {
+    if (element instanceof HTMLElement) items.push(element);
+  });
+
+  const next = items[items.indexOf(field) + 1];
+  if (next === undefined) return false;
+
+  const group = groupOf(next);
+  const target = (group === undefined ? undefined : tabStopIn(group)) ?? next;
+  target.focus();
+  return true;
 }
 
 /**
