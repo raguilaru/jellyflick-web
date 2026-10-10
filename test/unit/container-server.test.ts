@@ -28,9 +28,14 @@ function makeAssets(): { root: string; configDir: string } {
   const root = join(base, 'app');
   const configDir = join(base, 'config');
   mkdirSync(join(root, 'assets'), { recursive: true });
+  mkdirSync(join(root, 'icons'), { recursive: true });
   mkdirSync(configDir, { recursive: true });
   writeFileSync(join(root, 'index.html'), INDEX_HTML);
   writeFileSync(join(root, 'assets', 'main-abc123.js'), 'export const hello = 1;\n');
+  // The two unhashed artifacts an install needs. Their contents do not matter
+  // here — `test/unit/installable-app.test.ts` owns what they say.
+  writeFileSync(join(root, 'manifest.webmanifest'), '{"name":"Jellyflick"}');
+  writeFileSync(join(root, 'icons', 'icon-192.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47]));
   return { root, configDir };
 }
 
@@ -104,6 +109,28 @@ describe('the container server serving the app', () => {
 
     expect(asset.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
     expect(shell.headers.get('cache-control')).toBe('no-cache');
+  });
+
+  it('serves the web app manifest as a manifest, or the browser will not install the app', async () => {
+    const url = await serve();
+
+    const response = await fetch(`${url}/manifest.webmanifest`);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('application/manifest+json');
+  });
+
+  it('revalidates the manifest and the icons, so a new one is picked up with nothing cleared', async () => {
+    const url = await serve();
+
+    const manifest = await fetch(`${url}/manifest.webmanifest`);
+    const icon = await fetch(`${url}/icons/icon-192.png`);
+
+    // Neither filename is hashed — an installed app keeps asking for these two
+    // paths — so they must never be cached the way `/assets/` is.
+    expect(manifest.headers.get('cache-control')).toBe('no-cache');
+    expect(icon.headers.get('cache-control')).toBe('no-cache');
+    expect(icon.headers.get('content-type')).toBe('image/png');
   });
 });
 
