@@ -1,6 +1,7 @@
 import type {
   DeviceKey,
   DeviceLayer,
+  DeviceStorage,
   PlaybackTargets,
   SubtitleCapabilities,
   VideoCapabilities,
@@ -13,6 +14,8 @@ import type {
  * and nothing assumes an API newer than Chromium 68 exists.
  */
 export function createBrowserDeviceLayer(): DeviceLayer {
+  const storage = createBrowserStorage();
+
   return {
     name: 'browser',
 
@@ -20,6 +23,8 @@ export function createBrowserDeviceLayer(): DeviceLayer {
     newDeviceId: () => randomId(),
 
     keyFor: (event) => keyFor(event),
+
+    storage: () => storage,
 
     videoCapabilities,
     subtitleCapabilities,
@@ -160,6 +165,62 @@ function playbackTargets(): PlaybackTargets {
     // Picture-in-picture is Chrome 69, one version above the floor.
     pictureInPicture:
       'pictureInPictureEnabled' in document && document.pictureInPictureEnabled === true,
+  };
+}
+
+/**
+ * `localStorage`, which survives a reload and a restart. Every call is guarded:
+ * reading or even touching it throws in a private window and where site data is
+ * blocked, and writing throws when the quota is full. When it is unusable the
+ * app falls back to remembering things only for this page's lifetime, which
+ * means a User signs in again next time rather than seeing an error.
+ */
+function createBrowserStorage(): DeviceStorage {
+  const inMemory = new Map<string, string>();
+
+  function usableStore(): Storage | undefined {
+    try {
+      const store = window.localStorage;
+      const probe = '__jellyflick_probe__';
+      store.setItem(probe, '1');
+      store.removeItem(probe);
+      return store;
+    } catch {
+      return undefined;
+    }
+  }
+
+  const store = usableStore();
+
+  return {
+    read: (key) => {
+      if (store === undefined) return inMemory.get(key);
+      try {
+        return store.getItem(key) ?? undefined;
+      } catch {
+        return undefined;
+      }
+    },
+    write: (key, value) => {
+      if (store === undefined) {
+        inMemory.set(key, value);
+        return;
+      }
+      try {
+        store.setItem(key, value);
+      } catch {
+        inMemory.set(key, value);
+      }
+    },
+    remove: (key) => {
+      inMemory.delete(key);
+      if (store === undefined) return;
+      try {
+        store.removeItem(key);
+      } catch {
+        // Nothing left to do: the value is already unreachable.
+      }
+    },
   };
 }
 

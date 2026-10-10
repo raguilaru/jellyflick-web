@@ -16,19 +16,85 @@ export type FakeSystemInfo = {
   StartupWizardCompleted: boolean;
 };
 
+/**
+ * A Jellyfin user account on the Server. `UserDto`-shaped, with the password the
+ * fake checks kept alongside it — the real Server never returns one, so it is
+ * stripped before a user is served.
+ */
+export type FakeUser = {
+  Id: string;
+  Name: string;
+  ServerId: string;
+  /** Null means the user has no picture, so the app shows initials instead. */
+  PrimaryImageTag: string | null;
+  HasPassword: boolean;
+  HasConfiguredPassword: boolean;
+  /** `UserPolicy.IsHidden`: a hidden user is left out of `/Users/Public`. */
+  Policy: { IsHidden: boolean; EnableContentDownloading: boolean };
+  /** The fake's own field: what `AuthenticateByName` accepts for this user. */
+  password: string;
+};
+
 export type FakeJellyfinState = {
   systemInfo: FakeSystemInfo;
+  users: FakeUser[];
+  /**
+   * A status `AuthenticateByName` answers with whatever the credentials are, so
+   * a test can see what a Server that is having a bad day looks like. Null is
+   * the normal Server.
+   */
+  failAuthenticationWith: number | null;
 };
+
+const SERVER_ID = '0f1e2d3c4b5a69788796a5b4c3d2e1f0';
 
 export function createSampleData(): FakeJellyfinState {
   return {
+    failAuthenticationWith: null,
+    users: [
+      fakeUser({ Id: 'user-rafael', Name: 'Rafael', PrimaryImageTag: 'tag-rafael' }),
+      fakeUser({ Id: 'user-marina', Name: 'Marina', PrimaryImageTag: 'tag-marina' }),
+      // No picture, so the app has to fall back to initials.
+      fakeUser({ Id: 'user-nico', Name: 'Nico', PrimaryImageTag: null }),
+      // Hidden from the public list: the only way in is to type the username.
+      fakeUser({ Id: 'user-ghost', Name: 'Ghost', hidden: true }),
+    ],
     systemInfo: {
       LocalAddress: 'http://127.0.0.1:8096',
       ServerName: 'Fake Jellyfin',
       Version: '12.2.0',
       ProductName: 'Jellyfin Server',
-      Id: '0f1e2d3c4b5a69788796a5b4c3d2e1f0',
+      Id: SERVER_ID,
       StartupWizardCompleted: true,
     },
   };
+}
+
+/** The password every sample user has, unless a test patches one. */
+export const SAMPLE_PASSWORD = 'correct horse';
+
+function fakeUser(
+  user: Pick<FakeUser, 'Id' | 'Name'> & {
+    PrimaryImageTag?: string | null;
+    hidden?: boolean;
+    password?: string;
+  },
+): FakeUser {
+  return {
+    Id: user.Id,
+    Name: user.Name,
+    ServerId: SERVER_ID,
+    PrimaryImageTag: user.PrimaryImageTag ?? null,
+    HasPassword: true,
+    HasConfiguredPassword: true,
+    Policy: { IsHidden: user.hidden ?? false, EnableContentDownloading: true },
+    password: user.password ?? SAMPLE_PASSWORD,
+  };
+}
+
+/** A user as the Server serves it: `UserDto` has no password field. */
+export function publicViewOf(user: FakeUser): Omit<FakeUser, 'password'> {
+  const dto: Record<string, unknown> = { ...user };
+  delete dto.password;
+  return dto as Omit<FakeUser, 'password'>;
 }

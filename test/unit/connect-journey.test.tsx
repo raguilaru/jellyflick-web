@@ -23,7 +23,9 @@ describe('a User opening the app', () => {
   it('goes straight past the address screen when the host preset a Server address', async () => {
     renderApp(fakeJellyfinUrl());
 
-    expect(await screen.findByText('Connected to Fake Jellyfin.')).toBeTruthy();
+    // Connecting hands over to signing in, so the Server's Users are what
+    // appears next.
+    expect(await screen.findByText('Choose your User')).toBeTruthy();
     expect(screen.queryByLabelText('Server address')).toBeNull();
   });
 
@@ -41,7 +43,7 @@ describe('a User opening the app', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Connect' }));
 
-    expect(await screen.findByText('Connected to Fake Jellyfin.')).toBeTruthy();
+    expect(await screen.findByText('Choose your User')).toBeTruthy();
   });
 
   it('refuses a Server older than 12.0 and says which version it found', async () => {
@@ -93,9 +95,10 @@ describe('a User opening the app', () => {
     );
   });
 
-  it('shows every message through translation, so Spanish needs no code change', async () => {
-    renderApp(fakeJellyfinUrl(), es);
+  it('shows every message through translation, so Spanish needs no code change', () => {
+    renderApp(undefined, es);
 
-    expect(await screen.findByText('Conectado a Fake Jellyfin.')).toBeTruthy();
+    expect(screen.getByText('Conecta con tu servidor')).toBeTruthy();
+    expect(screen.getByLabelText('Dirección del servidor')).toBeTruthy();
   });
 });

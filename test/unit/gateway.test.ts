@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createJellyfinGateway } from '../../src/jellyfin/gateway';
 import { fakeRequests } from '../fake-jellyfin/control';
+import { SAMPLE_PASSWORD } from '../fake-jellyfin/data';
 import { fakeJellyfinUrl } from '../fake-jellyfin/url';
 
 const identity = {
@@ -60,6 +61,67 @@ describe('the Jellyfin gateway', () => {
     });
 
     await expect(gateway.getPublicSystemInfo()).resolves.toMatchObject({ Version: '12.2.0' });
+  });
+
+  it('lists the Server’s public users, leaving hidden accounts out', async () => {
+    const gateway = createJellyfinGateway({
+      serverAddress: fakeJellyfinUrl(),
+      deviceId: 'lists-public-users',
+      ...identity,
+    });
+
+    const users = await gateway.getPublicUsers();
+
+    expect(users.map((user) => user.Name)).toEqual(['Rafael', 'Marina', 'Nico']);
+  });
+
+  it('exchanges a username and password for an access token', async () => {
+    const gateway = createJellyfinGateway({
+      serverAddress: fakeJellyfinUrl(),
+      deviceId: 'authenticates',
+      ...identity,
+    });
+
+    const result = await gateway.authenticateByName('Rafael', SAMPLE_PASSWORD);
+
+    expect(result.User?.Name).toBe('Rafael');
+    expect(result.AccessToken).toBeTruthy();
+  });
+
+  it('authenticates a user the public list hides', async () => {
+    const gateway = createJellyfinGateway({
+      serverAddress: fakeJellyfinUrl(),
+      deviceId: 'authenticates-hidden',
+      ...identity,
+    });
+
+    const result = await gateway.authenticateByName('Ghost', SAMPLE_PASSWORD);
+
+    expect(result.User?.Id).toBe('user-ghost');
+  });
+
+  it('rejects a wrong password with 401 rather than a token', async () => {
+    const gateway = createJellyfinGateway({
+      serverAddress: fakeJellyfinUrl(),
+      deviceId: 'wrong-password',
+      ...identity,
+    });
+
+    await expect(gateway.authenticateByName('Rafael', 'nope')).rejects.toMatchObject({
+      status: 401,
+    });
+  });
+
+  it('builds a User picture URL from the id and the picture tag', () => {
+    const gateway = createJellyfinGateway({
+      serverAddress: 'http://server.test',
+      deviceId: 'user-image',
+      ...identity,
+    });
+
+    expect(gateway.userImageUrl('user-rafael', 'tag-rafael')).toBe(
+      'http://server.test/UserImage?userId=user-rafael&tag=tag-rafael',
+    );
   });
 
   it('reports an unreachable Server as a transport failure', async () => {

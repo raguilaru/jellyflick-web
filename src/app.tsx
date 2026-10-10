@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useMemo, useState } from 'preact/hooks';
 import { connectToServer } from './connect/connect-to-server';
 import { ServerAddressScreen, type ConnectionFailure } from './connect/server-address-screen';
 import type { DeviceLayer } from './device/types';
-import { createTranslate, TranslateProvider, useTranslate, type Messages } from './i18n/index';
+import { HomeScreen } from './home/home-screen';
+import { createTranslate, TranslateProvider, type Messages } from './i18n/index';
 import type { RuntimeConfig } from './runtime-config';
+import { createSession, type SignedInUser } from './session/session';
+import { SignInScreen } from './session/sign-in-screen';
 
 /** The application name the Server records for this client. */
 export const CLIENT_NAME = 'Jellyflick';
@@ -19,19 +22,36 @@ type Connection =
   | { status: 'connecting' }
   | { status: 'connected'; serverName: string; serverAddress: string };
 
+/** Whether the User on this device still has to sign in. */
+type Who =
+  /** Checking the stored token with the Server, which has to answer first. */
+  | { state: 'resuming' }
+  | { state: 'signed-out' }
+  | { state: 'signed-in'; user: SignedInUser };
+
 /**
- * Finds the Server and checks it is one this app can use, then hands over.
+ * Finds the Server, then finds out who is watching.
  *
  * A preset Server address skips the address screen; an empty one shows it. An
- * attempt that does not work comes back to the screen with the reason.
+ * attempt that does not work comes back to the screen with the reason. Once
+ * there is a Server, a User already signed in on this device goes straight to
+ * Home, and anyone else signs in with a password.
  *
- * Signing in, the User Picker and the app shell are later tickets, so for now a
- * connected Server is as far as the app goes.
+ * The app shell, navigation and Home's own content are later tickets, so Home
+ * is a placeholder that shows whose it is.
  */
 export function App({ config, device, messages }: AppProps) {
   const [address, setAddress] = useState(config.presetServerAddress ?? '');
   const [connection, setConnection] = useState<Connection>(
     config.presetServerAddress === undefined ? { status: 'asking' } : { status: 'connecting' },
+  );
+  const [who, setWho] = useState<Who>({ state: 'resuming' });
+
+  // One session per app: it owns the stored Users, so a second one would be a
+  // second opinion about who is signed in.
+  const session = useMemo(
+    () => createSession({ device, client: CLIENT_NAME, appVersion: config.appVersion }),
+    [device, config.appVersion],
   );
 
   useEffect(() => {
@@ -62,11 +82,34 @@ export function App({ config, device, messages }: AppProps) {
     // followed afterwards: typing during an attempt must not restart it.
   }, [connection.status]);
 
+  const serverAddress = connection.status === 'connected' ? connection.serverAddress : undefined;
+
+  useEffect(() => {
+    if (serverAddress === undefined) return;
+    let abandoned = false;
+    // Pointing the session at the Server clears every User when the address
+    // has changed, so Users from two Servers never mix.
+    session.useServer(serverAddress);
+    setWho({ state: 'resuming' });
+    void session.resume().then((result) => {
+      if (abandoned) return;
+      // A Server that cannot be reached leaves the stored User in place, but
+      // there is nothing to show until it answers, so the password is asked
+      // for again rather than trusting a token nothing has confirmed.
+      setWho(
+        result.outcome === 'signed-in'
+          ? { state: 'signed-in', user: result.user }
+          : { state: 'signed-out' },
+      );
+    });
+    return () => {
+      abandoned = true;
+    };
+  }, [serverAddress, session]);
+
   return (
     <TranslateProvider value={createTranslate(messages)}>
-      {connection.status === 'connected' ? (
-        <ConnectedScreen serverName={connection.serverName} />
-      ) : (
+      {serverAddress === undefined ? (
         <ServerAddressScreen
           address={address}
           onAddressChange={setAddress}
@@ -78,17 +121,18 @@ export function App({ config, device, messages }: AppProps) {
             setConnection({ status: 'connecting' });
           }}
         />
+      ) : who.state === 'signed-in' ? (
+        <HomeScreen user={who.user} />
+      ) : who.state === 'resuming' ? null : (
+        <SignInScreen
+          session={session}
+          serverAddress={serverAddress}
+          onSignedIn={() => {
+            const user = session.activeUser();
+            if (user !== undefined) setWho({ state: 'signed-in', user });
+          }}
+        />
       )}
     </TranslateProvider>
-  );
-}
-
-function ConnectedScreen({ serverName }: { serverName: string }) {
-  const t = useTranslate();
-  return (
-    <main class="screen screen--centred">
-      <h1 class="wordmark">{t('app.name')}</h1>
-      <p class="notice">{t('connect.connected', { serverName })}</p>
-    </main>
   );
 }

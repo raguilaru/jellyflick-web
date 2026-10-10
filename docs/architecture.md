@@ -16,15 +16,19 @@ server/                 The server inside the container. Not browser code:
                         `main.ts` is the process. No dependencies.
 src/
   main.tsx              Polyfills, locale, device layer, config, render. No logic.
-  app.tsx               Which screen shows, and the connection state machine.
+  app.tsx               Which screen shows: address → sign-in → Home, and the
+                        connection and who-is-signed-in state machines.
   polyfills.ts          The Chromium 68 shims, and a list of what is NOT shimmed.
   runtime-config.ts     Reads the host's settings once at startup.
   styles/base.css       Design tokens and primitives. Dark only.
   connect/              Finding a Server and checking its version.
   device/               The device layer: `types.ts` is the interface,
                         `browser.ts` the implementation that ships now.
+  home/                 Where a signed-in User lands. A placeholder until #4/#6/#7.
   i18n/                 `en.ts` is the key set, `es.ts` is typed against it.
   jellyfin/             The gateway: the only module that talks HTTP to the Server.
+  session/              Session & Users: the Server address and the signed-in
+                        Users in device storage, plus the sign-in screen.
 test/
   setup.ts              Vitest: unmounts components after each test.
   unit/                 Vitest specs. One file per behaviour, not per source file.
@@ -39,8 +43,12 @@ Where new code belongs:
 - **A new Jellyfin endpoint** → one method on the gateway in `src/jellyfin/gateway.ts`,
   and nowhere else. Nothing outside `src/jellyfin/` calls `fetch`.
 - **Anything device-specific** — a key code, a codec probe, the clock, randomness,
-  a renderer capability → `src/device/`. Nothing else reads `navigator`,
-  `window.chrome`, `Date.now()` or `Math.random()`.
+  a renderer capability, storage → `src/device/`. Nothing else reads `navigator`,
+  `window.chrome`, `Date.now()`, `Math.random()` or `localStorage`.
+- **Anything that must survive a reload** → through `device.storage()`, and under
+  one key owned by one module (`session/` owns `jellyflick.session`). Per-User
+  settings that follow a User between devices are not this: they belong on the
+  Server, in the Client Settings store (#10).
 - **A screen or a feature** → its own folder under `src/`, holding its logic and
   its components together (`connect/` is the pattern).
 
@@ -85,6 +93,11 @@ Control endpoints, outside Jellyfin's own namespace and shared by both runners:
 | `GET` / `DELETE /__fake/writes` | Every non-GET request: what tests assert was saved. |
 | `GET` / `DELETE /__fake/requests` | Every request, with headers. |
 | `GET` / `POST` / `DELETE /__fake/state` | Read, patch or reseed the sample data. |
+
+Sample data a test can lean on: four Users — `Rafael` and `Marina` with pictures,
+`Nico` without, and `Ghost`, who is hidden from `/Users/Public`. They share one
+password, exported as `SAMPLE_PASSWORD`. `failAuthenticationWith` makes
+`AuthenticateByName` answer with a status whatever the credentials are.
 
 Vitest uses the helpers in `test/fake-jellyfin/control.ts`; Playwright calls the
 same endpoints through its `request` fixture.
@@ -149,7 +162,18 @@ ADR 0002 sets the floor. These are the traps inside it.
   Version=…, Token=…`. The five key names are case-sensitive, values are always
   quoted and URL-encoded. See `src/jellyfin/authorization.ts`.
 - One DeviceId per signed-in User: the Server allows a single token per DeviceId.
-  `device.newDeviceId()` mints them.
+  `device.newDeviceId()` mints them, once, when that User signs in —
+  `src/session/session.ts` then keeps it alongside their token, so re-minting one
+  never knocks a token out.
+- `AuthenticateByName` takes `{ Username, Pw }` — `Pw`, not `Password` — and the
+  attempt carries a DeviceId and **no** `Token=`: that is how the Server records
+  which device the token it issues belongs to. A wrong password and an unknown
+  username are both 401, deliberately indistinguishable.
+- `/Users/Public` omits accounts whose `Policy.IsHidden` is true, which is why
+  sign-in also offers a typed username. A null `PrimaryImageTag` means the User
+  has no picture: show their initial.
+- `/UserImage` and the item image endpoints are anonymous, so an `<img src>`
+  needs no token. `/UserImage` takes no sizing parameters — size it with CSS.
 - The version gate reads `PublicSystemInfo.Version` from `/System/Info/Public`
   and compares the leading integer. Never compare versions as text, and do not
   use `@jellyfin/sdk`'s `MINIMUM_VERSION`, which is 10.10.0.

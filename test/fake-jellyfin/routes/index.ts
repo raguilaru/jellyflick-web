@@ -1,5 +1,6 @@
 import type { FakeRoute } from '../routing.ts';
 import { systemRoutes } from './system.ts';
+import { userRoutes } from './users.ts';
 
 /**
  * Every Jellyfin endpoint the fake answers.
@@ -8,4 +9,4 @@ import { systemRoutes } from './system.ts';
  * `readonly FakeRoute[]`, then spread it here. Keep one module per Jellyfin
  * controller so later tickets rarely touch the same file.
  */
-export const jellyfinRoutes: readonly FakeRoute[] = [...systemRoutes];
+export const jellyfinRoutes: readonly FakeRoute[] = [...systemRoutes, ...userRoutes];

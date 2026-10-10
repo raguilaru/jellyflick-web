@@ -7,7 +7,8 @@ test.afterEach(async ({ request }) => {
 test('a preset Server address takes the User straight past the address screen', async ({ page }) => {
   await openApp(page, { serverAddress: FAKE_JELLYFIN_URL });
 
-  await expect(page.getByText('Connected to Fake Jellyfin.')).toBeVisible();
+  // Connecting hands over to signing in, so the Server's Users come next.
+  await expect(page.getByText('Choose your User')).toBeVisible();
   await expect(page.getByLabel('Server address')).toHaveCount(0);
 });
 
@@ -22,7 +23,7 @@ test('an empty preset asks the User for an address and then connects', async ({ 
   await address.fill(FAKE_JELLYFIN_URL);
   await address.press('Enter');
 
-  await expect(page.getByText('Connected to Fake Jellyfin.')).toBeVisible();
+  await expect(page.getByText('Choose your User')).toBeVisible();
 });
 
 test('a Server older than 12.0 is refused with the version it found', async ({ page, request }) => {

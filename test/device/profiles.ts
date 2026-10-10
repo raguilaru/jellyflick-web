@@ -8,6 +8,7 @@
  */
 import type {
   DeviceLayer,
+  DeviceStorage,
   PlaybackTargets,
   SubtitleCapabilities,
   VideoCapabilities,
@@ -22,25 +23,56 @@ export type TestDeviceOptions = {
   now?: number;
   /** Returned by `random()` in order, then repeated from the start. */
   randomSequence?: readonly number[];
+  /**
+   * Device storage. Pass the same instance to two device layers to model a
+   * reload: the page is new, the storage is the one the device already had.
+   */
+  storage?: DeviceStorage;
 };
 
 /** 2026-06-15T12:00:00Z — a fixed instant, so date-derived behaviour is stable. */
 export const FIXED_NOW = Date.UTC(2026, 5, 15, 12, 0, 0);
 
+let deviceLayerCount = 0;
+
+/**
+ * Device storage that keeps values in a Map. Hold one across two device layers
+ * to model a reload; make a fresh one to model a different device.
+ */
+export function inMemoryDeviceStorage(
+  seed: Readonly<Record<string, string>> = {},
+): DeviceStorage {
+  const values = new Map<string, string>(Object.entries(seed));
+  return {
+    read: (key) => values.get(key),
+    write: (key, value) => {
+      values.set(key, value);
+    },
+    remove: (key) => {
+      values.delete(key);
+    },
+  };
+}
+
 export function testDeviceLayer(options: TestDeviceOptions = {}): DeviceLayer {
   const profileName = options.profile ?? 'modern-desktop-browser';
   const profile = CAPABILITY_PROFILES[profileName];
   const randomSequence = options.randomSequence ?? [0.5];
+  const storage = options.storage ?? inMemoryDeviceStorage();
   let randomIndex = 0;
   let deviceIdCount = 0;
+  // Unique per device layer as well as per call, so two device layers in one
+  // test never mint the same DeviceId — the Server allows one token per id.
+  const deviceIdPrefix = `test-device-${String((deviceLayerCount += 1))}`;
 
   return {
     name: `test:${profileName}`,
     deviceName: () => profile.deviceName,
     newDeviceId: () => {
       deviceIdCount += 1;
-      return `test-device-${String(deviceIdCount)}`;
+      return `${deviceIdPrefix}-${String(deviceIdCount)}`;
     },
+    storage: () => storage,
     // Key mapping has one correct answer on every device, so the real one is
     // used rather than a second copy that could drift from it.
     keyFor: createBrowserDeviceLayer().keyFor,

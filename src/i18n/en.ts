@@ -15,7 +15,6 @@ export const en = {
   'connect.addressHint': 'For example 192.168.1.10:8096 or https://jellyfin.example.com',
   'connect.submit': 'Connect',
   'connect.checking': 'Checking the Server…',
-  'connect.connected': (p: { serverName: string }) => `Connected to ${p.serverName}.`,
 
   'connect.error.addressInvalid': 'That is not an address Jellyflick can use. Check it and try again.',
   'connect.error.unreachable': (p: { serverAddress: string }) =>
@@ -24,6 +23,32 @@ export const en = {
     `Something answered at ${p.serverAddress}, but it is not a Jellyfin server.`,
   'connect.error.serverTooOld': (p: { version: string; minimumVersion: string }) =>
     `That server runs Jellyfin ${p.version}. Jellyflick needs ${p.minimumVersion} or later, so it cannot connect to it.`,
+
+  'signIn.heading': 'Choose your User',
+  'signIn.loadingUsers': 'Looking for Users on the Server…',
+  'signIn.typedHeading': 'Sign in with your username',
+  'signIn.typedExplanation':
+    'Accounts hidden from the Server’s list are not shown. Type the username to sign in.',
+  'signIn.typeUsername': 'Type a username instead',
+  'signIn.usernameLabel': 'Username',
+  'signIn.passwordLabel': 'Password',
+  'signIn.passwordFor': (p: { name: string }) => `Enter the password for ${p.name}.`,
+  'signIn.submit': 'Sign in',
+  'signIn.signingIn': 'Signing in…',
+  'signIn.back': 'Back',
+
+  'signIn.error.wrongCredentials':
+    'That username and password do not match an account on this Server.',
+  'signIn.error.usernameMissing': 'Type your username.',
+  'signIn.error.passwordMissing': 'Type your password.',
+  'signIn.error.unreachable': (p: { serverAddress: string }) =>
+    `Jellyflick could not reach ${p.serverAddress}. Check that the Server is switched on and try again.`,
+  'signIn.error.serverProblem': (p: { status: string }) =>
+    `The Server could not sign you in just now (error ${p.status}). Try again in a moment.`,
+  'signIn.error.usersUnavailable':
+    'Jellyflick could not read the list of Users from the Server. Type your username to sign in.',
+
+  'home.signedInAs': (p: { name: string }) => `Signed in as ${p.name}.`,
 } as const;
 
 /**
