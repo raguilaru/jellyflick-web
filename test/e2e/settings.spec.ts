@@ -152,6 +152,33 @@ test('going back to the device’s language leaves nothing stored', async ({ pag
   ).toBeVisible();
 });
 
+test.describe('driving the language choice with the arrow keys', () => {
+  // Wide enough for the three choices to sit side by side, so "the one to the
+  // left" is a direction a User can press. Below 640px they stack and Up and
+  // Down reach them instead — the same buttons either way.
+  test.use({ viewport: { width: 1024, height: 800 } });
+
+  test('picks a language with nothing but arrows and Enter', async ({ page }) => {
+    await signInAndLand(page);
+    await openSettings(page);
+
+    await page.getByRole('button', { name: 'Español' }).focus();
+    await page.keyboard.press('ArrowLeft');
+    await expect
+      .poll(() => page.evaluate(() => document.activeElement?.textContent))
+      .toBe('English');
+
+    await page.keyboard.press('Enter');
+
+    await expect(page.getByRole('button', { name: 'English', pressed: true })).toBeVisible();
+    // And "match my device" is no longer the choice, though English is what
+    // this device asks for anyway: the two are different settings.
+    await expect(
+      page.getByRole('button', { name: 'Match my device (English)', pressed: false }),
+    ).toBeVisible();
+  });
+});
+
 test('the Home Layout editor is reached from the settings screen', async ({ page }) => {
   await signInAndLand(page);
   await openSettings(page);
