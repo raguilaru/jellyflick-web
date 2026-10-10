@@ -51,6 +51,28 @@ export const es: Messages = {
   'home.newOnJellyflick.empty': 'Todavía no se ha añadido nada a tus bibliotecas.',
   'home.newOnJellyflick.unavailable': 'Jellyflick no pudo leer las novedades del servidor.',
 
+  'home.empty': 'No se muestra ninguna fila en Inicio. Edita Inicio para elegir algunas.',
+
+  'home.row.continueWatching': 'Seguir viendo',
+  'home.row.myList': 'Mi lista',
+  'home.row.watchAgain': 'Volver a ver',
+  'home.row.becauseYouWatched': 'Porque viste',
+
+  'homeLayout.heading': 'Editar Inicio',
+  'homeLayout.explanation':
+    'Elige las filas de tu Inicio y su orden. Tu Inicio te sigue a todos tus dispositivos.',
+  'homeLayout.done': 'Listo',
+  'homeLayout.hide': (p) => `Ocultar ${p.row}`,
+  'homeLayout.show': (p) => `Mostrar ${p.row}`,
+  'homeLayout.moveUp': (p) => `Subir ${p.row}`,
+  'homeLayout.moveDown': (p) => `Bajar ${p.row}`,
+  'homeLayout.hidden': 'Oculta',
+  'homeLayout.notBuiltYet': 'Todavía no está en Inicio',
+  'homeLayout.addHeading': 'Filas que puedes añadir',
+  'homeLayout.add': (p) => `Añadir ${p.row}`,
+  'homeLayout.nothingToAdd': 'Todas las filas ya están en Inicio.',
+  'homeLayout.notSaved': 'Jellyflick no pudo guardar ese cambio en el servidor.',
+
   'search.heading': 'Buscar',
   'search.fieldLabel': 'Busca una película o una serie',
   'search.searching': 'Buscando…',

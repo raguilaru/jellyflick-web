@@ -3,6 +3,8 @@ import type { DeviceLayer } from '../device/types';
 import { HomeScreen } from '../home/home-screen';
 import { SearchScreen } from '../search/search-screen';
 import type { Session, SignedInUser } from '../session/session';
+import { HOME_LAYOUT_PATH, HomeLayoutScreen } from '../settings/home-layout-screen';
+import { SettingsProvider } from '../settings/settings-provider';
 import { useBackHandler } from './back';
 import { useWideScreen } from './layout';
 import { BottomBar } from './bottom-bar';
@@ -38,7 +40,11 @@ const SEARCH_SECTION = sectionFor('search');
 export function AppShell({ user, session, device, pictureUrl }: AppShellProps) {
   return (
     <LocationProvider>
-      <ShellFrame user={user} session={session} device={device} pictureUrl={pictureUrl} />
+      {/* One copy of the User's settings for every screen: Home and the Home
+          Layout editor are two views of the same thing (#10). */}
+      <SettingsProvider gateway={session.gateway()} userId={user.userId}>
+        <ShellFrame user={user} session={session} device={device} pictureUrl={pictureUrl} />
+      </SettingsProvider>
     </LocationProvider>
   );
 }
@@ -66,6 +72,9 @@ function ShellFrame({ user, session, device, pictureUrl }: AppShellProps) {
             section={section}
           />
         ))}
+        {/* Not a section: it is reached from Home, and later from the settings
+            screen (#11/#35), so it is in neither navigation bar. */}
+        <Route path={HOME_LAYOUT_PATH} component={HomeLayoutScreen} />
         <Route default component={UnknownSection} />
       </Router>
 

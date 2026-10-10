@@ -55,6 +55,31 @@ export const en = {
   'home.newOnJellyflick.empty': 'Nothing has been added to your libraries yet.',
   'home.newOnJellyflick.unavailable': 'Jellyflick could not read what is new from the Server.',
 
+  'home.empty': 'No Rows are shown on Home. Edit Home to choose some.',
+
+  // A Row's name, wherever it is shown: on Home as its heading, and in the
+  // Home Layout editor as the thing being moved. New on Jellyflick already had
+  // a key of its own, above, and keeps it.
+  'home.row.continueWatching': 'Continue Watching',
+  'home.row.myList': 'My List',
+  'home.row.watchAgain': 'Watch Again',
+  'home.row.becauseYouWatched': 'Because You Watched',
+
+  'homeLayout.heading': 'Edit Home',
+  'homeLayout.explanation':
+    'Choose the Rows on your Home and the order they come in. Your Home follows you to every device.',
+  'homeLayout.done': 'Done',
+  'homeLayout.hide': (p: { row: string }) => `Hide ${p.row}`,
+  'homeLayout.show': (p: { row: string }) => `Show ${p.row}`,
+  'homeLayout.moveUp': (p: { row: string }) => `Move ${p.row} up`,
+  'homeLayout.moveDown': (p: { row: string }) => `Move ${p.row} down`,
+  'homeLayout.hidden': 'Hidden',
+  'homeLayout.notBuiltYet': 'Not on Home yet',
+  'homeLayout.addHeading': 'Rows you can add',
+  'homeLayout.add': (p: { row: string }) => `Add ${p.row}`,
+  'homeLayout.nothingToAdd': 'Every Row is already on Home.',
+  'homeLayout.notSaved': 'Jellyflick could not save that change to the Server.',
+
   'search.heading': 'Search',
   'search.fieldLabel': 'Search for a Movie or Series',
   'search.searching': 'Searching…',
