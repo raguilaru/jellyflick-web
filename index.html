@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>Jellyflick</title>
+    <!--
+      The runtime config is a classic script, so it runs synchronously and the
+      global is guaranteed to exist by the time the deferred module script does.
+      The container writes it at start-up; in `vite dev` the file in public/ is
+      an empty placeholder and .env.local stands in.
+    -->
+    <script src="/config.js"></script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
