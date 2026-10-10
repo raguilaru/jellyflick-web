@@ -55,8 +55,11 @@ src/
                         Users in device storage, plus the sign-in screen.
   settings/             The Client Settings store, on the Server:
                         `client-settings.ts` is the store, `settings-provider.tsx`
-                        the one copy the screens read, `home-layout-screen.tsx`
-                        the Home Layout editor.
+                        the one copy the screens read, `settings-screen.tsx` the
+                        settings screen, `home-layout-screen.tsx` the Home Layout
+                        editor, `accent-colours.ts` the Accent Colour presets,
+                        `use-accent-colour.ts` what paints them, `ui-language.tsx`
+                        the language the app is drawn in.
   shell/                The app once a User is signed in: `sections.ts` is the
                         one list of sections and their addresses, `app-shell.tsx`
                         the routes and which bar is shown, `back.ts` the single
@@ -78,8 +81,9 @@ Where new code belongs:
 - **A new Jellyfin endpoint** → one method on the gateway in `src/jellyfin/gateway.ts`,
   and nowhere else. Nothing outside `src/jellyfin/` calls `fetch`.
 - **Anything device-specific** — a key code, a codec probe, the clock, randomness,
-  a renderer capability, storage → `src/device/`. Nothing else reads `navigator`,
-  `window.chrome`, `Date.now()`, `Math.random()` or `localStorage`.
+  a renderer capability, storage, the languages the device prefers → `src/device/`.
+  Nothing else reads `navigator`, `window.chrome`, `Date.now()`, `Math.random()`
+  or `localStorage`.
 - **Anything that must survive a reload** → through `device.storage()`, and under
   one key owned by one module (`session/` owns `jellyflick.session`). Per-User
   settings that follow a User between devices are not this: they belong on the
@@ -203,6 +207,13 @@ Keys are dot-namespaced by screen or feature (`connect.addressLabel`). No string
 a User can see is ever written inline. Locales load as separate chunks, so a User
 downloads one dictionary.
 
+**Which language the app is drawn in** is a User's own setting, not a build-time
+choice: `src/main.tsx` loads the dictionary for the device's languages
+(`device.preferredLanguages()`) and `src/app.tsx` provides it, and
+`src/settings/ui-language.tsx` provides a second one under it once the User's
+settings have been read. See "The settings screen" below for why the language is
+ours rather than Jellyfin's, and why that provider is always in the tree.
+
 Formatting goes through `Intl.NumberFormat`, `Intl.DateTimeFormat` and
 `Intl.PluralRules`, which are native on the target. `Intl.RelativeTimeFormat`
 (71), `Intl.ListFormat` (72) and `Intl.Locale` (74) are **not** — write the three
@@ -272,9 +283,14 @@ belongs to a screen rather than a person.
   The POST answers **204**, which is why the gateway has a request shape that
   reads no body.
 - **A new setting is three lines**: a `jf.` key, a field on `ClientSettings`
-  with a default, and a line each in `settingsFrom` and `prefsFor`. The UI
-  language already has its key (`jf.uiLanguage`) and nothing reading it yet —
-  Jellyfin 12.x has no per-user UI language of its own, so it is ours (#11/#35).
+  with a default, and a line each in `settingsFrom` and `prefsFor`. There are
+  three keys today: `jf.homeLayout`, `jf.uiLanguage` and `jf.accentColour`. A
+  setting whose value is a name rather than a structure is typed as a plain
+  `string`, not a union, so a preset a *newer* Jellyflick offers survives being
+  read by an older one — the reader falls back when it draws it
+  (`accentColourFor`) and never rewrites what it did not understand. "No choice
+  at all" is stored as the empty string, because `CustomPrefs` holds strings:
+  that is how "match my device" differs from "English".
 - **One copy in front of the User.** `settings-provider.tsx` holds it, above the
   router, so Home and the editor are two views of one thing and an edit shows
   without a reload. A change is applied at once and saved behind it — pressing
@@ -284,6 +300,12 @@ belongs to a screen rather than a person.
   to undo their work.
 - **A save that does not land says so** and keeps the User's change on screen.
   A read that does not land hands back the defaults, so Home always draws.
+- **A screen that *edits* settings offers nothing to press until `loaded`.**
+  Home drawing the default layout for a moment is harmless; a *control* drawn
+  from the defaults is not, because pressing it saves the defaults plus that one
+  change over what the User really has. Both the settings screen and the Home
+  Layout editor show `settings.loading` until the read lands. This is the bug #13
+  flagged in #10's editor, fixed in #11 rather than waited out in the tests.
 
 The Home Layout itself is `src/home/home-layout.ts`: an ordered list of Rows,
 each with a kind and an optional `hidden`, and the rules are pure functions of
@@ -308,14 +330,73 @@ The editor, `src/settings/home-layout-screen.tsx`:
 
 - **Its address is not a section.** `/settings/home-layout` has its own `<Route>`
   in the shell and no place in either bar; `SECTIONS` is still the one list of
-  sections. It is reached from Home today and from the settings screen (#11/#35)
-  later.
+  sections. It is reached from Home and from the settings screen.
 - **Reordering is two buttons, not a drag.** A drag cannot be done with a remote
   (story 64), and the navigator owns Up/Down/Left/Right — taking the arrow keys
   here would leave no way to leave the screen. Buttons serve touch, mouse and
   arrow keys at once, and they are reachable because `src/navigation/` reaches
   anything focusable.
 - **There is no Save button**, so there is none to leave unpressed.
+
+## The settings screen, Accent Colour and language
+
+`src/settings/settings-screen.tsx` is the screen a User changes their own things
+on (#11): their Accent Colour, the language the app is in, and the way to their
+Home Layout. Its address `/settings` is **not a section** — `src/shell/sections.ts`
+is still the one list of sections and this is not in it — but both navigation bars
+reach it: the top bar with a link of its own after the sections, and the phone's
+bottom bar through the User's picture, which is where a phone User looks for
+their own settings. The picture used to be inert; it is now a real link named
+"Settings", because that is what pressing it does.
+
+- **Every choice is a `<button>` with `aria-pressed`, never a radio group.**
+  Native radios take Left and Right for themselves to move the selection, and
+  the navigator owns the arrow keys for moving focus — two meanings for one key
+  press, on the screen that most has to work with a remote. Buttons say which
+  one is chosen, leave the arrows alone, and serve touch, mouse and remote at
+  once. #10's Move up / Move down buttons are the same decision.
+- **There is no Save button.** A press applies at once and saves behind the
+  screen, and nothing is offered until the first read has landed (see above).
+
+**Accent Colour** (story 112) is `accent-colours.ts`: seven presets, each
+carrying both the `--accent` colour *and* the `--accent-text` that reads on it,
+because readability picks that, not taste. A fixed set rather than a colour
+picker is what makes "text stays readable" a promise the app can keep — and a
+picker is no way to choose anything with a remote.
+`test/unit/accent-colours.test.ts` measures every preset from the WCAG formula
+against two bars, because `base.css` uses the token two ways: **4.5:1** for
+`--accent-text` on `--accent` (body text on a filled button) and **3:1** for
+`--accent` on `--surface-base` (the wordmark, which is large text, and the focus
+ring and section underline, which are non-text parts of the interface). It also
+holds the default preset against the literal `base.css` ships.
+
+`use-accent-colour.ts` writes the two tokens on the root element in the shell,
+so every rule that already reads `--accent` follows at once and no component
+has to know a colour was chosen. **It does not touch the manifest.** The
+manifest's `theme_color`/`background_color` are `--surface-base`, because the
+manifest is one file for the whole household while the Accent Colour is one
+User's; a unit test from #36 fails if those two drift.
+
+**The language** (story 113) is `ui-language.tsx`, and it is **Jellyflick's own
+setting, not Jellyfin's**. Jellyfin 12.x has no per-user UI language at all —
+the only one it has is the server-wide `ServerConfiguration.UICulture`
+(`decisions.md` §2). Story 114 says the settings screen "edits my Jellyfin
+settings"; that holds for audio language, subtitle language and next-episode
+autoplay, which really are `UserConfiguration` fields and are #35's, and it
+cannot hold for the UI language. So the screen states the difference in words
+(`settings.languageExplanation`) rather than letting a User assume their other
+Jellyfin apps will follow.
+
+- The choice is the User's chosen tag, or **absent**, which means "match my
+  device" and is where `device.preferredLanguages()` comes in. Absent is stored
+  as the empty string, so going back to the device's language is a real choice
+  and not the same as choosing English.
+- `UiLanguage` is **always in the tree**, with only its *value* changing while a
+  dictionary is being fetched. Rendering the children bare and wrapping them in
+  a provider later changes the shape of the tree, which unmounts and remounts
+  the whole shell — losing a typed search term and every Row's state. The
+  dictionary already on the screen stands in meanwhile, so there is no blank
+  screen and no flash of message keys.
 
 ## My List
 

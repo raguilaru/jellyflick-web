@@ -11,7 +11,7 @@ if (root === null) throw new Error('index.html is missing its #app element.');
 
 const config = readRuntimeConfig();
 const device = createBrowserDeviceLayer();
-const locale = pickLocale(navigator.languages ?? [navigator.language]);
+const locale = pickLocale(device.preferredLanguages());
 
 // No top-level `await` anywhere in this app: Oxc cannot downlevel it for
 // Chromium 68 and the build only warns while emitting code the target cannot

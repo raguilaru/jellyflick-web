@@ -16,9 +16,9 @@ import { useSettings } from './settings-provider';
  * The Home Layout editor: add, hide and reorder the Rows on Home (story 48).
  *
  * **Its address is not a section.** `src/shell/sections.ts` is the one list of
- * sections and this is not one of them — it is a screen reached from Home, and
- * later from the settings screen (#11/#35), so it has its own route and no
- * place in either navigation bar.
+ * sections and this is not one of them — it is a screen reached from Home and
+ * from the settings screen (#11), so it has its own route and no place in
+ * either navigation bar.
  *
  * **Reordering is two buttons, not a drag.** A drag cannot be done with a
  * remote, and story 64 says every screen is usable with arrows, Enter and Back.
@@ -37,11 +37,25 @@ export const HOME_LAYOUT_PATH = '/settings/home-layout';
 
 export function HomeLayoutScreen() {
   const t = useTranslate();
-  const { settings, saveFailed, change } = useSettings();
+  const { settings, loaded, saveFailed, change } = useSettings();
   const layout = settings.homeLayout;
 
   const rename = (kind: HomeRowKind): string => t(ROW_NAME_KEYS[kind]);
   const addable = addableRowKinds(layout);
+
+  // Nothing to press until the Server has answered. The provider starts on the
+  // default layout, so buttons drawn before the read lands are buttons for
+  // somebody else's Home: a press then would save the defaults, plus that one
+  // change, over what the User really has. #13 found this as a lost press.
+  if (!loaded) {
+    return (
+      <main class="screen">
+        <h1 class="screen__heading">{t('homeLayout.heading')}</h1>
+        <p class="screen__lead">{t('homeLayout.explanation')}</p>
+        <p class="notice">{t('settings.loading')}</p>
+      </main>
+    );
+  }
 
   return (
     <main class="screen">

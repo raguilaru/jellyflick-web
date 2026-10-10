@@ -111,6 +111,31 @@ export const es: Messages = {
   'homeLayout.nothingToAdd': 'Todas las filas ya están en Inicio.',
   'homeLayout.notSaved': 'Jellyflick no pudo guardar ese cambio en el servidor.',
 
+  'settings.heading': 'Ajustes',
+  'settings.loading': 'Buscando tus ajustes…',
+  'settings.notSaved': 'Jellyflick no pudo guardar ese cambio en el servidor.',
+
+  'settings.accentHeading': 'Color de acento',
+  'settings.accentExplanation':
+    'El color que resalta los botones, el logotipo y lo que tengas seleccionado. En todos estos colores el texto se lee bien.',
+  'settings.accent.red': 'Rojo',
+  'settings.accent.amber': 'Ámbar',
+  'settings.accent.green': 'Verde',
+  'settings.accent.teal': 'Turquesa',
+  'settings.accent.blue': 'Azul',
+  'settings.accent.violet': 'Violeta',
+  'settings.accent.pink': 'Rosa',
+
+  'settings.languageHeading': 'Idioma',
+  'settings.languageExplanation':
+    'El idioma de Jellyflick. Jellyflick guarda este ajuste por ti y te acompaña en todos tus dispositivos, pero Jellyfin no tiene un ajuste de idioma propio, así que tus otras aplicaciones de Jellyfin conservan el suyo.',
+  'settings.language.deviceIs': (p) => `El de mi dispositivo (${p.language})`,
+  'settings.language.en': 'English',
+  'settings.language.es': 'Español',
+
+  'settings.homeHeading': 'Inicio',
+  'settings.homeExplanation': 'Elige las filas de tu Inicio y el orden en que aparecen.',
+
   'search.heading': 'Buscar',
   'search.fieldLabel': 'Busca una película o una serie',
   'search.searching': 'Buscando…',
@@ -156,6 +181,7 @@ export const es: Messages = {
   'nav.series': 'Series',
   'nav.myList': 'Mi lista',
   'nav.search': 'Buscar',
+  'nav.settings': 'Ajustes',
 
   'shell.sectionNotBuiltYet': 'Esta sección todavía no está hecha.',
   'shell.unknownSectionHeading': 'Aquí no hay nada',

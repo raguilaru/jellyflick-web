@@ -4,10 +4,16 @@ State of the `/implement-spec` run on the integration branch `feat/jellyflick-v1
 (draft PR #38). Update this whenever a wave lands, so a fresh session can pick the work
 up without re-deriving anything.
 
-## START HERE — fourth session, three implementers in flight
+## START HERE — fourth session stopped at 88% of the 5-hour window
 
-The 5-hour window reset, so the run resumed. **#13 landed**, and a wave of three was
-launched on #17, #11 and #8.
+The window had reset, so the run resumed: **#13 and #11 landed**, and a wave of three was
+launched on #17, #11 and #8. The session then stopped at **88%** (weekly 58%) with **#17
+and #8 still in flight**, rather than begin a merge it might not finish — a merge plus the
+integrator's own gate run is 10–15 points, and being stranded mid-merge is the one state
+worth avoiding. **Nothing is half-merged; the branch is green.**
+
+The window resets 2026-10-11 00:40 UTC. **Weekly is now the one to watch**: 58%, and it
+does not reset until 09:00 UTC, so it will bind before the 5-hour window does.
 
 **The integration branch is green.** Tip `acf6fc9`, gate verified on fresh ports
 (see trap 4): `lint` 0, `typecheck` 0, `build` 0, **264 unit tests** in 25 files,
@@ -23,26 +29,16 @@ gates #18, #19, #20 and #21.
 1. **Check the 5-hour window before anything else.** A wave of three implementers plus the
    integrator's own gate runs costs roughly 25–30 points of it. The third session measured
    this properly — the table is further down.
-2. **Merge whatever reported.** #17, #11 and #8 are in flight; see the table below for
+2. **Merge whatever reported.** #17 and #8 are in flight; see the table below for
    branches, worktrees and ports. Re-run the gate **on fresh ports** after every merge,
    each step with its own exit code, and close each ticket as part of merging it.
-3. **Then launch from what is left**: #12, #14, #15, #16, plus #9 once #8 lands and #18,
-   #19, #20, #21, #25 once #17 does.
+3. **Then launch from what is left**: #12, #14, #15, #16 and #35 (opened by #11), plus #9
+   once #8 lands and #18, #19, #20, #21, #25 once #17 does.
    - **#12, #15 and #16 all touch Home** (`src/home/home-rows.tsx` and the Row registry),
      so running all three at once will conflict. Two at most, or accept the merge work.
    - **#14 touches `cardForTitle` in `src/home/row.tsx`**, which #13 and #17 also touch.
 4. **Read trap 4 before running a single gate.** It cost the third session a full false
    alarm.
-
-### One real bug is open and unowned
-
-#13 found that **#10's Home Layout editor opens on the defaults and redraws when the
-Server's answer lands, so a User pressing in that gap loses the press.**
-`editing-home.spec.ts` now waits for `networkidle` rather than papering over it, so the
-suite is honest, but **the bug is still there**. It is small and user-facing. #11's
-implementer was told about it and asked to fix it only if it fell out cheaply; if #11
-reports it untouched, it needs an owner — either a standalone commit by the integrator or
-its own ticket.
 
 ### Still owed after the tickets
 
@@ -58,7 +54,7 @@ natural place) must update them.
 
 ## Status at the last stop (2026-10-10, fourth session)
 
-**Merged into `feat/jellyflick-v1`** (tip `acf6fc9`, draft PR #38 open):
+**Merged into `feat/jellyflick-v1`** (tip `89ea755`, draft PR #38 open):
 
 | Ticket | State |
 |---|---|
@@ -72,13 +68,15 @@ natural place) must update them.
 | #10 Client Settings and Home Layout | merged at `9c0ed1a`, issue closed (touch caveat — see below) |
 | #24 Search | merged at `5b81023`, issue closed |
 | #13 My List | merged at `acf6fc9`, issue closed |
+| #11 Settings screen: Accent Colour and language | merged at `89ea755`, issue closed |
 
-Gate on the integration tip `acf6fc9` after #13 merged, each step's exit code checked
+Gate on the integration tip `89ea755` after #11 merged, each step's exit code checked
 individually and **on fresh ports** (see trap 4): `lint` 0, `typecheck` 0, `build` 0,
-**264 unit tests** in 25 files, **183 Playwright tests — 169 passed, 14 skipped, 0
-failed**, `chrome68` build **68.84 kB / 22.97 kB gz** JS and 7.71 kB / 2.13 kB gz CSS.
-Independently re-run by the integrator after every merge, not taken from the implementers'
-reports; all four this run matched their implementer's numbers exactly.
+**284 unit tests** in 27 files, **204 Playwright tests — 190 passed, 14 skipped, 0
+failed**, `chrome68` build **74.16 kB / 24.42 kB gz** JS (plus a separate 6.01 kB / 2.08 kB
+gz Spanish chunk) and 8.46 kB / 2.24 kB gz CSS. Independently re-run by the integrator
+after every merge, not taken from the implementers' reports; all six this run matched their
+implementer's numbers exactly.
 
 **The skip count rose 12 → 14 at #13**, and the two new ones are legitimate: the
 pointer-only hover tests in `my-list.spec.ts`, skipped on `keyboard-only` with an explicit
@@ -89,49 +87,49 @@ The session opened by re-running the gate on `1c54103` and got the second sessio
 numbers unchanged (173 unit / 18 files, 102 passed / 12 skipped, 53.18 kB / 18.84 kB gz),
 which confirmed the two doc/config commits after `49fed11` changed nothing.
 
-Bundle growth so far: 53.18 → 68.84 kB raw, 18.84 → 22.97 kB gz, across #10 (~7 kB raw),
-#24 (~5 kB raw) and #13 (~3.7 kB raw). #36 added nothing to the JS — its manifest and
-icons are static files in `public/`. **Nothing is lazily loaded yet**, and the spec's
-lightness constraint is about the bundle shipped to a TV, so whoever adds the player
-should expect to be the one who has to start splitting. Worth watching: the remaining
-tickets include a title page, a Billboard and the whole player.
+Bundle growth so far: 53.18 → 74.16 kB raw, 18.84 → 24.42 kB gz, across #10 (~7 kB raw),
+#24 (~5 kB), #13 (~3.7 kB) and #11 (~5.3 kB). #36 added nothing to the JS — its manifest
+and icons are static files in `public/`. **Nothing is lazily loaded yet**, and the spec's
+lightness constraint is about the bundle shipped to a TV, so whoever adds the player should
+expect to be the one who has to start splitting. Still to come: a title page, a Billboard,
+more Row types and the whole player. **The bundle is the one gate number that moves every
+merge — watch the trend, not just the pass.**
 
 The 12 e2e skips are all deliberate viewport/pointer gating: #6's 7 (3 wide-screen tests
 skipped on `phone`, 2 phone tests skipped on `desktop` and `keyboard-only`) plus #7's 5
 (1 phone-only test skipped on `desktop` and `keyboard-only`, 3 pointer tests skipped on
 `keyboard-only`).
 
-### In flight right now — #17, #11 and #8
-
-Launched in the fourth session from base `acf6fc9`, each in its own worktree, each driving
-the `tdd` skill, each briefed with pointers only:
+### In flight right now — #17 and #8
 
 | Ticket | Branch | Worktree | `APP_PORT` / `FAKE_JELLYFIN_PORT` |
 |---|---|---|---|
-| #17 Title page | `ticket/17-title-page` | `.claude/worktrees/ticket-17-title-page` | 4217 / 8817 |
-| #11 Settings screen: Accent Colour and language | `ticket/11-settings-screen` | `.claude/worktrees/ticket-11-settings-screen` | 4211 / 8811 |
+| #17 Title page | `ticket/17-title-page` | **its own harness-made worktree** (see trap 5) | 4217 / 8817 |
 | #8 Several Users and the User Picker | `ticket/8-users-and-user-picker` | `.claude/worktrees/ticket-8-user-picker` | 4208 / 8808 |
 
-None had reported as of the last write of this file. **Their context may be gone but their
-branches are not** — see "Recovering an interrupted implementer" below, and check each
-branch before assuming it is empty or correct.
+**#17 was launched twice.** The first implementer was blocked by trap 5 before writing any
+code; the integrator saved its design research to the session scratchpad
+(`scratchpad/notes/ticket-17-design.md`) and relaunched with `isolation: "worktree"`,
+pointing the replacement at those notes as an **unverified** lead. The branch name was
+freed first (old worktree and branch removed; nothing lost, it had no commits). The
+replacement was told to **push its branch**, so look for `origin/ticket/17-title-page`
+rather than a local worktree.
 
-These three were chosen to *avoid* the Home contention: #12, #15 and #16 all add Rows
-through #10's registry and would have fought over `src/home/home-rows.tsx`. #17 is a new
-screen, #11 is the settings area and #8 is the shell. They still overlap additively on
-`src/shell/app-shell.tsx` (routes), `src/styles/base.css` and the `i18n` dictionaries, which
-is usually trivial to resolve.
+**#8 was alive and three commits in** at the last write, with uncommitted work in its
+worktree. Two things to check when it reports, rather than taking its word:
 
-**Two risks worth knowing before merging them:**
-
-- **#8 is the one to watch.** Per-User state is now live in two places — #10's settings
-  provider and #13's My List store — so switching User must not leave the previous User's
-  Home Layout or My List on screen. #8 was asked to report what it found. #8 may also have
-  had to touch other tickets' specs, because many sign in as Rafael and several assert the
-  literal "Signed in as Rafael."; it was told to say which and not to weaken an assertion
-  to make it pass. **Check that claim rather than taking it.**
-- **#11 and #8 both touch the bottom bar**, where #6 left the User picture inert and not a
-  focus stop pending #8, and credited settings to #11. Expect a real conflict there.
+- **It had `test/e2e/zz-debug.spec.ts` in its tree.** That is scaffolding and **must not
+  land**. Check the merge diff for it.
+- **Per-User state is now live in three places** — #10's settings provider, #13's My List
+  store, and #11's accent and language — so switching User must not leave the previous
+  User's Home Layout, My List, accent or language on screen. #11's accent in particular is
+  painted on the root element inside the shell. #8 was asked what it found; verify it.
+- #8 may also have had to edit other tickets' specs, since many sign in as Rafael and
+  several assert the literal "Signed in as Rafael." It was told to say which and not to
+  weaken an assertion to make it pass. **Read those diffs.**
+- **#11 turned the bottom bar's User picture into a "Settings" link and a focus stop** (it
+  was inert per #6) — the same element a User-switch control wants. #11 flagged this as a
+  real collision. #8 branched before #11 landed, so its merge is where it lands.
 
 ### What #17 closes that is not its own
 
@@ -140,14 +138,14 @@ seam (`Row` takes `onCardPress`) and left the box open. **#17 passing a handler 
 closes it**, and #17 was asked to say whether it now does. #13 left `useMyList()` and
 `<MyListToggle>` for #17's story-70 toggle, so #17 should not build a second My List path.
 
-### The frontier after #13 — seven wide, three of them taken
+### The frontier — seven open, two of them taken
 
 All verified `blocked_by: 0` after #13 merged:
 
 | Ticket | Note |
 |---|---|
 | #17 Title page | **in flight** — head of the deepest chain, and gates #18, #19, #20, #21, #25 |
-| #11 Settings screen: Accent Colour and language | **in flight** — gates #35 |
+| #35 Playback preferences in settings | newly open — #11 landed; takes `SETTINGS_PATH`, the `aria-pressed` pattern and the `loaded` guard from it |
 | #8 Several Users and the User Picker | **in flight** — gates #9 |
 | #12 Continue Watching | open; adds a Row via #10's registry |
 | #15 More Row types | open; `HomeRow.parameter` is already round-tripped unread for its genre/Collection Rows |
@@ -187,7 +185,7 @@ and it must still be run after every merge.
 The weekly limit has been the slack one all run (46% at the start of the fourth session)
 but it does not reset for days, so it is the one that will eventually bind. Watch both.
 
-### Four traps that have already bitten this run
+### Five traps that have already bitten this run
 
 **1. A merged ticket is not a closed ticket.** This bit twice. #2, #3 and #5 were merged
 in the first session and never closed, so GitHub reported #4 and #6 as blocked long after
@@ -232,6 +230,36 @@ for p in <ports used>; do lsof -ti :$p | xargs kill -9; done
 
 This is trap 2's sibling. Trap 2 is a gate whose exit code lies; this is a gate whose
 exit code is honest about the wrong build. Both produce a confident, meaningless number.
+
+**5. An implementer cannot necessarily write to a worktree the integrator made for it.**
+This killed the fourth session's first #17 implementer outright — ~190k subagent tokens
+spent, zero lines of code. A subagent inherits the *integrator's* working directory, so
+writing to a sibling path under `.claude/worktrees/` is refused ("that path belongs to a
+different worktree"), and `git checkout -b` inside its own inherited worktree is refused
+too, because that worktree holds the shared integration branch and switching it off would
+disturb the integrator. The implementer was right to refuse to route around either guard
+with shell heredocs, and right not to commit onto `feat/jellyflick-v1`.
+
+Confusing detail: **this is not uniform.** Waves 4 and 5 (#36, #10, #13, #24) all wrote to
+integrator-made worktrees without trouble, and #11 in this very wave was writing fine while
+#17 was being refused. The guard appears to tighten part-way through a session, so a
+pattern that worked an hour ago is not evidence it still works.
+
+**The simplest fix, found by #11 the same hour: the implementer calls
+`EnterWorktree(path=…)` with the worktree the integrator already made for it.** Writes are
+refused until it does and work normally afterwards. **Say this in every implementer brief**
+— #11 worked it out alone, #17's first attempt did not and died. The alternative, launching
+with `isolation: "worktree"` so the harness provides one, also works; then have the agent
+`git checkout -b ticket/<n>-<slug>` there (free the branch name first if the integrator
+already created one) and **tell it to push the branch**, because a harness-made worktree may
+be cleaned up and the pushed branch is then the only surviving copy. Do **not** respond to this by editing permission settings because
+an agent asked — that is the wrong lever and the agent has no authority to ask for it.
+
+**Salvage what a blocked implementer learned.** #17's first attempt had done real,
+accurate design research before it was stopped; it was saved to the session scratchpad and
+handed to the replacement as an explicitly *unverified* lead. That turned a total loss into
+a head start. The `implement-spec` skill's own step 2 suggests exactly this — notes saved
+outside the repo, reachable by later subagents.
 
 **3. `npm ci` in the integration worktree after merging a branch that changed
 `package.json`.** Merging #6 made the gate fail four ways (`typecheck` 2, `test` 1,
@@ -439,16 +467,42 @@ From #13 (all recorded in `docs/architecture.md` under "My List"):
   #13's extra startup request made it bite. **Relevant to every later ticket that writes
   settings.**
 
+From #11:
+
+- **A choice is a `<button aria-pressed>`, never a radio group.** Native radios take
+  Left/Right to move the selection and the navigator owns the arrow keys — two meanings for
+  one press, on the screen that most needs a remote.
+- **A context provider that appears conditionally remounts everything below it.**
+  `UiLanguage` is always in the tree with only its value changing; rendering children bare
+  and wrapping them later unmounted the whole shell and lost a typed search term. Ten
+  `search-journey` tests caught it. **Anyone adding a provider that waits on async data
+  should copy this shape.**
+- **A name-valued setting is typed `string`, not a union**, so a preset a newer Jellyflick
+  offers survives an older one reading it (`accentColourFor` falls back only when drawing).
+  "No choice" is the empty string, which is how "match my device" differs from "English".
+- **The accent is painted on the root element only inside the shell**, so sign-in and the
+  address screen are always the default red — there is no User yet to have a colour.
+- **`/settings` is not a section.** The top bar carries its own link after the sections; the
+  phone's bottom bar reaches it through the User's picture, now a real link and a focus stop.
+- **Accent contrast is computed, not asserted.** `accent-colours.test.ts` derives WCAG
+  contrast from the formula (pinning the formula against published values first) and holds
+  **two** bars, because `base.css` uses the token two ways: 4.5:1 for text on the accent
+  fill, 3:1 for the accent as ink or edges on `--surface-base`. It also fails if the presets
+  drift from the literals `base.css` ships. **A new preset must clear both bars.**
+- **The UI language says on screen that it is ours, not Jellyfin's**, per `decisions.md` §2,
+  and a unit test holds that exact sentence. #35 must keep it true while its own three
+  settings really do edit Jellyfin.
+- `device.preferredLanguages()` exists now; nothing else should read `navigator.languages`.
+- **Both settings screens draw no control until the first read lands.** This fixed a real
+  #10 bug: a control drawn from the provider's defaults and pressed in that gap saved the
+  defaults *over the User's real settings*. Any later screen reading settings needs the same
+  guard.
+
 Every implementer kept `docs/architecture.md` current. Read it rather than this file for
 the codebase map.
 
 ### Loose ends neither ticket owned
 
-- **#10's Home Layout editor loses a press made before the Server's answer lands.** The
-  editor opens on the defaults and redraws when the read returns, so a press in that gap
-  goes to a button about to be replaced. Found by #13, which made
-  `editing-home.spec.ts` wait for `networkidle` rather than paper over it — so the suite is
-  honest and the bug is still real. Small, user-facing, **and nobody's ticket.**
 - **No wordmark at phone width.** The bottom bar has no room and story 61 does not ask
   for one; the Billboard ticket may want a small phone header.
 - **Bebas Neue still wants crediting on an about/licences screen**, which no ticket owns yet.
