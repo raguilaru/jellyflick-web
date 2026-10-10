@@ -277,6 +277,42 @@ body {
   min-width: 0;
 }
 
+/*
+ * Browsing by genre: the genres as a wrapping set of chips.
+ *
+ * Flex, because the set has to wrap and grid would force a column count — so
+ * `gap` is the Chrome 84 one and silently does nothing on the target. The
+ * margins below are the fallback: a negative margin on the list cancels the
+ * outer edge, which is what `gap` would have done.
+ */
+.genres {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.genres__list {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0 calc(var(--space-2) * -1);
+  padding: 0;
+  list-style: none;
+}
+
+.genres__list > li {
+  margin: var(--space-1) var(--space-2);
+}
+
+/* The chip is a quiet button without the primary action's top margin. */
+.genres__genre,
+.genres__leave {
+  margin-top: 0;
+}
+
+.genres__leave {
+  justify-self: start;
+}
+
 .field__label {
   font-weight: 600;
 }

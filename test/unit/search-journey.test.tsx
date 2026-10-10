@@ -3,7 +3,12 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/preact';
 import { App } from '../../src/app';
 import { en } from '../../src/i18n/en';
 import { inMemoryDeviceStorage, testDeviceLayer } from '../device/profiles';
-import { fakeRequests, forgetFakeRequests, resetFakeState } from '../fake-jellyfin/control';
+import {
+  fakeRequests,
+  forgetFakeRequests,
+  resetFakeState,
+  setFakeState,
+} from '../fake-jellyfin/control';
 import { SAMPLE_PASSWORD } from '../fake-jellyfin/data';
 import { fakeJellyfinUrl } from '../fake-jellyfin/url';
 
@@ -136,5 +141,46 @@ describe('a User searching for something to watch', () => {
     expect(samples.filter((said) => said.includes('Searching…'))).toEqual([]);
     // Heat matches both terms, so it was on the screen the whole way through.
     expect(samples.filter((said) => !said.includes('Heat'))).toEqual([]);
+  });
+});
+
+describe('a User who does not know what they want', () => {
+  it('is offered the genres the Server’s Movies and Series are in', async () => {
+    await openSearch();
+
+    const genres = await screen.findByRole('list', { name: 'Browse by genre' });
+    expect(
+      Array.from(genres.querySelectorAll('button')).map((button) => button.textContent),
+    ).toEqual(['Comedy', 'Crime', 'Drama', 'Family', 'Science Fiction', 'Thriller']);
+  });
+
+  it('browses one genre, and sees the Movies and Series in it together', async () => {
+    await openSearch();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Family' }));
+
+    await waitFor(() => expect(cardNames('Family')).toEqual(['Bluey', 'Paddington']));
+  });
+
+  it('can leave a genre and be offered all of them again', async () => {
+    await openSearch();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Crime' }));
+    await waitFor(() => expect(cardNames('Crime')).toEqual(['Heat']));
+
+    fireEvent.click(screen.getByRole('button', { name: 'All genres' }));
+
+    expect(await screen.findByRole('list', { name: 'Browse by genre' })).toBeTruthy();
+    expect(screen.queryByRole('list', { name: 'Crime' })).toBeNull();
+  });
+
+  it('is told plainly when the Server will not say what it holds', async () => {
+    await setFakeState({ failLibraryQueriesWith: 500 });
+
+    await openSearch();
+
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'Jellyflick could not read the genres from the Server.',
+    );
   });
 });

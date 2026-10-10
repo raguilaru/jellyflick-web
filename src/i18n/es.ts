@@ -53,11 +53,17 @@ export const es: Messages = {
 
   'search.heading': 'Buscar',
   'search.fieldLabel': 'Busca una película o una serie',
-  'search.prompt': 'Escribe para buscar, o explora por género.',
   'search.searching': 'Buscando…',
   'search.results': 'Resultados',
   'search.nothingFound': (p) => `Nada en este servidor coincide con «${p.term}».`,
   'search.unavailable': 'Jellyflick no pudo buscar en el servidor ahora mismo.',
+  'search.genresHeading': 'Explora por género',
+  'search.genresLoading': 'Buscando géneros…',
+  'search.genresEmpty': 'Todavía no hay nada clasificado por género en tus bibliotecas.',
+  'search.genresUnavailable': 'Jellyflick no pudo leer los géneros del servidor.',
+  'search.allGenres': 'Todos los géneros',
+  'search.genreEmpty': (p) => `Todavía no hay nada en ${p.genre}.`,
+  'search.genreUnavailable': (p) => `Jellyflick no pudo leer lo que hay en ${p.genre}.`,
 
   'nav.sections': 'Secciones',
   'nav.home': 'Inicio',

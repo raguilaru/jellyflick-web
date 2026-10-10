@@ -3,6 +3,7 @@ import { Row } from '../home/row';
 import { useTranslate } from '../i18n/index';
 import type { JellyfinGateway } from '../jellyfin/gateway';
 import type { Session } from '../session/session';
+import { BrowseByGenre } from './genres';
 import { searchForTitles, type TitlesResult } from './search';
 
 export type SearchScreenProps = {
@@ -35,7 +36,7 @@ export function SearchScreen({ session }: SearchScreenProps) {
   const results = useSearch(gateway, settled);
 
   return (
-    <main class="screen search">
+    <main class="screen">
       <h1 class="screen__heading">{t('search.heading')}</h1>
 
       <div class="stack">
@@ -54,7 +55,16 @@ export function SearchScreen({ session }: SearchScreenProps) {
         />
       </div>
 
-      <SearchResults term={settled} results={results} />
+      {/*
+        Genres are what the screen offers while no term has been typed. Once
+        there is one, the results take the space: a User who is searching has
+        said what they want.
+      */}
+      {settled === '' ? (
+        <BrowseByGenre gateway={gateway} />
+      ) : (
+        <SearchResults term={settled} results={results} />
+      )}
     </main>
   );
 }
@@ -72,7 +82,6 @@ function SearchResults({
 }) {
   const t = useTranslate();
 
-  if (term === '') return <p class="notice">{t('search.prompt')}</p>;
   if (results === undefined) return <p class="notice">{t('search.searching')}</p>;
   if (results.outcome === 'unavailable') {
     return (
