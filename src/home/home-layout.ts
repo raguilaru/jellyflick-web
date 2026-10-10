@@ -96,8 +96,12 @@ export function hideRow(layout: HomeLayout, kind: HomeRowKind): HomeLayout {
 export function showRow(layout: HomeLayout, kind: HomeRowKind): HomeLayout {
   return layout.map((row) => {
     if (row.kind !== kind) return row;
-    const { hidden: _hidden, ...shown } = row;
-    return shown;
+    // Shown is the absence of `hidden`, not `hidden: false`, so that a layout
+    // read back from the Server is the one that was written.
+    return {
+      kind: row.kind,
+      ...(row.parameter === undefined ? {} : { parameter: row.parameter }),
+    };
   });
 }
 
