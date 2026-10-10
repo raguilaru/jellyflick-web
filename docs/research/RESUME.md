@@ -4,33 +4,50 @@ State of the `/implement-spec` run on the integration branch `feat/jellyflick-v1
 (draft PR #38). Update this whenever a wave lands, so a fresh session can pick the work
 up without re-deriving anything.
 
-## Status at the last stop (2026-10-10)
+## Status at the last stop (2026-10-10, second session)
 
-**Merged into `feat/jellyflick-v1`** (tip pushed, draft PR #38 open):
+**Merged into `feat/jellyflick-v1`** (tip `2d9d6d4`, pushed, draft PR #38 open):
 
 | Ticket | State |
 |---|---|
-| #2 Connect to a Server | merged |
-| #3 Sign in with a password | merged |
-| #5 Deployable container | merged |
+| #2 Connect to a Server | merged — **issue still open, needs closing** |
+| #3 Sign in with a password | merged — **issue still open, needs closing** |
+| #5 Deployable container | merged — **issue still open, needs closing** |
 
-Gate on the integration branch at that point: `lint` and `typecheck` clean,
-**115 unit tests**, **33 Playwright tests** across desktop/phone/keyboard-only, and a
-`chrome68` build.
+Gate re-verified on the integration tip at the start of this session and clean:
+`lint` and `typecheck` pass, **115 unit tests**, **33 Playwright tests** across
+desktop/phone/keyboard-only, and the `chrome68` build succeeds.
 
-**The frontier is #4 and #6** — both unblocked by #3, neither started. #6 was launched
-and stopped before it committed anything; its branch holds no work. #7 needs both.
+### Bookkeeping trap — read this before trusting `blocked_by`
 
-**Not yet done, and owed:** every ticket from #4 onward, the `code-review` pass over the
+The three merged tickets were **never closed**, so GitHub still reports
+`blocked_by: 1` for both #4 and #6 (each blocked by the open #3). The dependency is
+satisfied in substance — #3's work is on the integration branch. Closing #2, #3 and #5
+is what makes the live graph truthful again. Do not read a non-zero `blocked_by` on #4
+or #6 as real work remaining.
+
+### In flight right now
+
+Two implementers were launched in this session, in their own worktrees, both based on
+`2d9d6d4`:
+
+| Ticket | Branch | Worktree |
+|---|---|---|
+| #6 App shell | `ticket/6-app-shell` | `.claude/worktrees/ticket-6-app-shell` |
+| #4 New on Jellyflick on Home | `ticket/4-new-on-jellyflick-on-home` | `.claude/worktrees/ticket-4-new-on-home` |
+
+Neither has been merged, pushed, or had its issue closed — that was reserved for the
+integrator. If this session died mid-flight, see *Recovering an interrupted implementer*
+below; the branches are durable even though the agents' context is not.
+
+They collide on the Home screen, so ownership was split explicitly in both briefs:
+**#6 owns** the theme, wordmark, routing, the two navigation bars and the Back handler,
+keeping Home a thin placeholder; **#4 owns** Home's contents and adds the first real Row.
+Each was told the other is in flight. **#7 needs both.**
+
+**Not yet done, and owed:** every ticket from #7 onward, the `code-review` pass over the
 integration branch, the history rewrite in `decisions.md` §10, marking PR #38 ready, and
 removing the agent worktrees.
-
-### If you resume #4 and #6 together
-
-They collide on the Home screen. Split ownership explicitly: **#6 owns** the theme,
-wordmark, routing, the two navigation bars and the Back handler, keeping Home a thin
-placeholder; **#4 owns** Home's contents and adds the first real Row. Tell each that the
-other is in flight.
 
 ### Tickets whose acceptance boxes cannot be ticked as written
 
@@ -46,18 +63,21 @@ other is in flight.
   that made them is still alive.
 - **The task graph**: `docs/research/task-graph.md`. GitHub native issue dependencies are
   the source of truth; query a ticket's live gate with
-  `gh api repos/:owner/:repo/issues/<n> --jq .issue_dependencies_summary.blocked_by`.
+  `gh api repos/:owner/:repo/issues/<n> --jq .issue_dependencies_summary.blocked_by`
+  — but see the bookkeeping trap above before believing a non-zero answer.
 
 ## How to pick up
 
 1. Read `docs/research/decisions.md` — binding, and it overrides spec #1 where they differ.
 2. Read `docs/architecture.md` — the codebase map ticket #2 left for implementers.
-3. Find the frontier: open tickets whose `blocked_by` count is 0.
+3. Find the frontier: open tickets whose `blocked_by` count is 0, after confirming every
+   already-merged ticket has actually been closed.
 4. For each, spawn one implementer per ticket in its own worktree on `ticket/<n>-<slug>`
    based on the current tip of `feat/jellyflick-v1`, briefed with **pointers only**
    (the ticket, the spec, `decisions.md`, the research notes, `docs/architecture.md`) —
-   never by restating their content. Each implementer drives the `tdd` skill, and merges
-   the integration tip into its own branch before reporting done.
+   never by restating their content. Each implementer drives the `tdd` skill, runs
+   `npm ci` first in its fresh worktree, and merges the integration tip into its own
+   branch before reporting done.
 5. Merge each finished branch into `feat/jellyflick-v1`. Spawn a merger subagent only
    when branches actually conflict; a clean merge is faster done inline.
 6. Verify after every merge: `npm run lint && npm run typecheck && npm test &&
@@ -69,7 +89,7 @@ Its context is gone; its files are not.
 
 ```
 git log --oneline feat/jellyflick-v1..ticket/<n>-<slug>   # what it committed
-git -C .claude/worktrees/agent-<id> status --short          # what it had not committed
+git -C .claude/worktrees/<worktree> status --short         # what it had not committed
 ```
 
 Commit or discard the leftovers deliberately, then either finish the ticket or re-brief a
@@ -83,4 +103,6 @@ branch is correct — check its tests pass before building on it.
    product's name from the root commit. Must happen with no implementers in flight, and
    the host must then ask GitHub Support to purge the stale objects.
 3. Mark PR #38 ready for review.
-4. Remove the agent worktrees (`git worktree list`, then `git worktree remove`).
+4. Remove the agent worktrees (`git worktree list`, then `git worktree remove`). As of this
+   session that list includes three stale `agent-*` worktrees from the first session plus
+   the two `ticket-*` worktrees created here.
