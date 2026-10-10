@@ -4,6 +4,7 @@ import { genreRoutes } from './genres.ts';
 import { itemRoutes } from './items.ts';
 import { systemRoutes } from './system.ts';
 import { userFavoriteRoutes } from './user-favorites.ts';
+import { userPlayedRoutes } from './user-played.ts';
 import { userRoutes } from './users.ts';
 import { userViewRoutes } from './user-views.ts';
 
@@ -19,6 +20,7 @@ export const jellyfinRoutes: readonly FakeRoute[] = [
   ...userRoutes,
   ...userViewRoutes,
   ...userFavoriteRoutes,
+  ...userPlayedRoutes,
   ...itemRoutes,
   ...genreRoutes,
   ...displayPreferencesRoutes,

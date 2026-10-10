@@ -303,6 +303,86 @@ describe('the Jellyfin gateway', () => {
     expect((await gateway.getFavouriteItems()).map((item) => item.Id)).toEqual(['movie-arrival']);
   });
 
+  it('reads one Title in full, by id, with the fields the title page shows', async () => {
+    const gateway = createJellyfinGateway({
+      serverAddress: fakeJellyfinUrl(),
+      deviceId: 'reads-one-title',
+      ...identity,
+      token: tokenFor('reads-one-title'),
+    });
+
+    const [title] = await gateway.getTitles({ ids: ['movie-arrival'], detail: true });
+
+    expect(title?.Id).toBe('movie-arrival');
+    // The fields a Row never asks for, and the title page always does.
+    expect(title?.Overview).toContain('linguist');
+    expect(title?.People?.length).toBeGreaterThan(0);
+    expect(title?.MediaStreams?.length).toBeGreaterThan(0);
+    expect(title?.ImageTags?.Logo).toBeDefined();
+    expect(title?.BackdropImageTags?.length).toBeGreaterThan(0);
+    // `enableUserData` is off on a Row's query, and a title page needs it: the
+    // watched state is a `UserData` field.
+    expect(title?.UserData).toBeDefined();
+  });
+
+  it('answers with nothing for an id that is not a Movie or a Series', async () => {
+    // The "only Movies and Series" rule lives in the gateway, so a hand-typed
+    // address for an Episode or an album is the Server's to refuse rather than
+    // a screen's to filter.
+    const gateway = createJellyfinGateway({
+      serverAddress: fakeJellyfinUrl(),
+      deviceId: 'refuses-a-non-title',
+      ...identity,
+      token: tokenFor('refuses-a-non-title'),
+    });
+
+    expect(await gateway.getTitles({ ids: ['album-nocturnes'], detail: true })).toEqual([]);
+    expect(await gateway.getTitles({ ids: ['episode-bluey-s2e3'], detail: true })).toEqual([]);
+  });
+
+  it('reads the Titles like a given one, for More like this', async () => {
+    const gateway = createJellyfinGateway({
+      serverAddress: fakeJellyfinUrl(),
+      deviceId: 'reads-similar',
+      ...identity,
+      token: tokenFor('reads-similar'),
+    });
+
+    const similar = await gateway.getSimilarTitles({ itemId: 'movie-arrival' });
+
+    expect(similar.map((item) => item.Id)).toEqual(['series-severance', 'movie-heat']);
+  });
+
+  it('reads the Collections a Title is in', async () => {
+    const gateway = createJellyfinGateway({
+      serverAddress: fakeJellyfinUrl(),
+      deviceId: 'reads-collections',
+      ...identity,
+      token: tokenFor('reads-collections'),
+    });
+
+    const collections = await gateway.getCollectionsFor('movie-heat');
+
+    expect(collections.map((item) => item.Name)).toEqual(['Crime Classics']);
+  });
+
+  it('marks a Title watched and unwatched on the 12.x played routes', async () => {
+    const gateway = createJellyfinGateway({
+      serverAddress: fakeJellyfinUrl(),
+      deviceId: 'marks-played',
+      ...identity,
+      token: tokenFor('marks-played'),
+    });
+
+    await gateway.markPlayed('movie-heat');
+    const [watched] = await gateway.getTitles({ ids: ['movie-heat'], detail: true });
+    expect(watched?.UserData?.Played).toBe(true);
+
+    await gateway.markUnplayed('movie-heat');
+    const [again] = await gateway.getTitles({ ids: ['movie-heat'], detail: true });
+    expect(again?.UserData?.Played).toBe(false);
+  });
+
   it('reports an unreachable Server as a transport failure', async () => {
     const gateway = createJellyfinGateway({
       serverAddress: 'http://127.0.0.1:1/',
