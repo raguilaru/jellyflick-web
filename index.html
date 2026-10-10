@@ -6,6 +6,24 @@
     <meta name="color-scheme" content="dark" />
     <title>Jellyflick</title>
     <!--
+      Installability (#36). The manifest alone is enough: a service worker is
+      not required to install from the browser's own menu, and this app
+      deliberately has none — nothing is cached, so an update is picked up on
+      the next load with nothing to clear. See docs/architecture.md,
+      "Installing the app".
+
+      `theme-color` repeats the manifest's, because the browser reads it before
+      the manifest and on pages that are not installed at all. Its value is
+      `--surface-base` from src/styles/base.css.
+
+      iOS reads none of the manifest's icons: `apple-touch-icon` is the only
+      one the Share ▸ Add to Home Screen flow uses.
+    -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#0b0b0d" />
+    <link rel="icon" href="/icons/icon-192.png" type="image/png" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <!--
       The wordmark's face, preloaded because the wordmark is the first thing on
       every screen. `crossorigin` stays even though the font is our own: fonts
       are fetched in CORS mode, and leaving it out costs a second download.

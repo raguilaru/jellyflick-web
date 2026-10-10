@@ -10,7 +10,11 @@ index.html              Loads /config.js (classic, blocking) then src/main.tsx,
                         and preloads the wordmark's font.
 public/config.js        Runtime config placeholder. The container overwrites it.
 public/fonts/           Bebas Neue, self-hosted, with its OFL licence beside it.
+public/manifest.webmanifest
+                        What makes the app installable. No service worker.
+public/icons/           The app icons, written by scripts/make-icons.mjs.
 scripts/build.mjs       vite build, plus the TOLERATED_TRANSFORM guard.
+scripts/make-icons.mjs  Draws public/icons/. Run by hand, output committed.
 Dockerfile              The multi-stage image. See "The container" below.
 deploy/                 entrypoint.sh and the example OMV8 compose file.
 server/                 The server inside the container. Not browser code:
@@ -307,6 +311,45 @@ ADR 0002 sets the floor. These are the traps inside it.
   use `@jellyfin/sdk`'s `MINIMUM_VERSION`, which is 10.10.0.
 - Types come from `@jellyfin/sdk` as `import type` only, never its runtime, its
   axios-backed API clients or its generated enums.
+
+## Installing the app
+
+Story 110. `public/manifest.webmanifest` and `public/icons/` are the whole
+feature: Vite copies `public/` verbatim, `index.html` links the manifest and the
+Apple touch icon, and the browser's own Install item does the rest.
+
+- **There is no service worker, deliberately.** `decisions.md` §8 and
+  `player-subtitles.md` §8c: Chromium dropped the service-worker requirement for
+  installing from its own menu (108 mobile, 112 desktop), and the spec forbids
+  caching media or API data anyway. A registered worker also outlives the page
+  that registered it, so a stale one is exactly the "clear something before the
+  update appears" failure the ticket rules out. The only thing a worker would
+  buy is `beforeinstallprompt` for a *custom in-app Install button* — which is
+  Chromium-only (iOS installs through the Share menu) and nothing asks for. **If
+  a later ticket wants that button, it is adding a service worker, with the
+  update story that comes with it.** `test/unit/installable-app.test.ts` and
+  `test/e2e/installing-the-app.spec.ts` both fail if one appears by accident.
+- **Updates need nothing cleared** because nothing unhashed is cached:
+  `/assets/` is hashed and immutable, and the shell, the manifest and the icons
+  are all `no-cache`, so the browser revalidates them on every load. That rule
+  lives in `cacheControlFor` in `server/jellyflick-server.ts`.
+- **The colours are the app's own tokens.** `background_color` and `theme_color`
+  are both `--surface-base` from `src/styles/base.css`, repeated in a
+  `<meta name="theme-color">` because browsers read that before the manifest.
+  A unit test fails if the token and the manifest drift apart. An Accent Colour
+  is a per-User preference (#11) and is deliberately *not* the theme colour —
+  the manifest is one file for the whole household.
+- **The icons are generated, not drawn by hand.** `node scripts/make-icons.mjs`
+  writes the three PNGs; its output is committed, and it is **not** part of
+  `npm run build`, so the shipped artwork shows up in a diff and the production
+  build depends on no rasteriser of ours. It has no dependencies — the mark is a
+  stem and a hook, flat, in the accent on the page's own background, so it owes
+  nothing to Bebas Neue at build time. Re-run it when the accent or the mark
+  changes.
+- **Three icons, and why each exists:** 192px and 512px are what Chromium
+  requires; the 512px `maskable` one is what stops Android cropping the square
+  into a circle with visible letterboxing. iOS reads none of them, which is what
+  `rel="apple-touch-icon"` is for.
 
 ## Runtime config
 
