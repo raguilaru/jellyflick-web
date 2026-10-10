@@ -579,3 +579,81 @@ html[data-input='pointer'] [tabindex]:focus {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/*
+ * The Home Layout editor (#10).
+ *
+ * Grid throughout, and `gap` only inside a grid: flex `gap` is Chrome 84 and
+ * silently does nothing on the floor, so the buttons beside a Row are a grid
+ * with `grid-auto-flow: column` rather than a flex row. They wrap to their own
+ * line on a phone by dropping back to one column.
+ */
+.home__edit {
+  margin: 0;
+}
+
+.layout-rows {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.layout-row {
+  display: grid;
+  gap: var(--space-1) var(--space-3);
+  align-items: center;
+  padding: var(--space-3);
+  background: var(--surface-raised);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius);
+}
+
+.layout-row__name {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.layout-row__note {
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.layout-row__buttons {
+  display: grid;
+  gap: var(--space-2);
+  justify-content: start;
+}
+
+.layout-add__heading {
+  margin: var(--space-5) 0 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.layout-add {
+  display: grid;
+  gap: var(--space-2);
+  justify-content: start;
+  margin: 0;
+}
+
+.layout-done {
+  margin: var(--space-5) 0 0;
+}
+
+/* Wide enough for the name and its buttons side by side. */
+@media (min-width: 640px) {
+  .layout-row {
+    grid-template-columns: 1fr auto auto;
+  }
+
+  .layout-row__buttons {
+    grid-auto-flow: column;
+  }
+
+  .layout-add {
+    grid-auto-flow: column;
+  }
+}

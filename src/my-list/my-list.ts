@@ -64,7 +64,14 @@ export type MyList = {
 export function createMyList(gateway: JellyfinGateway): MyList {
   let state: MyListState = { outcome: 'loading' };
   let unsaved = false;
+  /** How many times the list has been published. Read by whoever draws it. */
   let version = 0;
+  /**
+   * How many changes the User has made. A read asked before one of them is out
+   * of date; a read asked before another *read* is not, which is why this is
+   * counted apart from `version`.
+   */
+  let changes = 0;
   const listeners = new Set<() => void>();
 
   function publish(next: MyListState): void {
@@ -79,18 +86,18 @@ export function createMyList(gateway: JellyfinGateway): MyList {
   }
 
   async function load(): Promise<void> {
-    // A read that is overtaken by a change, or by a later read, is thrown away:
-    // it was asked before the change and would put the Title straight back.
-    const asked = version;
+    // A read overtaken by a change is thrown away: it was asked before the
+    // change and would put the Title straight back.
+    const asked = changes;
     let items;
     try {
       items = await gateway.getFavouriteItems();
     } catch {
-      if (version !== asked) return;
+      if (changes !== asked) return;
       publish({ outcome: 'unavailable' });
       return;
     }
-    if (version !== asked) return;
+    if (changes !== asked) return;
 
     const cards: RowCard[] = [];
     for (const dto of items) {
@@ -112,6 +119,7 @@ export function createMyList(gateway: JellyfinGateway): MyList {
     changed: (held: readonly RowCard[]) => readonly RowCard[],
     write: () => Promise<unknown>,
   ): Promise<void> {
+    changes += 1;
     const held = titles();
     if (held !== undefined) publish({ outcome: 'list', titles: changed(held) });
 

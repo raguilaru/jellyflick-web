@@ -18,10 +18,14 @@ import { fakeJellyfinUrl } from '../fake-jellyfin/url';
 
 afterEach(resetFakeState);
 
-// The window's history outlives a test, and a test that navigated to the My
-// List page would otherwise start the next one there instead of on Home.
-beforeEach(() => {
+beforeEach(async () => {
+  // The window's history outlives a test, and a test that navigated to the My
+  // List page would otherwise start the next one there instead of on Home.
   window.history.replaceState(null, '', '/');
+  // And the sample data is put back before each test as well as after: a write
+  // another test file left in flight — the Home Layout editor saves one — can
+  // otherwise land after its own reset and change the Home this one starts on.
+  await resetFakeState();
 });
 
 async function signInAndLand() {
@@ -65,6 +69,19 @@ describe('a User managing My List', () => {
     // And the card now offers the other half of the toggle.
     expect(screen.queryByRole('button', { name: 'Add Arrival to My List' })).toBeNull();
     expect(screen.getAllByRole('button', { name: 'Remove Arrival from My List' }).length).toBe(2);
+  });
+
+  it('can take the My List Row off Home, because it is a Row of the Home Layout', async () => {
+    await setFakeState({ favourites: { 'user-rafael': ['movie-arrival'] } });
+    await signInAndLand();
+    await waitFor(() => expect(cardNames('My List')).toEqual(['Arrival']));
+
+    fireEvent.click(await screen.findByRole('link', { name: 'Edit Home' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Hide My List' }));
+    fireEvent.click(await screen.findByRole('link', { name: 'Done' }));
+
+    await screen.findByText('Signed in as Rafael.');
+    expect(screen.queryByRole('list', { name: 'My List' })).toBeNull();
   });
 
   it('sees My List on its own page, in the Server’s order', async () => {

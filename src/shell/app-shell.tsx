@@ -6,6 +6,8 @@ import { createMyList, type MyList } from '../my-list/my-list';
 import { MyListScreen } from '../my-list/my-list-screen';
 import { MyListProvider } from '../my-list/use-my-list';
 import type { Session, SignedInUser } from '../session/session';
+import { HOME_LAYOUT_PATH, HomeLayoutScreen } from '../settings/home-layout-screen';
+import { SettingsProvider } from '../settings/settings-provider';
 import { useBackHandler } from './back';
 import { useWideScreen } from './layout';
 import { BottomBar } from './bottom-bar';
@@ -43,9 +45,15 @@ export type AppShellProps = {
 export function AppShell({ user, session, device, pictureUrl }: AppShellProps) {
   return (
     <LocationProvider>
-      <MyListProvider value={useLoadedMyList(session, user)}>
-        <ShellFrame user={user} session={session} device={device} pictureUrl={pictureUrl} />
-      </MyListProvider>
+      {/* One copy of the User's settings for every screen: Home and the Home
+          Layout editor are two views of the same thing (#10). */}
+      <SettingsProvider gateway={session.gateway()} userId={user.userId}>
+        {/* And one copy of My List, for the Row on Home, the My List page and
+            every card's toggle (#13). */}
+        <MyListProvider value={useLoadedMyList(session, user)}>
+          <ShellFrame user={user} session={session} device={device} pictureUrl={pictureUrl} />
+        </MyListProvider>
+      </SettingsProvider>
     </LocationProvider>
   );
 }
@@ -73,6 +81,9 @@ function ShellFrame({ user, session, device, pictureUrl }: AppShellProps) {
             section={section}
           />
         ))}
+        {/* Not a section: it is reached from Home, and later from the settings
+            screen (#11/#35), so it is in neither navigation bar. */}
+        <Route path={HOME_LAYOUT_PATH} component={HomeLayoutScreen} />
         <Route default component={UnknownSection} />
       </Router>
 

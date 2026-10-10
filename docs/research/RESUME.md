@@ -4,9 +4,9 @@ State of the `/implement-spec` run on the integration branch `feat/jellyflick-v1
 (draft PR #38). Update this whenever a wave lands, so a fresh session can pick the work
 up without re-deriving anything.
 
-## Status at the last stop (2026-10-10, second session)
+## Status at the last stop (2026-10-10, third session)
 
-**Merged into `feat/jellyflick-v1`** (tip `49fed11`, draft PR #38 open):
+**Merged into `feat/jellyflick-v1`** (tip `9c0ed1a`, draft PR #38 open):
 
 | Ticket | State |
 |---|---|
@@ -16,36 +16,93 @@ up without re-deriving anything.
 | #4 New on Jellyflick on Home | merged at `ed9603b`, issue closed |
 | #6 App shell | merged at `8225247`, issue closed |
 | #7 Rows and arrow-key navigation | merged at `49fed11`, issue closed |
+| #36 Installable app | merged at `e0a85ac`, issue closed (service-worker box superseded — see below) |
+| #10 Client Settings and Home Layout | merged at `9c0ed1a`, issue closed (touch caveat — see below) |
 
-Gate on the integration tip `49fed11`, each step's exit code checked individually:
-`lint` 0, `typecheck` 0, **173 unit tests** in 18 files, **114 Playwright tests — 102
-passed, 12 skipped, 0 failed**, `chrome68` build 53.18 kB / 18.84 kB gz. Independently
-re-run by the integrator, not taken from the implementers' reports.
+Gate on the integration tip `9c0ed1a` after #10 merged, each step's exit code checked
+individually: `lint` 0, `typecheck` 0, `build` 0, **224 unit tests** in 22 files,
+**150 Playwright tests — 138 passed, 12 skipped, 0 failed**, `chrome68` build
+**60.13 kB / 20.73 kB gz**. Independently re-run by the integrator after each merge, not
+taken from the implementers' reports; both matched their implementer's numbers exactly.
+
+The session opened by re-running the gate on `1c54103` and got the second session's
+numbers unchanged (173 unit / 18 files, 102 passed / 12 skipped, 53.18 kB / 18.84 kB gz),
+which confirmed the two doc/config commits after `49fed11` changed nothing.
+
+Bundle growth so far: 53.18 → 60.13 kB raw, 18.84 → 20.73 kB gz. All of it is #10 — one
+new screen, a provider and ~20 strings, not lazily loaded. #36 added nothing to the JS
+(its manifest and icons are static files in `public/`).
 
 The 12 e2e skips are all deliberate viewport/pointer gating: #6's 7 (3 wide-screen tests
 skipped on `phone`, 2 phone tests skipped on `desktop` and `keyboard-only`) plus #7's 5
 (1 phone-only test skipped on `desktop` and `keyboard-only`, 3 pointer tests skipped on
 `keyboard-only`).
 
-**Nothing is in flight.** No implementers are running; no worktree holds uncommitted
-work. Three waves have landed this session (#4, #6, #7), all verified by the integrator.
+### In flight right now — #13 and #24
 
-### The frontier is six tickets wide, and verified open
+Launched in the third session, each in its own worktree, each driving the `tdd` skill,
+each briefed with pointers only:
 
-#7 is closed, so nothing is falsely blocked. All six report `blocked_by: 0`:
+| Ticket | Branch | Worktree | `APP_PORT` / `FAKE_JELLYFIN_PORT` | Based on |
+|---|---|---|---|---|
+| #13 My List | `ticket/13-my-list` | `.claude/worktrees/ticket-13-my-list` | 4213 / 8813 | `1c54103` |
+| #24 Search | `ticket/24-search` | `.claude/worktrees/ticket-24-search` | 4224 / 8824 | `e0a85ac` |
+
+Neither had reported as of the last write of this file. **Their context may be gone but
+their branches are not** — see "Recovering an interrupted implementer" below, and check
+each branch before assuming it is empty or correct.
+
+**#13 was based on `1c54103`, before #10 landed, and #10 rewrote Home.** So #13's own
+merge of the integration tip is where the conflict lands. It is a real conflict, not a
+mistake: #10 made Home draw from a stored layout through the registry in
+`src/home/home-rows.tsx`, and #13 adds a Row to Home. The resolution #10 designed for is
+that **#13 adds a loader, a case in `HomeRowFor`, and its kind to `BUILT_ROW_KINDS`** —
+no change to the layout format. If #13's branch instead edits `home-screen.tsx` directly,
+prefer #10's registry and port #13's Row onto it.
+
+#24 was based on the post-#36 tip and was told to expect #10 and #13 to land under it.
+
+### The frontier is six tickets wide again
+
+#36 and #10 closing opened wave 6. All six verified `blocked_by: 0` after #10 merged:
 
 | Ticket | Needs | Note |
 |---|---|---|
-| #8 Several Users and the User Picker | #6 | unblocked since the last wave, unstarted |
-| #36 Installable app | #6 | unblocked since the last wave, unstarted |
-| #10 Client Settings and Home Layout | #7 | **critical path** — 2 → 3 → 6 → 7 → 10 → … |
-| #13 My List | #7 | gates #17, which gates the whole player chain |
-| #14 Title Labels | #7 | |
-| #24 Search | #7 | |
+| #8 Several Users and the User Picker | #6 | unstarted; gates #9 |
+| #14 Title Labels | #7 | unstarted; touches cards, so it conflicts with #13 — hold it until #13 lands |
+| #11 Settings screen: Accent Colour and language | #10 | newly open; gates #35. `jf.uiLanguage` is already keyed and defaulted by #10, unread |
+| #12 Continue Watching | #10 | newly open; adds a Row via #10's registry |
+| #15 More Row types | #10 | newly open; `HomeRow.parameter` is already round-tripped unread for its genre/Collection Rows |
+| #16 Billboard with Spotlight | #10 | newly open; the natural place for the leftover "Signed in as Rafael." line to disappear |
 
-#10 and #13 are the two that unlock the most: #10 opens wave 6 (#11, #12, #15, #16) and
-#13 gates #17 → #25 → #26 → #27 → #28, the deepest remaining chain. **Give any two
-concurrent implementers distinct `APP_PORT` and `FAKE_JELLYFIN_PORT` values.**
+**None of these six were launched**, and the reason is spend, not readiness — see below.
+#13 still gates #17 → #25 → #26 → #27 → #28, the deepest remaining chain, so it is the
+one whose landing matters most.
+
+### Why the third session stopped launching implementers
+
+The host asked for the spending limit to be checked at every commit and for the process
+to be documented if a ticket was unfinished at 94%. The **5-hour window** is the binding
+limit, not the weekly one. Measured this session:
+
+| Point | 5-hour | Weekly |
+|---|---|---|
+| session start | 2% | 33% |
+| three implementers launched | 14% | 35% |
+| #36 merged and verified | 34% | 37% |
+| #10 merged and verified | 61% | 41% |
+
+**A wave of three implementers plus the integrator's own gate runs costs roughly 25–30
+points of the 5-hour window.** At 61%, with #13 and #24 still running and still to be
+merged and verified, launching another wave of three would have crossed 94% mid-ticket —
+exactly the situation the host asked to avoid. So the third session deliberately stopped
+launching and spent its remaining budget on merging, verifying and writing this down.
+
+**For the next session:** check the 5-hour window first. If it has reset, three
+concurrent implementers is a comfortable wave and #11, #12, #15 and #16 are all open. If
+it has not, launch one or two. Note also that the integrator's own verification is not
+free: a full gate run (lint, typecheck, test, build, then the e2e suite) is a few points
+each time, and it must still be run after every merge.
 
 ### Three traps that have already bitten this run
 
@@ -109,6 +166,18 @@ launching two or more at once; the defaults are fine for a lone implementer.
 - **#5, second box** — it says the entrypoint writes the MDBList key into the runtime
   config. ADR 0004 forbids the key reaching the browser, so the box is superseded. This
   was recorded in the closing comment on #5 rather than ticked.
+- **#36, second box** — it asks for "a minimal service worker for installability only".
+  `decisions.md` §8 is binding and says the manifest alone is enough, so the box is
+  superseded, recorded in #36's closing comment rather than ticked. A worker would only
+  buy `beforeinstallprompt` for a custom in-app Install button that nothing asks for, and
+  a registered worker outlives the page that registered it, which works against #36's own
+  third box. **Two tests now fail if a service worker appears by accident.** A later
+  ticket wanting a custom Install button owns adding the worker and its update story.
+- **#10, third box, partially** — "adds, hides and reorders with touch, mouse and arrow
+  keys" is ticked for mouse and arrow keys (two Playwright tests drive the editor with
+  arrows and Enter, and the whole spec also runs under `keyboard-only`). **Touch is not
+  directly exercised** — the same `hasTouch` gap as #7's touch-swipe box. The controls are
+  plain `<button>`s so a tap is a click, but nothing asserts it.
 - #4 and #6: every box can be ticked.
 - **#7, two caveats on its six boxes.** *Touch swipe* is `overflow-x: auto` doing its job
   and is asserted structurally (the strip is the scroller, it overflows,
@@ -186,6 +255,53 @@ From #7 (`src/navigation/`, installed once in `src/app.tsx`):
   one axis, with a margin, serving both the Row sideways and the page downwards.
 - `.screen--top` is gone, folded into `.shell .screen` as #4 intended.
 
+From #10 (all recorded in `docs/architecture.md`):
+
+- **`src/home/home-rows.tsx` is the Row registry, not the layout.** A layout may name a
+  Row whose feature does not exist yet; Home draws only `BUILT_ROW_KINDS` and leaves the
+  rest out rather than drawing an empty Row. **#12, #13 and #15 each add a loader, a case
+  in `HomeRowFor`, and their kind to that list — no layout format change.**
+  `HomeRow.parameter` is carried and round-tripped unread, ready for #15's genre and
+  Collection Rows.
+- **`CLIENT_SETTINGS_CLIENT = 'jellyflick'` is a storage partition, deliberately not
+  `CLIENT_NAME` ('Jellyflick').** Every key is prefixed `jf.`; the store strips everything
+  non-`jf.` out of a GET so nothing the Server injected is ever POSTed back. POST is 204,
+  so the gateway gained `requestWithoutAnswer`.
+- **`src/settings/settings-provider.tsx` holds one copy of the settings above the
+  router.** Changes apply at once and save behind the screen; saves are serialised because
+  each is a read-modify-write; a first read landing after the User has already edited is
+  dropped (a real bug the editor tests caught). A failed save says so and keeps the
+  change; a failed read yields the defaults so Home always draws.
+- **The editor's address `/settings/home-layout` is not a section** — its own `<Route>`,
+  in neither bar; `SECTIONS` is still the single section list. **#11 and #35 should link to
+  it from the settings screen.**
+- **Reordering is Move up / Move down buttons, not a drag**, so the navigator keeps the
+  arrow keys (a screen that stole them could not be left) and one control serves touch,
+  mouse and keyboard alike.
+- The fake's `/DisplayPreferences` reproduces the real controller: `client` required, its
+  own keys injected on GET and consumed on POST, and a **500** for a `homesection…` key
+  with a non-numeric suffix. Seed a User's settings with
+  `state.displayPreferences['jellyflick|jellyflick|<userId>']`; `failDisplayPreferencesWith`
+  fails the endpoint.
+- `jf.uiLanguage` is keyed and defaulted but **nothing reads it yet** — for #11/#35.
+- Unit journeys navigate for real, so that spec resets `history` between tests. Worth
+  copying in any later spec that visits a second address.
+- **Adding a Row can only offer kinds absent from the layout**, so with the default layout
+  nothing is addable and hiding is the only way a Row leaves Home. There is no "remove".
+
+From #36:
+
+- **No service worker, by design** (see the superseded box above). Recorded in the new
+  "Installing the app" section of `docs/architecture.md`.
+- **The manifest's `theme_color`/`background_color` are `--surface-base`, not the
+  accent.** Accent Colour is per-User (#11); the manifest is one file for the whole
+  household. **A unit test fails if the CSS token and the manifest drift apart** — so #11
+  must not try to make the manifest follow the accent.
+- **Icons are generated by `node scripts/make-icons.mjs`, run by hand, output committed.**
+  Dependency-free, deliberately not wired into `npm run build` so shipped artwork shows up
+  in a diff. The mark is a plain generated "J" — no design asset existed. **Worth a human
+  look before release**; re-run the script after editing its glyph constants.
+
 Every implementer kept `docs/architecture.md` current. Read it rather than this file for
 the codebase map.
 
@@ -257,14 +373,21 @@ branch is correct — check its tests pass before building on it.
 
 ## Still owed at the end of the run
 
-1. Every ticket from #8 onward. Six are unblocked and unstarted: #8, #36, #10, #13,
-   #14, #24.
+1. Every ticket from #8 onward except #10 and #36, which have landed. #13 and #24 are in
+   flight; #8, #14, #11, #12, #15 and #16 are unblocked and unstarted; #9 waits on #8, #17
+   and its whole chain wait on #13.
 2. `code-review` over the whole integration branch, with findings fixed in one implementer.
 3. **The git history rewrite** described in `decisions.md` §10 — removing the inspiration
    product's name from the root commit. Must happen with no implementers in flight, and
    the host must then ask GitHub Support to purge the stale objects.
 4. Mark PR #38 ready for review.
-5. Remove the agent worktrees (`git worktree list`, then `git worktree remove`). As of this
-   session that is three stale `agent-*` worktrees from the first session plus
-   `ticket-4-new-on-home`, `ticket-6-app-shell` and `ticket-7-rows-and-arrows`, all three
-   merged and safe to remove.
+5. Remove the implementer worktrees (`git worktree list`, then `git worktree remove`).
+   **Done for every worktree merged so far**: the three stale `agent-*` worktrees from the
+   first session and `ticket-4-new-on-home`, `ticket-6-app-shell`,
+   `ticket-7-rows-and-arrows` were removed in the third session, each verified clean
+   (`git status --short` empty) and fully merged (`git rev-list --count <branch>
+   ^feat/jellyflick-v1` = 0) first. The branches were kept. Still to remove when they
+   merge: `ticket-13-my-list` and `ticket-24-search`. `ticket-10-client-settings` and
+   `ticket-36-installable-app` have merged and can be removed once nothing needs them.
+   **Leave `implement-spec-88c250` and `remote-setup-2e9b22` alone — they belong to other
+   Claude sessions, not this run.**

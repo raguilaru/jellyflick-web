@@ -125,6 +125,18 @@ describe('My List', () => {
     expect(names(myList)).toEqual([]);
   });
 
+  it('shows a Title added before the first read came back', async () => {
+    const myList = myListFor('my-list-adds-while-reading');
+
+    // The shell reads the list as soon as it is on the screen, and a card can
+    // be pressed before that read lands.
+    const reading = myList.load();
+    await myList.add(PADDINGTON);
+    await reading;
+
+    expect(names(myList)).toEqual(['Paddington']);
+  });
+
   it('counts its changes, so whoever draws it can see one it has not drawn yet', async () => {
     const myList = myListFor('my-list-versions');
     const first = myList.version();

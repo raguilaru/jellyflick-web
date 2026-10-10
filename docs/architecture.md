@@ -10,7 +10,11 @@ index.html              Loads /config.js (classic, blocking) then src/main.tsx,
                         and preloads the wordmark's font.
 public/config.js        Runtime config placeholder. The container overwrites it.
 public/fonts/           Bebas Neue, self-hosted, with its OFL licence beside it.
+public/manifest.webmanifest
+                        What makes the app installable. No service worker.
+public/icons/           The app icons, written by scripts/make-icons.mjs.
 scripts/build.mjs       vite build, plus the TOLERATED_TRANSFORM guard.
+scripts/make-icons.mjs  Draws public/icons/. Run by hand, output committed.
 Dockerfile              The multi-stage image. See "The container" below.
 deploy/                 entrypoint.sh and the example OMV8 compose file.
 server/                 The server inside the container. Not browser code:
@@ -29,17 +33,27 @@ src/
   connect/              Finding a Server and checking its version.
   device/               The device layer: `types.ts` is the interface,
                         `browser.ts` the implementation that ships now.
-  home/                 Where a signed-in User lands: `row.tsx` is the Row and
-                        its card, one module per Row beside it. The Billboard
-                        is still to come.
+  home/                 Where a signed-in User lands: `home-layout.ts` is which
+                        Rows and in what order, `home-rows.tsx` which kind is
+                        drawn by what, `row.tsx` the Row and its card,
+                        `title-card.ts` what a card is made of, one module per
+                        Row beside it. The Billboard is still to come.
   i18n/                 `en.ts` is the key set, `es.ts` is typed against it.
   jellyfin/             The gateway: the only module that talks HTTP to the Server.
+  my-list/              My List, which is Jellyfin's Favorites: `my-list.ts` is
+                        the store every screen reads, `use-my-list.ts` the
+                        context and hook, `my-list-toggle.tsx` the control on a
+                        card, `my-list-screen.tsx` the My List page.
   navigation/           Arrow keys and focus: `nearest.ts` the geometry,
                         `reveal.ts` how far a scroller must move, `focusable.ts`
                         what the arrows reach, `spatial-navigation.ts` the
                         wiring, `input-modality.ts` the focus highlight.
   session/              Session & Users: the Server address and the signed-in
                         Users in device storage, plus the sign-in screen.
+  settings/             The Client Settings store, on the Server:
+                        `client-settings.ts` is the store, `settings-provider.tsx`
+                        the one copy the screens read, `home-layout-screen.tsx`
+                        the Home Layout editor.
   shell/                The app once a User is signed in: `sections.ts` is the
                         one list of sections and their addresses, `app-shell.tsx`
                         the routes and which bar is shown, `back.ts` the single
@@ -63,7 +77,8 @@ Where new code belongs:
 - **Anything that must survive a reload** → through `device.storage()`, and under
   one key owned by one module (`session/` owns `jellyflick.session`). Per-User
   settings that follow a User between devices are not this: they belong on the
-  Server, in the Client Settings store (#10).
+  Server, in the Client Settings store — `src/settings/client-settings.ts`, and
+  see "Client Settings and the Home Layout" below.
 - **A screen or a feature** → its own folder under `src/`, holding its logic and
   its components together (`connect/` is the pattern).
 - **A new focusable thing** → nothing. The arrow keys find anything focusable by
@@ -128,6 +143,16 @@ with each Series once, the whole sample library is exactly:
 `failLibraryQueriesWith` makes `/UserViews` and `/Items/Latest` answer with a
 status, for a Server that will not say what it holds. Both of those endpoints
 want a token, as the real Server does.
+`failDisplayPreferencesWith` does the same for `/DisplayPreferences`.
+
+Stored `CustomPrefs` live in `state.displayPreferences`, keyed
+`<displayPreferencesId>|<client>|<userId>` — the three things the real Server
+partitions them by. Seeding one is how a test gets a User who already has
+settings: `{ 'jellyflick|jellyflick|user-rafael': { 'jf.homeLayout': '…' } }`.
+The route copies the real controller's three awkward behaviours — `client`
+required, the Server's own keys injected on the way out and consumed on the way
+in, and a **500** for a `homesection…` key whose suffix is not a number, which
+is what the real Server does when a client sends one.
 
 Vitest uses the helpers in `test/fake-jellyfin/control.ts`; Playwright calls the
 same endpoints through its `request` fixture.
@@ -189,6 +214,136 @@ lines by hand instead of adding a polyfill.
   spacing, never by weight — browsers synthesise a bold that looks wrong on it.
   The licence has to travel with the file, so `public/fonts/bebas-neue-OFL.txt`
   ships with the app and the family still wants crediting on an about screen.
+
+## Client Settings and the Home Layout
+
+`src/settings/` is where a User's own settings live. They are kept on the
+**Server**, in `DisplayPreferences.CustomPrefs` under the client `jellyflick`,
+so they follow the User to every device (story 49). Device storage is for what
+belongs to a screen rather than a person.
+
+- **Every key is prefixed `jf.`**, and `src/settings/client-settings.ts` is the
+  only module that knows the key names. The prefix is not tidiness: the Server
+  *owns* some keys in that map. It injects one `homesection<n>` per stored Home
+  Section and six literals (`chromecastVersion`, `skipForwardLength`,
+  `skipBackLength`, `enableNextVideoInfoOverlay`, `tvhome`, `dashboardTheme`)
+  when it answers, consumes them again on the way in, reserves `landing-*`, and
+  **throws** on a key beginning `homesection` whose suffix is not a number. See
+  `decisions.md` §3.
+- **`client` is a required query parameter** on both the GET and the POST, and
+  it partitions the storage. `CLIENT_SETTINGS_CLIENT` is `jellyflick`,
+  deliberately not `CLIENT_NAME` ("Jellyflick"), which is the application name
+  the Server records for a session. The two must not be conflated.
+- **Every write is a read-modify-write**, because a POST replaces the whole
+  custom set. The store reads, keeps only the `jf.` keys (so nothing the Server
+  injected is handed back), merges the change and POSTs the result — which also
+  means a key a *newer* Jellyflick wrote survives an older one saving over it.
+  The POST answers **204**, which is why the gateway has a request shape that
+  reads no body.
+- **A new setting is three lines**: a `jf.` key, a field on `ClientSettings`
+  with a default, and a line each in `settingsFrom` and `prefsFor`. The UI
+  language already has its key (`jf.uiLanguage`) and nothing reading it yet —
+  Jellyfin 12.x has no per-user UI language of its own, so it is ours (#11/#35).
+- **One copy in front of the User.** `settings-provider.tsx` holds it, above the
+  router, so Home and the editor are two views of one thing and an edit shows
+  without a reload. A change is applied at once and saved behind it — pressing
+  "move up" four times on a remote must not wait for four round trips. Saves run
+  one at a time (each is a read-modify-write), and a first read that lands
+  *after* the User has already changed something is dropped rather than allowed
+  to undo their work.
+- **A save that does not land says so** and keeps the User's change on screen.
+  A read that does not land hands back the defaults, so Home always draws.
+
+The Home Layout itself is `src/home/home-layout.ts`: an ordered list of Rows,
+each with a kind and an optional `hidden`, and the rules are pure functions of
+it (`addRow`, `hideRow`, `showRow`, `moveRow`, `visibleRows`,
+`addableRowKinds`). Hiding keeps a Row's place, so showing it again puts it
+back; adding appends; moving is clamped at the ends. A stored layout that cannot
+be read falls back to `DEFAULT_HOME_LAYOUT` rather than emptying Home, and an
+unknown kind is dropped on its own, so a layout written by a newer Jellyflick
+keeps the Rows this version understands. `parameter` is carried but unread —
+genre and Collection Rows (#15) need it and will not have to change the format.
+
+**Which Rows exist is `src/home/home-rows.tsx`**, not the layout: `ROW_NAME_KEYS`
+is a Row's name wherever it is shown, and `BUILT_ROW_KINDS` is the kinds whose
+feature exists. Home draws the visible rows whose kind is built and leaves the
+rest out — an empty Row would look like something that failed, and the editor
+says "Not on Home yet" in words instead. **Adding a Row's feature** (#12 Continue
+Watching, #15 the suggestion Rows) is: a loader beside `new-on-jellyflick.ts`, a
+case in `HomeRowFor`, and the kind in `BUILT_ROW_KINDS`. The layout already
+carries it — My List (#13) was added exactly that way.
+
+The editor, `src/settings/home-layout-screen.tsx`:
+
+- **Its address is not a section.** `/settings/home-layout` has its own `<Route>`
+  in the shell and no place in either bar; `SECTIONS` is still the one list of
+  sections. It is reached from Home today and from the settings screen (#11/#35)
+  later.
+- **Reordering is two buttons, not a drag.** A drag cannot be done with a remote
+  (story 64), and the navigator owns Up/Down/Left/Right — taking the arrow keys
+  here would leave no way to leave the screen. Buttons serve touch, mouse and
+  arrow keys at once, and they are reachable because `src/navigation/` reaches
+  anything focusable.
+- **There is no Save button**, so there is none to leave unpressed.
+
+## My List
+
+My List **is** Jellyfin's Favorites, so it is the same list every other Jellyfin
+app shows: `/Items?isFavorite=true` reads it and `/UserFavoriteItems/{itemId}`
+adds and removes (the legacy `/Users/{userId}/FavoriteItems/{id}` is gone in
+12.x). Three gateway methods, `getFavouriteItems`, `addToFavourites` and
+`removeFromFavourites`.
+
+It is read **ordered by `Name`, not `SortName`**. A client that has just added a
+Title has only its name to place it by, and `SortName` strips articles, so the
+two orders would disagree about where "The Unfinished" goes.
+
+`src/my-list/my-list.ts` is one store, made once per (Server, User) in the shell
+and reaching every screen through `MyListProvider`. One store rather than a load
+per screen, because a Title added from a card on Home has to appear in the Row
+beside it, on the My List page and on every other card for the same Title at
+once. Its whole interface is `state`, `has`, `add`, `remove`, `load`, `unsaved`,
+`version` and `subscribe`.
+
+Three things about it are load-bearing, and all three were found by tests:
+
+- **A change shows before the Server has agreed to it**, and is taken back if
+  the Server refuses, with `unsaved()` to say so — a change that reverted itself
+  silently would look like the app losing track. An added Title is inserted
+  where its name puts it, which is where the Server's own order will have it, so
+  the list does not reshuffle a moment later.
+- **A read asked before a change is thrown away.** Otherwise the read comes back
+  with the list as it was and puts the Title straight back. The guard counts
+  *changes*, deliberately not publishes: a read asked before another read's
+  answer is still perfectly good, and discarding it loses an add made while the
+  first read was in flight.
+- **A subscription can only be made once a component has rendered.** A press in
+  that gap — a card pressed the moment it appeared — changes the store and would
+  never be drawn, so `useMyList` compares the `version()` it rendered with
+  against the one it subscribed to and catches up. Anything else that grows a
+  store with a subscription hook inherits this.
+
+**The control on a card** is `MyListToggle`: a real button with its own name
+("Add Arrival to My List") and `aria-pressed`, passed to `Row` through
+`cardControl`, which is the slot Play and More info will share once the enlarged
+hover card (#21) arrives.
+
+On a card in a Row that control is drawn **only while the pointer is over the
+card**, and that is not only a look: `spatial-navigation.ts` ignores anything
+with a zero-sized box, so a hidden control is not a stop the arrow keys step
+through and Right still takes the next card along the Row. The keyboard and the
+remote reach My List from the title page instead (story 70, #17). On the My List
+page the same control is always drawn and **is** a focus stop, on purpose: that
+page exists for managing the list, so taking something out of it has to work
+with a remote.
+
+**The My List page** is a grid (`.grid`, `auto-fill` columns) rather than a
+strip, so a long list wraps down the page instead of scrolling sideways, and it
+has no focus memory to keep — the page *is* the grid. An empty My List draws no
+Row on Home at all, where New on Jellyflick says so in words: an empty My List is
+where every User starts and is theirs to fill, so a notice on Home on every
+visit would be in the way. The page explains it instead, and also carries the
+"the Server would not say" message.
 
 ## Arrow keys, focus and Rows
 
@@ -307,6 +462,45 @@ ADR 0002 sets the floor. These are the traps inside it.
   use `@jellyfin/sdk`'s `MINIMUM_VERSION`, which is 10.10.0.
 - Types come from `@jellyfin/sdk` as `import type` only, never its runtime, its
   axios-backed API clients or its generated enums.
+
+## Installing the app
+
+Story 110. `public/manifest.webmanifest` and `public/icons/` are the whole
+feature: Vite copies `public/` verbatim, `index.html` links the manifest and the
+Apple touch icon, and the browser's own Install item does the rest.
+
+- **There is no service worker, deliberately.** `decisions.md` §8 and
+  `player-subtitles.md` §8c: Chromium dropped the service-worker requirement for
+  installing from its own menu (108 mobile, 112 desktop), and the spec forbids
+  caching media or API data anyway. A registered worker also outlives the page
+  that registered it, so a stale one is exactly the "clear something before the
+  update appears" failure the ticket rules out. The only thing a worker would
+  buy is `beforeinstallprompt` for a *custom in-app Install button* — which is
+  Chromium-only (iOS installs through the Share menu) and nothing asks for. **If
+  a later ticket wants that button, it is adding a service worker, with the
+  update story that comes with it.** `test/unit/installable-app.test.ts` and
+  `test/e2e/installing-the-app.spec.ts` both fail if one appears by accident.
+- **Updates need nothing cleared** because nothing unhashed is cached:
+  `/assets/` is hashed and immutable, and the shell, the manifest and the icons
+  are all `no-cache`, so the browser revalidates them on every load. That rule
+  lives in `cacheControlFor` in `server/jellyflick-server.ts`.
+- **The colours are the app's own tokens.** `background_color` and `theme_color`
+  are both `--surface-base` from `src/styles/base.css`, repeated in a
+  `<meta name="theme-color">` because browsers read that before the manifest.
+  A unit test fails if the token and the manifest drift apart. An Accent Colour
+  is a per-User preference (#11) and is deliberately *not* the theme colour —
+  the manifest is one file for the whole household.
+- **The icons are generated, not drawn by hand.** `node scripts/make-icons.mjs`
+  writes the three PNGs; its output is committed, and it is **not** part of
+  `npm run build`, so the shipped artwork shows up in a diff and the production
+  build depends on no rasteriser of ours. It has no dependencies — the mark is a
+  stem and a hook, flat, in the accent on the page's own background, so it owes
+  nothing to Bebas Neue at build time. Re-run it when the accent or the mark
+  changes.
+- **Three icons, and why each exists:** 192px and 512px are what Chromium
+  requires; the 512px `maskable` one is what stops Android cropping the square
+  into a circle with visible letterboxing. iOS reads none of them, which is what
+  `rel="apple-touch-icon"` is for.
 
 ## Runtime config
 
