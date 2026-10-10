@@ -6,7 +6,7 @@ up without re-deriving anything.
 
 ## Status at the last stop (2026-10-10, second session)
 
-**Merged into `feat/jellyflick-v1`** (tip `8225247`, draft PR #38 open):
+**Merged into `feat/jellyflick-v1`** (tip `49fed11`, draft PR #38 open):
 
 | Ticket | State |
 |---|---|
@@ -15,34 +15,38 @@ up without re-deriving anything.
 | #5 Deployable container | merged, issue closed (second box superseded — see below) |
 | #4 New on Jellyflick on Home | merged at `ed9603b`, issue closed |
 | #6 App shell | merged at `8225247`, issue closed |
+| #7 Rows and arrow-key navigation | merged at `49fed11`, **issue still open** |
 
-Gate on the integration tip `8225247`, each step's exit code checked individually and
-after an `npm ci`: `lint` 0, `typecheck` 0, **150 unit tests** in 14 files, **78
-Playwright tests — 71 passed, 7 skipped, 0 failed**, `chrome68` build
-48.33 kB / 17.26 kB gz. Independently re-run by the integrator, not taken from the
-implementers' reports.
+Gate on the integration tip `49fed11`, each step's exit code checked individually:
+`lint` 0, `typecheck` 0, **173 unit tests** in 18 files, **114 Playwright tests — 102
+passed, 12 skipped, 0 failed**, `chrome68` build 53.18 kB / 18.84 kB gz. Independently
+re-run by the integrator, not taken from the implementers' reports.
 
-The 7 e2e skips are deliberate and correct: #6's viewport-gated journeys (3 wide-screen
-tests skipped on `phone`, 2 phone tests skipped on `desktop` and on `keyboard-only`).
+The 12 e2e skips are all deliberate viewport/pointer gating: #6's 7 (3 wide-screen tests
+skipped on `phone`, 2 phone tests skipped on `desktop` and `keyboard-only`) plus #7's 5
+(1 phone-only test skipped on `desktop` and `keyboard-only`, 3 pointer tests skipped on
+`keyboard-only`).
 
-### In flight right now
+**Nothing is in flight.** No implementers are running; no worktree holds uncommitted
+work. Three waves have landed this session (#4, #6, #7), all verified by the integrator.
 
-| Ticket | Branch | Worktree |
+### The frontier — close #7 first
+
+#7's work is merged but **its issue is still open**, so #10, #13, #14 and #24 will all
+report as blocked until it is closed (trap 1, which has now bitten three times). Once it
+is closed the frontier is six tickets wide:
+
+| Ticket | Needs | Note |
 |---|---|---|
-| #7 Rows and arrow-key navigation | `ticket/7-rows-and-arrow-key-navigation` | `.claude/worktrees/ticket-7-rows-and-arrows` |
+| #8 Several Users and the User Picker | #6 | unblocked since the last wave, unstarted |
+| #36 Installable app | #6 | unblocked since the last wave, unstarted |
+| #10 Client Settings and Home Layout | #7 | **critical path** — 2 → 3 → 6 → 7 → 10 → … |
+| #13 My List | #7 | gates #17, which gates the whole player chain |
+| #14 Title Labels | #7 | |
+| #24 Search | #7 | |
 
-Launched in this session off `d1c20a2`, briefed with pointers only, running alone so the
-default test ports are free. Not merged, not pushed, issue not closed — the integrator's
-job. It was given the trap-2 warning explicitly and the baseline it must beat
-(150 unit, 78 e2e with 7 expected skips).
-
-**#8 (Several Users and the User Picker) and #36 (Installable app) are unblocked and not
-started.** Both are a clean next launch.
-
-### The frontier
-
-#4 and #6 are now closed, and with them out of the way #7, #8 and #36 all report
-`blocked_by: 0`. #7 is in flight (below). #7 is the critical path: 2 → 3 → 6 → 7 → 10 → …
+#10 and #13 are the two that unlock the most: #10 opens wave 6 (#11, #12, #15, #16) and
+#13 gates #17 → #25 → #26 → #27 → #28, the deepest remaining chain.
 
 ### Three traps that have already bitten this run
 
@@ -75,6 +79,15 @@ three assertions at the sign-in heading. #6 needed no further change to them.
 worktree's `node_modules` predated it. Nothing was wrong with the merge. Check
 `git diff <prev-tip> <new-tip> -- package.json` before concluding a merge broke something.
 
+### Ticket numbers in code comments have been wrong once — check them
+
+#7 found that #6's comments misattributed four sections: `section-placeholder.tsx`,
+`app-shell.tsx` and `docs/architecture.md` said Movies/Series were #7, My List #8 and
+Search #9 (they are **#23**, **#13**, **#24**), and `bottom-bar.tsx` credited switching
+User and settings to #14/#35 (they are **#8** and **#11**). Fixed in `33e9b09`, comments
+only, and verified against `task-graph.md` by the integrator. Worth a glance whenever a
+ticket points the next one at a number.
+
 ### A hazard for the next parallel wave: fixed test ports
 
 `npm test` and `npm run test:e2e` use fixed ports — **8787** (fake Jellyfin) and **4173**
@@ -94,6 +107,14 @@ implementer to set both to distinct values.
   config. ADR 0004 forbids the key reaching the browser, so the box is superseded. This
   was recorded in the closing comment on #5 rather than ticked.
 - #4 and #6: every box can be ticked.
+- **#7, two caveats on its six boxes.** *Touch swipe* is `overflow-x: auto` doing its job
+  and is asserted structurally (the strip is the scroller, it overflows,
+  `overscroll-behavior-x: contain`, the page does not move) rather than by a real swipe —
+  no Playwright project sets `hasTouch`. Adding a touch project is a one-line config
+  change and would close the gap properly. *Opening a card* **cannot be ticked until
+  #17**, because there is no title page yet; #7 wired the seam (`Row` takes `onCardPress`,
+  Enter clicks the focused card, the e2e asserts the press and that Home survives), so
+  #17 passes a handler and the box closes.
 
 ### Decisions #4 and #6 made that later tickets inherit
 
@@ -135,7 +156,34 @@ From #6:
 - An unknown address gets a short "nothing here" screen rather than silently becoming Home.
 - `docs/architecture.md` has a new "The shell: sections, routing and Back" section.
 
-Both implementers kept `docs/architecture.md` current. Read it rather than this file for
+From #7 (`src/navigation/`, installed once in `src/app.tsx`):
+
+- **A Row's focus memory *is* its tab stop.** The remembered card holds `tabindex="0"`,
+  the rest `-1`; the navigator enters a group at its tab stop — one fact read two ways, no
+  store. Any new strip opts in with `FOCUS_GROUP_ATTRIBUTE` and one tab stop, so
+  #12/#13/#15 get it free by using `Row`.
+- **Moving inside a group is plain geometry; only *arriving* honours the memory**, or
+  Left/Right could never leave the remembered card.
+- **The page's own flow is tried before anything fixed.** Without this the phone's fixed
+  bottom bar is the nearest thing downwards from anywhere and Down never reaches the next
+  Row. From inside a fixed overlay the overlay *is* the flow, so the player (#26) and the
+  title-page pop-up (#17) inherit working behaviour.
+- **A card is a focus stop, not a button.** Enter deliberately leaves real links, buttons
+  and fields to the browser — clicking them would press them twice.
+- **The navigator owns Up/Down/Left/Right/Enter; `src/shell/back.ts` still owns Back
+  alone.** A screen needing different arrow behaviour — the Subtitle Offset panel (#28),
+  where Left/Right adjust the offset — should take the keys *before* this handler rather
+  than adding a parallel one. A field owns its own arrow keys via `isEditable`, which
+  matters for Search (#24).
+- **`input-modality.ts` sets `data-input` on the root element** and `base.css` removes the
+  focus ring under `html[data-input='pointer']`. This replaced #4/#6's
+  `@supports selector(:focus-visible)` block, which could not satisfy the "no ring on
+  mouse click" box on the Chromium 68 floor.
+- **ADR 0002 rules out `scroll-snap-*`, so `reveal.ts` is how a Row scrolls at all** —
+  one axis, with a margin, serving both the Row sideways and the page downwards.
+- `.screen--top` is gone, folded into `.shell .screen` as #4 intended.
+
+Every implementer kept `docs/architecture.md` current. Read it rather than this file for
 the codebase map.
 
 ### Loose ends neither ticket owned
@@ -143,8 +191,15 @@ the codebase map.
 - **No wordmark at phone width.** The bottom bar has no room and story 61 does not ask
   for one; the Billboard ticket may want a small phone header.
 - **Bebas Neue still wants crediting on an about/licences screen**, which no ticket owns yet.
-- #4 left `.screen--top` as a provisional CSS modifier; #6 absorbed Home's wordmark into
-  the top bar but the modifier is still there to fold into the shell properly.
+- `.screen--top` is now resolved — #7 folded it in.
+- **The navigation bars have no focus memory**, deliberately: entering a bar is geometric
+  (the link above the card you came from). Story 65 asks Rows to remember, and a roving
+  tabindex in a bar would stop Tab visiting every link, which is worse for a keyboard user.
+- **Focus and Row scroll position do not survive leaving a section.** Home unmounts and
+  re-reads from the Server, so `preact-iso`'s unconfigurable `scrollTo(0, 0)` stays
+  harmless. Whoever makes a section's state outlive a navigation inherits that problem.
+- **No Playwright project sets `hasTouch`**, so real touch gestures are untested
+  anywhere. One added project would fix it for #7 and everything after.
 
 ## Where the work lives
 
@@ -190,7 +245,8 @@ branch is correct — check its tests pass before building on it.
 
 ## Still owed at the end of the run
 
-1. Every ticket from #7 onward (#7 in flight, #8 and #36 unblocked and unstarted).
+1. Close #7, then every ticket from #8 onward. Six are unblocked once #7 closes:
+   #8, #36, #10, #13, #14, #24.
 2. `code-review` over the whole integration branch, with findings fixed in one implementer.
 3. **The git history rewrite** described in `decisions.md` §10 — removing the inspiration
    product's name from the root commit. Must happen with no implementers in flight, and
@@ -198,5 +254,5 @@ branch is correct — check its tests pass before building on it.
 4. Mark PR #38 ready for review.
 5. Remove the agent worktrees (`git worktree list`, then `git worktree remove`). As of this
    session that is three stale `agent-*` worktrees from the first session plus
-   `ticket-4-new-on-home` and `ticket-6-app-shell` (both merged, safe to remove), and
-   `ticket-7-rows-and-arrows` (in flight).
+   `ticket-4-new-on-home`, `ticket-6-app-shell` and `ticket-7-rows-and-arrows`, all three
+   merged and safe to remove.
