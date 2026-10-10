@@ -704,3 +704,68 @@ html[data-input='pointer'] [tabindex]:focus {
     grid-auto-flow: column;
   }
 }
+
+/*
+ * The settings screen (#11): one group per thing a User can change.
+ *
+ * Grid `gap` throughout, which is native on the target — flex `gap` is not,
+ * and silently does nothing there (decisions.md §6).
+ */
+.settings-group {
+  margin: var(--space-5) 0 0;
+}
+
+.settings-group__heading {
+  margin: 0 0 var(--space-2);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.settings-choices {
+  display: grid;
+  gap: var(--space-2);
+  justify-content: start;
+  margin: var(--space-2) 0 0;
+}
+
+/*
+ * The Accent Colour presets. Each swatch is filled with the colour it sets and
+ * carries its own text colour, so a User can see the pair they are choosing
+ * before they choose it. They wrap at any width rather than scrolling.
+ */
+.accents {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 48px);
+  gap: var(--space-2);
+  justify-content: start;
+  margin: var(--space-3) 0 0;
+}
+
+.accent {
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: 2px solid var(--surface-line);
+  border-radius: 50%;
+  font: inherit;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.accent[aria-pressed='true'] {
+  border-color: var(--text-strong);
+}
+
+/* A pressed choice among several: the quiet button, filled in. */
+.button--quiet[aria-pressed='true'] {
+  background: var(--surface-raised);
+  border-color: var(--text-strong);
+  font-weight: 600;
+}
+
+@media (min-width: 640px) {
+  .settings-choices {
+    grid-auto-flow: column;
+  }
+}

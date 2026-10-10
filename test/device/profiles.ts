@@ -28,6 +28,11 @@ export type TestDeviceOptions = {
    * reload: the page is new, the storage is the one the device already had.
    */
   storage?: DeviceStorage;
+  /**
+   * The languages the device prefers, best first. English by default, so a
+   * test that says nothing about language gets the English dictionary.
+   */
+  preferredLanguages?: readonly string[];
 };
 
 /** 2026-06-15T12:00:00Z — a fixed instant, so date-derived behaviour is stable. */
@@ -68,6 +73,7 @@ export function testDeviceLayer(options: TestDeviceOptions = {}): DeviceLayer {
   return {
     name: `test:${profileName}`,
     deviceName: () => profile.deviceName,
+    preferredLanguages: () => options.preferredLanguages ?? ['en'],
     newDeviceId: () => {
       deviceIdCount += 1;
       return `${deviceIdPrefix}-${String(deviceIdCount)}`;

@@ -53,6 +53,7 @@ export const SETTINGS_KEY_PREFIX = 'jf.';
 
 export const HOME_LAYOUT_KEY = `${SETTINGS_KEY_PREFIX}homeLayout`;
 export const UI_LANGUAGE_KEY = `${SETTINGS_KEY_PREFIX}uiLanguage`;
+export const ACCENT_COLOUR_KEY = `${SETTINGS_KEY_PREFIX}accentColour`;
 
 /**
  * A User's settings, typed, with a default for every one of them — a new User
@@ -63,10 +64,19 @@ export type ClientSettings = {
   /**
    * The language the User chose for the app, or absent for their browser's.
    * Jellyfin 12.x has no per-user UI language of its own (`decisions.md` §2),
-   * so this one is ours. Read by #11/#35; stored here from the start so the
-   * settings screen is the only thing that ticket has to build.
+   * so this one is ours, and the settings screen says so rather than implying
+   * otherwise. `src/settings/ui-language.tsx` is what reads it (#11).
    */
   readonly uiLanguage?: string;
+  /**
+   * The Accent Colour preset the User picked, or absent for the default (red).
+   *
+   * A plain string rather than `AccentColourId`, so a preset a newer Jellyflick
+   * offers survives being read by this one: it is carried unchanged and
+   * `accentColourFor` falls back to red only when showing it. The same
+   * treatment `HomeRow.parameter` gets.
+   */
+  readonly accentColour?: string;
 };
 
 export const DEFAULT_CLIENT_SETTINGS: ClientSettings = { homeLayout: DEFAULT_HOME_LAYOUT };
@@ -167,11 +177,21 @@ function ourKeysOf(
 
 /** The stored strings as typed settings, with a default for each. */
 function settingsFrom(prefs: Record<string, string | null>): ClientSettings {
-  const language = prefs[UI_LANGUAGE_KEY];
   return {
     homeLayout: parseHomeLayout(prefs[HOME_LAYOUT_KEY]),
-    ...(typeof language === 'string' && language !== '' ? { uiLanguage: language } : {}),
+    // An empty string is how "no choice" is stored, so it is not a choice.
+    ...chosen('uiLanguage', prefs[UI_LANGUAGE_KEY]),
+    ...chosen('accentColour', prefs[ACCENT_COLOUR_KEY]),
   };
+}
+
+/** One stored string as a setting, or nothing at all when nothing was chosen. */
+function chosen<K extends string>(
+  key: K,
+  value: string | null | undefined,
+): Partial<Record<K, string>> {
+  if (typeof value !== 'string' || value === '') return {};
+  return { [key]: value } as Record<K, string>;
 }
 
 /** Typed settings as the strings they are stored as. */
@@ -184,6 +204,9 @@ function prefsFor(changes: Partial<ClientSettings>): Record<string, string | nul
     // Chosen, or back to the browser's: an empty string is how "no choice" is
     // stored, because `CustomPrefs` holds strings and nothing else.
     prefs[UI_LANGUAGE_KEY] = changes.uiLanguage ?? '';
+  }
+  if ('accentColour' in changes) {
+    prefs[ACCENT_COLOUR_KEY] = changes.accentColour ?? '';
   }
   return prefs;
 }

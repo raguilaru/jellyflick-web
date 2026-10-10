@@ -88,6 +88,37 @@ export const en = {
   'homeLayout.nothingToAdd': 'Every Row is already on Home.',
   'homeLayout.notSaved': 'Jellyflick could not save that change to the Server.',
 
+  // The settings screen (#11). The rest of story 114 — audio language,
+  // subtitle language and next-episode autoplay, which really are Jellyfin's
+  // own settings — is #35's and has no copy here yet.
+  'settings.heading': 'Settings',
+  'settings.loading': 'Looking for your settings…',
+  'settings.notSaved': 'Jellyflick could not save that change to the Server.',
+
+  'settings.accentHeading': 'Accent Colour',
+  'settings.accentExplanation':
+    'The highlight colour for buttons, the wordmark and whatever you have selected. Every colour here is one text stays readable on.',
+  'settings.accent.red': 'Red',
+  'settings.accent.amber': 'Amber',
+  'settings.accent.green': 'Green',
+  'settings.accent.teal': 'Teal',
+  'settings.accent.blue': 'Blue',
+  'settings.accent.violet': 'Violet',
+  'settings.accent.pink': 'Pink',
+
+  'settings.languageHeading': 'Language',
+  // Jellyfin 12.x has no per-user UI language at all (`decisions.md` §2), so
+  // this setting is Jellyflick's own. Saying so is the point of this string:
+  // the screen must not suggest it reaches the User's other Jellyfin apps.
+  'settings.languageExplanation':
+    'The language Jellyflick itself is in. Jellyflick keeps this one for you and it follows you to every device, but Jellyfin has no language setting of its own — so your other Jellyfin apps keep their own language.',
+  'settings.language.deviceIs': (p: { language: string }) => `Match my device (${p.language})`,
+  'settings.language.en': 'English',
+  'settings.language.es': 'Español',
+
+  'settings.homeHeading': 'Home',
+  'settings.homeExplanation': 'Choose the Rows on your Home and the order they come in.',
+
   'search.heading': 'Search',
   'search.fieldLabel': 'Search for a Movie or Series',
   'search.searching': 'Searching…',
@@ -110,6 +141,9 @@ export const en = {
   'nav.series': 'Series',
   'nav.myList': 'My List',
   'nav.search': 'Search',
+  // Not a section — the settings screen has its own address and is reached
+  // from the bars rather than listed in `SECTIONS`.
+  'nav.settings': 'Settings',
 
   'shell.sectionNotBuiltYet': 'This section is not built yet.',
   'shell.unknownSectionHeading': 'Nothing here',

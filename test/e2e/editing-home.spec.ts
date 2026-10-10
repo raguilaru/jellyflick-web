@@ -47,11 +47,11 @@ async function signInAndLand(page: Page): Promise<void> {
 async function openTheEditor(page: Page): Promise<void> {
   await page.getByRole('link', { name: 'Edit Home' }).press('Enter');
   await expect(page.getByRole('heading', { name: 'Edit Home', level: 1 })).toBeVisible();
-  // The editor opens on the defaults and redraws when the Server's answer
-  // lands, which looks the same but is a different tree. A press in that gap is
-  // a press on a button that is about to be redrawn, so these journeys wait for
-  // the app to have finished talking to the Server before pressing anything.
-  await page.waitForLoadState('networkidle');
+  // The editor now offers nothing to press until the Server has answered (#11
+  // fixed that), so waiting for the list of Rows is waiting for the User's own
+  // layout rather than the defaults. This used to be a `networkidle` wait,
+  // which papered over a press being able to land on the defaults.
+  await expect(page.locator('.layout-row').first()).toBeVisible();
 }
 
 async function backToHome(page: Page): Promise<void> {
