@@ -183,8 +183,10 @@ describe('the ratings route', () => {
 
     expect(response.status).toBe(200);
     expect(JSON.parse(payload)).toEqual(MATRIX_RATINGS);
+    // The trailing slash is part of MDBList's own route template, not an
+    // accident: docs/research/ratings-mdblist.md §19.
     expect(upstream.calls).toEqual([
-      'https://api.mdblist.com/imdb/movie/tt0133093?apikey=secret-key-42',
+      'https://api.mdblist.com/imdb/movie/tt0133093/?apikey=secret-key-42',
     ]);
     expect(payload).not.toContain('secret-key-42');
     expect(JSON.stringify([...response.headers])).not.toContain('secret-key-42');
@@ -306,6 +308,25 @@ describe('the ratings route', () => {
 
     expect(response.status).toBe(502);
     expect(await response.json()).toEqual({ error: 'mdblist-unavailable' });
+  });
+
+  it('accepts every provider and media type MDBList itself accepts', async () => {
+    const upstream = fakeMdbList(() => ({ status: 200, body: MATRIX_RATINGS }));
+    const url = await serve({ mdbListApiKey: 'secret-key-42', fetch: upstream.fetch });
+
+    const statuses = await Promise.all(
+      [
+        '/api/ratings/imdb/movie/tt0133093',
+        '/api/ratings/tmdb/movie/603',
+        '/api/ratings/tvdb/show/73739',
+        '/api/ratings/trakt/show/1390',
+        '/api/ratings/mal/any/1',
+        '/api/ratings/mdblist/any/12345',
+        '/api/ratings/imdb/any/tt0133093',
+      ].map(async (path) => (await fetch(`${url}${path}`)).status),
+    );
+
+    expect(statuses).toEqual([200, 200, 200, 200, 200, 200, 200]);
   });
 
   it('rejects a provider, type or id it does not recognise, so nothing is smuggled upstream', async () => {

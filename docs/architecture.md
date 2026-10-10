@@ -220,13 +220,14 @@ left alone. `docs/setup.md` is the host's guide.
 GET /api/ratings/:provider/:type/:id
 ```
 
-- `:provider` — `imdb`, `tmdb`, `tvdb` or `trakt`
-- `:type` — `movie` or `show`
+- `:provider` — `imdb`, `mal`, `mdblist`, `tmdb`, `trakt` or `tvdb`
+- `:type` — `any`, `movie` or `show`
 - `:id` — the provider's id, `[A-Za-z0-9]{1,32}`
 
-The segments are MDBList's own path shape, so they pass straight through and
-this route stays **transport, not translation**. The key is added here and
-nowhere else, so it never reaches a browser.
+The three segments are MDBList's own enums, from its OpenAPI schema
+(`docs/research/ratings-mdblist.md` §19), so they pass straight through and this
+route stays **transport, not translation**. The key is added here and nowhere
+else, so it never reaches a browser.
 
 | Status | Body | Means |
 | --- | --- | --- |
@@ -242,6 +243,10 @@ them — story 81 says a missing rating is left out, not shown as zero. There is
 capability flag in the runtime config to check first, by design: the config
 carries `serverAddress` and `appVersion` and nothing else, so no secret can leak
 into it.
+
+Prefer `imdb` with `ProviderIds.Imdb` and fall back to `tmdb` with
+`ProviderIds.Tmdb`; map `BaseItemKind` to the type, `Movie` → `movie` and
+`Series` → `show`.
 
 Two properties the route already gives you, so do not rebuild them client-side:
 

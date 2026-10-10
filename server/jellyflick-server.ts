@@ -61,8 +61,9 @@ export const RATINGS_CACHE_DEFAULTS = { ttlMs: ONE_DAY_MS, maxEntries: 2000 };
  * route stays transport rather than translation. Ticket #20 shapes the payload.
  */
 const MDBLIST_BASE = 'https://api.mdblist.com';
-const RATINGS_PROVIDERS = ['imdb', 'tmdb', 'tvdb', 'trakt'] as const;
-const RATINGS_MEDIA_TYPES = ['movie', 'show'] as const;
+/** MDBList's own enums, from its OpenAPI schema: docs/research/ratings-mdblist.md §19. */
+const RATINGS_PROVIDERS = ['imdb', 'mal', 'mdblist', 'tmdb', 'trakt', 'tvdb'] as const;
+const RATINGS_MEDIA_TYPES = ['any', 'movie', 'show'] as const;
 /** Deliberately narrow: an id is the only part of the upstream URL a caller picks. */
 const RATINGS_ID = /^[A-Za-z0-9]{1,32}$/;
 
@@ -232,7 +233,8 @@ export function startJellyflickServer(options: JellyflickServerOptions): Promise
    * would otherwise be looked up on every page view.
    */
   async function lookUpRatings(key: string): Promise<CachedRatings | undefined> {
-    const target = new URL(`${MDBLIST_BASE}/${key}`);
+    // The trailing slash is part of MDBList's route template, not decoration.
+    const target = new URL(`${MDBLIST_BASE}/${key}/`);
     target.searchParams.set('apikey', options.mdbListApiKey);
 
     let upstream: Response;
