@@ -1,6 +1,5 @@
 import { catalogueItemFrom, titleOf } from '../catalogue/catalogue';
-import { cardFor } from '../home/title-card';
-import type { RowCard } from '../home/row';
+import { cardForTitle, type RowCard } from '../home/row';
 import type { JellyfinGateway } from '../jellyfin/gateway';
 
 /**
@@ -105,7 +104,7 @@ export function createMyList(gateway: JellyfinGateway): MyList {
       // The Server is asked for Movies and Series only, so anything else here
       // is something this app does not show.
       if (item === undefined) continue;
-      cards.push(cardFor(gateway, titleOf(item)));
+      cards.push(cardForTitle(gateway, titleOf(item)));
     }
     publish({ outcome: 'list', titles: cards });
   }

@@ -17,65 +17,6 @@ import { userForToken } from './users.ts';
 export const itemRoutes: readonly FakeRoute[] = [
   {
     method: 'GET',
-    path: '/Items',
-    handle: (request, state) => {
-      // Whose favourites, whose parental controls: the Server wants a token.
-      const user = userForToken(request.headers.authorization ?? '', state.users);
-      if (user === undefined) {
-        return { status: 401, body: { error: 'No valid token.' } };
-      }
-
-      // My List is the only `/Items` query any feature makes so far. Anything
-      // else is refused rather than answered with the whole library.
-      if (request.query.get('isFavorite') !== 'true') {
-        return {
-          status: 400,
-          body: {
-            error:
-              'The fake Jellyfin only implements /Items?isFavorite=true. Implement the query your ticket needs in test/fake-jellyfin/routes/items.ts.',
-          },
-        };
-      }
-
-      if (state.failFavouriteQueriesWith !== null) {
-        return {
-          status: state.failFavouriteQueriesWith,
-          body: { error: 'The fake Jellyfin was told to fail favourite queries.' },
-        };
-      }
-
-      const sortBy = request.query.get('sortBy');
-      if (sortBy !== null && sortBy !== 'Name') {
-        return {
-          status: 400,
-          body: {
-            error: `The fake Jellyfin only implements sortBy=Name, not ${sortBy}. Implement it in test/fake-jellyfin/routes/items.ts.`,
-          },
-        };
-      }
-
-      const favourites = state.favourites[user.Id] ?? [];
-      const kinds = csvOf(request.query.get('includeItemTypes'));
-      const descending = request.query.get('sortOrder') === 'Descending';
-
-      const items = state.items
-        .filter((item) => favourites.indexOf(item.Id) !== -1)
-        .filter((item) => kinds.length === 0 || kinds.indexOf(item.Type) !== -1)
-        .sort((left, right) =>
-          descending ? right.Name.localeCompare(left.Name) : left.Name.localeCompare(right.Name),
-        )
-        .slice(0, limitOf(request.query.get('limit')))
-        .map(servedViewOf);
-
-      return {
-        status: 200,
-        body: { Items: items, TotalRecordCount: items.length, StartIndex: 0 },
-      };
-    },
-  },
-
-  {
-    method: 'GET',
     path: '/Items/Latest',
     handle: (request, state) => {
       // What is new is new to one User, so the Server wants a token.
@@ -126,6 +67,95 @@ export const itemRoutes: readonly FakeRoute[] = [
 
   {
     method: 'GET',
+    path: '/Items',
+    handle: (request, state) => {
+      // A query across the libraries is a query about what one User can see —
+      // and `isFavorite` makes it a query about what one User has saved.
+      const user = userForToken(request.headers.authorization ?? '', state.users);
+      if (user === undefined) {
+        return { status: 401, body: { error: 'No valid token.' } };
+      }
+
+      const favouritesOnly = request.query.get('isFavorite') === 'true';
+      if (favouritesOnly && state.failFavouriteQueriesWith !== null) {
+        return {
+          status: state.failFavouriteQueriesWith,
+          body: { error: 'The fake Jellyfin was told to fail favourite queries.' },
+        };
+      }
+
+      if (state.failLibraryQueriesWith !== null) {
+        return {
+          status: state.failLibraryQueriesWith,
+          body: { error: 'The fake Jellyfin was told to fail library queries.' },
+        };
+      }
+
+      // The real Server answers with the library folders themselves without
+      // it, which is never what a client asking for Titles meant.
+      if (request.query.get('recursive') !== 'true') {
+        return {
+          status: 400,
+          body: {
+            error:
+              'The fake Jellyfin only implements recursive=true. Implement the non-recursive form in test/fake-jellyfin/routes/items.ts if a ticket needs it.',
+          },
+        };
+      }
+
+      // `Name` and `SortName` are both asked for — My List by `Name`, because
+      // a client inserting a Title it just added has only the name to place it
+      // by, and Search by `SortName`. The real Server falls back to the name
+      // when an item has no sort name, and no sample item has one, so here the
+      // two orders are the same. Any other order is refused rather than
+      // quietly ignored.
+      const sortBy = request.query.get('sortBy');
+      const sortOrder = request.query.get('sortOrder');
+      if (
+        (sortBy !== null && sortBy !== 'Name' && sortBy !== 'SortName') ||
+        (sortOrder !== null && sortOrder !== 'Ascending')
+      ) {
+        return {
+          status: 400,
+          body: {
+            error:
+              'The fake Jellyfin only implements sortBy=Name or SortName, ascending. Implement the order your ticket needs in test/fake-jellyfin/routes/items.ts.',
+          },
+        };
+      }
+
+      const includeItemTypes = csvOf(request.query.get('includeItemTypes'));
+      const searchTerm = request.query.get('searchTerm');
+      const genres = csvOf(request.query.get('genres'));
+      const favourites = state.favourites[user.Id] ?? [];
+
+      const matching = state.items
+        .filter((item) => !favouritesOnly || favourites.includes(item.Id))
+        .filter((item) => includeItemTypes.length === 0 || includeItemTypes.includes(item.Type))
+        // The real Server's matching is cleverer than this; a substring of the
+        // name is as much as a fake owes a client.
+        .filter(
+          (item) =>
+            searchTerm === null ||
+            item.Name.toLowerCase().includes(searchTerm.toLowerCase()),
+        )
+        .filter(
+          (item) => genres.length === 0 || genres.some((genre) => hasGenre(item, genre)),
+        )
+        .sort((left, right) => left.Name.localeCompare(right.Name))
+        .slice(0, limitOf(request.query.get('limit')))
+        .map(servedViewOf);
+
+      // A query result, not a bare array: `/Items/Latest` is the odd one out.
+      return {
+        status: 200,
+        body: { Items: matching, TotalRecordCount: matching.length, StartIndex: 0 },
+      };
+    },
+  },
+
+  {
+    method: 'GET',
     path: '/Items/:itemId/Images/:imageType',
     handle: (_request, state, params) => {
       const itemId = params.itemId ?? '';
@@ -147,10 +177,17 @@ function imageTagOf(item: FakeItem | undefined, imageType: string): string | und
   return item.ImageTags?.[imageType];
 }
 
-/** One of Jellyfin's CSV parameters, as the list it stands for. */
+/** A comma-delimited query parameter, which is how Jellyfin takes every list. */
 function csvOf(raw: string | null): string[] {
   if (raw === null) return [];
-  return raw.split(',').filter((value) => value.length > 0);
+  return raw
+    .split(',')
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+}
+
+function hasGenre(item: FakeItem, genre: string): boolean {
+  return (item.Genres ?? []).some((candidate) => candidate.toLowerCase() === genre.toLowerCase());
 }
 
 /** Jellyfin's `limit`, which is optional and means "everything" when absent. */

@@ -4,9 +4,58 @@ State of the `/implement-spec` run on the integration branch `feat/jellyflick-v1
 (draft PR #38). Update this whenever a wave lands, so a fresh session can pick the work
 up without re-deriving anything.
 
+## START HERE — the third session stopped at the 5-hour spending limit
+
+The host asked for the spend to be checked at every commit, and for the process to be
+written down if a ticket was unfinished when the limit neared. **That is what happened.**
+The third session stopped at **91% of the 5-hour window** (weekly 45%), with **#13 still
+in flight**. Nothing is broken and nothing is half-merged on the integration branch.
+
+**The integration branch is green.** Tip `46dfa67`, gate verified on fresh ports:
+`lint` 0, `typecheck` 0, `build` 0, 242 unit tests in 23 files, 168 Playwright tests
+(156 passed, 12 skipped, 0 failed), 65.12 kB / 21.94 kB gz. #36, #10 and #24 all landed
+and closed this session.
+
+### Do these, in this order
+
+1. **Check the 5-hour window before anything else** (it resets 2026-10-10 19:40 UTC). A
+   wave of three implementers plus the integrator's own gate runs costs roughly 25–30
+   points of it. If the window is fresh, three is comfortable; if not, launch one.
+2. **Deal with #13 first — it was mid-merge when the session ended.** Its implementer was
+   alive in `.claude/worktrees/ticket-13-my-list` with a **merge of `6eb34a2` in progress,
+   all conflicts already resolved and staged but not committed**, on top of its own four
+   commits (tip `7691ed8`). So:
+   - If the merge commit exists and the branch looks finished, treat it as a finished
+     branch: re-run its gate **on fresh ports** and merge it.
+   - If it is still sitting mid-merge with nothing since, the implementer died there.
+     `git -C .claude/worktrees/ticket-13-my-list status` and either commit the resolved
+     merge or `git merge --abort` and redo it deliberately. **Do not assume the staged
+     resolution is right** — check its tests pass before building on it.
+   - **It merged `6eb34a2`, which is pre-#24.** So #13 has #10 and #36 but **not** #24,
+     and merging it into the current tip will conflict with #24 in `src/home/row.tsx`,
+     `src/jellyfin/gateway.ts`, `src/shell/sections.ts` and
+     `test/fake-jellyfin/routes/items.ts`. The resolutions are written down under "In
+     flight right now" below — read that before resolving anything by hand.
+3. **Then launch the next wave** from the six-wide frontier below. #8, #11, #12, #15 and
+   #16 are all safe to run concurrently; **hold #14 until #13 has landed**, because both
+   touch `cardForTitle` in `src/home/row.tsx`.
+4. **Read trap 4 before running a single gate.** It cost this session a full false alarm.
+
+### Still owed after the tickets
+
+`code-review` over the whole branch, the git history rewrite in `decisions.md` §10 (**not
+while any implementer is in flight**), marking PR #38 ready, and removing the merged
+worktrees. The full list is at the bottom of this file.
+
+Two things a human may want to look at, neither of which any ticket owns:
+**the app icon is a plain generated "J"** that an agent produced because no design asset
+existed (`node scripts/make-icons.mjs` regenerates it), and **"Signed in as Rafael." is
+still scaffolding on Home** — several specs now assert it, so whoever removes it (#16 is
+the natural place) must update them.
+
 ## Status at the last stop (2026-10-10, third session)
 
-**Merged into `feat/jellyflick-v1`** (tip `9c0ed1a`, draft PR #38 open):
+**Merged into `feat/jellyflick-v1`** (tip `5b81023`, draft PR #38 open):
 
 | Ticket | State |
 |---|---|
@@ -18,58 +67,64 @@ up without re-deriving anything.
 | #7 Rows and arrow-key navigation | merged at `49fed11`, issue closed |
 | #36 Installable app | merged at `e0a85ac`, issue closed (service-worker box superseded — see below) |
 | #10 Client Settings and Home Layout | merged at `9c0ed1a`, issue closed (touch caveat — see below) |
+| #24 Search | merged at `5b81023`, issue closed |
 
-Gate on the integration tip `9c0ed1a` after #10 merged, each step's exit code checked
-individually: `lint` 0, `typecheck` 0, `build` 0, **224 unit tests** in 22 files,
-**150 Playwright tests — 138 passed, 12 skipped, 0 failed**, `chrome68` build
-**60.13 kB / 20.73 kB gz**. Independently re-run by the integrator after each merge, not
-taken from the implementers' reports; both matched their implementer's numbers exactly.
+Gate on the integration tip `5b81023` after #24 merged, each step's exit code checked
+individually and **on fresh ports** (see trap 4): `lint` 0, `typecheck` 0, `build` 0,
+**242 unit tests** in 23 files, **168 Playwright tests — 156 passed, 12 skipped, 0
+failed**, `chrome68` build **65.12 kB / 21.94 kB gz**. Independently re-run by the
+integrator after each merge, not taken from the implementers' reports; all three matched
+their implementer's numbers exactly.
 
 The session opened by re-running the gate on `1c54103` and got the second session's
 numbers unchanged (173 unit / 18 files, 102 passed / 12 skipped, 53.18 kB / 18.84 kB gz),
 which confirmed the two doc/config commits after `49fed11` changed nothing.
 
-Bundle growth so far: 53.18 → 60.13 kB raw, 18.84 → 20.73 kB gz. All of it is #10 — one
-new screen, a provider and ~20 strings, not lazily loaded. #36 added nothing to the JS
-(its manifest and icons are static files in `public/`).
+Bundle growth so far: 53.18 → 65.12 kB raw, 18.84 → 21.94 kB gz. #10 is about 7 kB raw
+(one new screen, a provider and ~20 strings, not lazily loaded) and #24 about 5 kB raw /
+1.2 kB gz. #36 added nothing to the JS — its manifest and icons are static files in
+`public/`. **Nothing is lazily loaded yet**, and the spec's lightness constraint is about
+the bundle shipped to a TV, so whoever adds the player should expect to be the one who
+has to start splitting.
 
 The 12 e2e skips are all deliberate viewport/pointer gating: #6's 7 (3 wide-screen tests
 skipped on `phone`, 2 phone tests skipped on `desktop` and `keyboard-only`) plus #7's 5
 (1 phone-only test skipped on `desktop` and `keyboard-only`, 3 pointer tests skipped on
 `keyboard-only`).
 
-### In flight right now — #13 and #24
-
-Launched in the third session, each in its own worktree, each driving the `tdd` skill,
-each briefed with pointers only:
+### In flight right now — #13 only
 
 | Ticket | Branch | Worktree | `APP_PORT` / `FAKE_JELLYFIN_PORT` | Based on |
 |---|---|---|---|---|
 | #13 My List | `ticket/13-my-list` | `.claude/worktrees/ticket-13-my-list` | 4213 / 8813 | `1c54103` |
-| #24 Search | `ticket/24-search` | `.claude/worktrees/ticket-24-search` | 4224 / 8824 | `e0a85ac` |
 
-Neither had reported as of the last write of this file. **Their context may be gone but
-their branches are not** — see "Recovering an interrupted implementer" below, and check
-each branch before assuming it is empty or correct.
+It had not reported as of the last write of this file. **Its context may be gone but its
+branch is not** — see "Recovering an interrupted implementer" below, and check the branch
+before assuming it is empty or correct.
 
-**#13 was based on `1c54103`, before #10 landed, and #10 rewrote Home.** So #13's own
-merge of the integration tip is where the conflict lands. It is a real conflict, not a
-mistake: #10 made Home draw from a stored layout through the registry in
-`src/home/home-rows.tsx`, and #13 adds a Row to Home. The resolution #10 designed for is
-that **#13 adds a loader, a case in `HomeRowFor`, and its kind to `BUILT_ROW_KINDS`** —
-no change to the layout format. If #13's branch instead edits `home-screen.tsx` directly,
-prefer #10's registry and port #13's Row onto it.
+**#13 was based on `1c54103`, before #10 and #24 landed, and both touched what it
+touches.** Its own merge of the integration tip is where that lands, and it is a real
+conflict rather than a mistake:
 
-#24 was based on the post-#36 tip and was told to expect #10 and #13 to land under it.
+- **#10 rewrote Home** to draw from a stored layout through the registry in
+  `src/home/home-rows.tsx`. The resolution #10 designed for is that **#13 adds a loader, a
+  case in `HomeRowFor`, and its kind to `BUILT_ROW_KINDS`** — no change to the layout
+  format. If #13's branch instead edits `home-screen.tsx` directly, prefer #10's registry
+  and port #13's Row onto it. Note that `'my-list'` is **already a Row name in #10's
+  default layout** but not in `BUILT_ROW_KINDS`, so Home currently leaves it out; #13
+  landing is what makes it appear.
+- **#24 extracted `cardForTitle` into `src/home/row.tsx`** as the one place a Title becomes
+  a card, and put the "only Movies and Series" rule in the gateway. **#13 should grow
+  `getTitles` rather than add a second `/Items` method**, and use `cardForTitle`.
 
 ### The frontier is six tickets wide again
 
-#36 and #10 closing opened wave 6. All six verified `blocked_by: 0` after #10 merged:
+#36, #10 and #24 closing opened wave 6. All six verified `blocked_by: 0`:
 
 | Ticket | Needs | Note |
 |---|---|---|
 | #8 Several Users and the User Picker | #6 | unstarted; gates #9 |
-| #14 Title Labels | #7 | unstarted; touches cards, so it conflicts with #13 — hold it until #13 lands |
+| #14 Title Labels | #7 | unstarted; touches cards (`cardForTitle` in `src/home/row.tsx`), so hold it until #13 lands |
 | #11 Settings screen: Accent Colour and language | #10 | newly open; gates #35. `jf.uiLanguage` is already keyed and defaulted by #10, unread |
 | #12 Continue Watching | #10 | newly open; adds a Row via #10's registry |
 | #15 More Row types | #10 | newly open; `HomeRow.parameter` is already round-tripped unread for its genre/Collection Rows |
@@ -91,6 +146,7 @@ limit, not the weekly one. Measured this session:
 | three implementers launched | 14% | 35% |
 | #36 merged and verified | 34% | 37% |
 | #10 merged and verified | 61% | 41% |
+| #24 merged and verified, incl. the false alarm | ~70% | ~43% |
 
 **A wave of three implementers plus the integrator's own gate runs costs roughly 25–30
 points of the 5-hour window.** At 61%, with #13 and #24 still running and still to be
@@ -104,7 +160,7 @@ it has not, launch one or two. Note also that the integrator's own verification 
 free: a full gate run (lint, typecheck, test, build, then the e2e suite) is a few points
 each time, and it must still be run after every merge.
 
-### Three traps that have already bitten this run
+### Four traps that have already bitten this run
 
 **1. A merged ticket is not a closed ticket.** This bit twice. #2, #3 and #5 were merged
 in the first session and never closed, so GitHub reported #4 and #6 as blocked long after
@@ -128,6 +184,27 @@ Those 9 failures were real and pre-existing: #3 (`74091d9`) removed the
 #5's container journeys still asserted it, and the gate was never re-run after they
 merged in that order. Fixed by #4 in a standalone commit, `b24e2c8`, which repoints the
 three assertions at the sign-in heading. #6 needed no further change to them.
+
+**4. Never re-use the same test ports for two successive gate runs.** This bit the
+integrator in the third session and cost a full false alarm. `reuseExistingServer` is
+`!process.env.CI`, so **both** webServers — the fake Jellyfin *and* `vite preview` — are
+reused when a process is already on the port. Verifying #10 on `4290/8890` and then
+verifying #24 on the same `4290/8890` meant the second run was served a **stale preview
+build and a fake Jellyfin carrying the first run's state**. Two tests failed
+(`editing-home.spec.ts` saw the default Row order instead of the edited one, and
+`moving-around-the-app.spec.ts` could not find Home's sign-in line) and it looked exactly
+like a real regression from the merge. It was not: the same suite on fresh ports
+`4292/8892` was green at 156 passed / 12 skipped / 0 failed, matching the implementer's
+own numbers exactly.
+
+So: **pick unused ports for every gate run, and kill strays afterwards.**
+
+```
+for p in <ports used>; do lsof -ti :$p | xargs kill -9; done
+```
+
+This is trap 2's sibling. Trap 2 is a gate whose exit code lies; this is a gate whose
+exit code is honest about the wrong build. Both produce a confident, meaningless number.
 
 **3. `npm ci` in the integration worktree after merging a branch that changed
 `package.json`.** Merging #6 made the gate fail four ways (`typecheck` 2, `test` 1,
@@ -373,7 +450,7 @@ branch is correct — check its tests pass before building on it.
 
 ## Still owed at the end of the run
 
-1. Every ticket from #8 onward except #10 and #36, which have landed. #13 and #24 are in
+1. Every ticket from #8 onward except #10, #24 and #36, which have landed. #13 is in
    flight; #8, #14, #11, #12, #15 and #16 are unblocked and unstarted; #9 waits on #8, #17
    and its whole chain wait on #13.
 2. `code-review` over the whole integration branch, with findings fixed in one implementer.
@@ -387,7 +464,7 @@ branch is correct — check its tests pass before building on it.
    `ticket-7-rows-and-arrows` were removed in the third session, each verified clean
    (`git status --short` empty) and fully merged (`git rev-list --count <branch>
    ^feat/jellyflick-v1` = 0) first. The branches were kept. Still to remove when they
-   merge: `ticket-13-my-list` and `ticket-24-search`. `ticket-10-client-settings` and
+   merge: `ticket-13-my-list`. `ticket-10-client-settings`, `ticket-24-search` and
    `ticket-36-installable-app` have merged and can be removed once nothing needs them.
    **Leave `implement-spec-88c250` and `remote-setup-2e9b22` alone — they belong to other
    Claude sessions, not this run.**

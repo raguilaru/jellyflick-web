@@ -1,8 +1,7 @@
 import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models/base-item-dto';
 import { catalogueItemFrom, titleOf, type Title } from '../catalogue/catalogue';
 import type { JellyfinGateway } from '../jellyfin/gateway';
-import type { RowCard } from './row';
-import { cardFor } from './title-card';
+import { cardForTitle, type RowCard } from './row';
 
 /**
  * New on Jellyflick: the newest Titles across all libraries, newest first, with
@@ -64,7 +63,7 @@ export async function loadNewOnJellyflick(
 
   return {
     outcome: 'row',
-    titles: mergeNewOnJellyflick(latest, limit).map((title) => cardFor(gateway, title)),
+    titles: mergeNewOnJellyflick(latest, limit).map((title) => cardForTitle(gateway, title)),
   };
 }
 

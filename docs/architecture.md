@@ -35,9 +35,9 @@ src/
                         `browser.ts` the implementation that ships now.
   home/                 Where a signed-in User lands: `home-layout.ts` is which
                         Rows and in what order, `home-rows.tsx` which kind is
-                        drawn by what, `row.tsx` the Row and its card,
-                        `title-card.ts` what a card is made of, one module per
-                        Row beside it. The Billboard is still to come.
+                        drawn by what, `row.tsx` the Row, its card and
+                        `cardForTitle`, one module per Row beside it. The
+                        Billboard is still to come.
   i18n/                 `en.ts` is the key set, `es.ts` is typed against it.
   jellyfin/             The gateway: the only module that talks HTTP to the Server.
   my-list/              My List, which is Jellyfin's Favorites: `my-list.ts` is
@@ -48,6 +48,9 @@ src/
                         `reveal.ts` how far a scroller must move, `focusable.ts`
                         what the arrows reach, `spatial-navigation.ts` the
                         wiring, `input-modality.ts` the focus highlight.
+  search/               Search: `search-screen.tsx` the field and the live
+                        results, `genres.tsx` browsing by genre, `search.ts`
+                        what the Server is asked.
   session/              Session & Users: the Server address and the signed-in
                         Users in device storage, plus the sign-in screen.
   settings/             The Client Settings store, on the Server:
@@ -140,9 +143,16 @@ with each Series once, the whole sample library is exactly:
 
     Bluey, Severance, Paddington, Arrival, Heat, The Unfinished
 
-`failLibraryQueriesWith` makes `/UserViews` and `/Items/Latest` answer with a
-status, for a Server that will not say what it holds. Both of those endpoints
-want a token, as the real Server does.
+Every Movie and Series also carries `Genres`, and the music album carries
+`Classical` — a genre nothing this app shows is in, so a client that forgets to
+narrow `includeItemTypes` is caught rather than merely untested. The genres of
+the Titles, in the order `/Genres` serves them, are exactly:
+
+    Comedy, Crime, Drama, Family, Science Fiction, Thriller
+
+`failLibraryQueriesWith` makes `/UserViews`, `/Items/Latest`, `/Items` and
+`/Genres` answer with a status, for a Server that will not say what it holds.
+All four want a token, as the real Server does.
 `failDisplayPreferencesWith` does the same for `/DisplayPreferences`.
 
 Stored `CustomPrefs` live in `state.displayPreferences`, keyed
@@ -186,9 +196,11 @@ lines by hand instead of adding a polyfill.
 - **A section's address** lives once, in `SECTIONS` in `src/shell/sections.ts`,
   with the key of its translated name. Both navigation bars and the router read
   that list, so adding a section is one entry plus one route.
-- **Taking a section over** (Movies and Series are #23, My List #13, Search #24)
-  means pointing its `<Route>` in `src/shell/app-shell.tsx` at your own folder
-  under `src/` instead of `SectionPlaceholder`, and nothing else.
+- **Taking a section over** (Movies and Series are #23, My List #13) means
+  pointing its `<Route>` in `src/shell/app-shell.tsx` at your own folder under
+  `src/` instead of `SectionPlaceholder`, and nothing else. Name the section
+  with `sectionFor('<id>')` rather than writing its address again; Search is
+  the worked example.
 - **The router is `preact-iso`**, imported as `preact-iso/router`, never the
   barrel, which pulls in `preact-render-to-string`. It pushes real history
   entries, so a section can be bookmarked, shared and reloaded — which is why
@@ -326,7 +338,8 @@ Three things about it are load-bearing, and all three were found by tests:
 **The control on a card** is `MyListToggle`: a real button with its own name
 ("Add Arrival to My List") and `aria-pressed`, passed to `Row` through
 `cardControl`, which is the slot Play and More info will share once the enlarged
-hover card (#21) arrives.
+hover card (#21) arrives. `home-rows.tsx` passes it to every Row on Home, so
+there is one place that decides what a card on Home offers.
 
 On a card in a Row that control is drawn **only while the pointer is over the
 card**, and that is not only a look: `spatial-navigation.ts` ignores anything
@@ -404,6 +417,61 @@ it is a key.
   out screen in `test/e2e/arrow-key-navigation.spec.ts`, which runs in the
   keyboard-only project too.
 
+
+## Search
+
+`src/search/` is story 59 (live results) and story 60 (browse by genre).
+
+- **"Only Movies and Series" lives in the gateway, not on a screen.** Every
+  Title query carries `includeItemTypes=Movie,Series`, so the Server never
+  sends an Episode, a Season, an album or a stray video file at all. Two
+  gateway methods serve the whole feature: `getTitles({ searchTerm, genre,
+  limit })` is `GET /Items` with `recursive=true` and `sortBy=SortName`, and
+  `getTitleGenres()` is `GET /Genres`. Whoever builds Movies, Series or My List
+  should grow `getTitles` rather than add a second `/Items` method.
+- **The debounce is on the value, not the request.** `useDebounced` in
+  `search-screen.tsx` answers with the term as it was once it stopped changing,
+  so one place decides when a term has settled and everything downstream simply
+  reads a term. A word typed at speed is one question to the Server.
+- **No flicker means nothing is cleared.** The results on the screen stay there
+  while the next answer is in flight — the strip is never emptied and never
+  replaced by "Searching…" between keystrokes. A reply that arrives after a
+  newer question was asked is dropped, so the slowest answer cannot overwrite
+  the newest.
+- **The field owns its arrow keys, and hands two of them back.**
+  `spatial-navigation.ts` returns early inside anything editable, so Left and
+  Right move the caret and Backspace is an edit (`back.ts` leaves a field alone
+  too). The field's own `onKeyDown` takes **Down and Enter** — before that
+  handler, not beside it — and moves focus to the first focus stop after it in
+  the `<main>`: the strip of results, entered at the card it remembers, or the
+  genres when nothing has been typed. Document order rather than geometry,
+  because happy-dom gives every element a zero-sized rectangle and geometry
+  could not be pinned down in a unit test at all. This is the pattern for any
+  screen that needs a key the navigator owns.
+- **The field is deliberately narrow** (`.search__field`, 420px). `nearest.ts`
+  scores a candidate partly by how far its centre is across the direction
+  pressed, so a field spanning a 1920px screen loses Up from a result to
+  whichever link in the bar above happens to sit over that card. Anything
+  full-width and focusable has this problem; keep it narrow or expect the bar
+  to win.
+- **A genre is screen state, not an address.** Back is the browser's back
+  button everywhere in this app, and a genre that pushed a history entry would
+  make Back mean "the genre before this one" on a screen whose other half is a
+  text field. "All genres" is the way out, and it is a focus stop like
+  everything else. If a later ticket wants a genre to be bookmarkable, that is
+  a deliberate change to Back's story as well.
+- **The genre chips are not a focus group.** A genre is picked once and there is
+  nothing to come back to, so the arrows reach each one geometrically, the way
+  they reach the links in a navigation bar. Only strips that should be re-entered
+  where focus left them mark themselves `data-focus-group`.
+- **The card mapping is `cardForTitle` in `src/home/row.tsx`**, where the card
+  itself already lives, so every Row asks the Server for artwork at the same
+  width. Search and New on Jellyflick both use it; a new Row should too rather
+  than build an image URL of its own.
+- **Opening a result is still #17's.** The strip is browsable and Enter presses
+  the focused card, but there is no title page for it to open yet, so the
+  Playwright spec asserts that Enter leaves Search as it is — the same caveat #7
+  recorded for Home.
 
 ## Chromium 68 constraints that will bite
 

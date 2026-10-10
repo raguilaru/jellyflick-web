@@ -5,13 +5,14 @@ import { HomeScreen } from '../home/home-screen';
 import { createMyList, type MyList } from '../my-list/my-list';
 import { MyListScreen } from '../my-list/my-list-screen';
 import { MyListProvider } from '../my-list/use-my-list';
+import { SearchScreen } from '../search/search-screen';
 import type { Session, SignedInUser } from '../session/session';
 import { HOME_LAYOUT_PATH, HomeLayoutScreen } from '../settings/home-layout-screen';
 import { SettingsProvider } from '../settings/settings-provider';
 import { useBackHandler } from './back';
 import { useWideScreen } from './layout';
 import { BottomBar } from './bottom-bar';
-import { HOME_PATH, pathOf, SECTIONS } from './sections';
+import { HOME_PATH, SECTIONS, sectionFor } from './sections';
 import { SectionPlaceholder, UnknownSection } from './section-placeholder';
 import { TopBar } from './top-bar';
 
@@ -34,14 +35,29 @@ export type AppShellProps = {
  * top bar on anything wider than a phone, the bottom bar on a phone.
  *
  * What each section *contains* belongs to its own ticket: Movies and Series are
- * #23 and Search #24, and each only has to point its route at its own folder.
- * Home and My List are already their own screens.
+ * #23, and each only has to point its route at its own folder. Home, My List
+ * and Search are already their own screens.
  *
  * My List is the one piece of state the shell holds rather than a screen: the
  * Row on Home, the My List page and every card's toggle have to agree about it
  * and change together, so the store is made here and reaches them all through
  * `MyListProvider`.
  */
+/**
+ * The sections that have a screen of their own, named here so their addresses
+ * are still written once in `SECTIONS`. Every other section is still the
+ * placeholder, and taking one over is a `<Route>` of its own plus an entry in
+ * the list below.
+ */
+const MY_LIST_SECTION = sectionFor('my-list');
+const SEARCH_SECTION = sectionFor('search');
+
+const PATHS_WITH_THEIR_OWN_SCREEN: readonly string[] = [
+  HOME_PATH,
+  MY_LIST_SECTION.path,
+  SEARCH_SECTION.path,
+];
+
 export function AppShell({ user, session, device, pictureUrl }: AppShellProps) {
   return (
     <LocationProvider>
@@ -70,9 +86,10 @@ function ShellFrame({ user, session, device, pictureUrl }: AppShellProps) {
 
       <Router>
         <Route path={HOME_PATH} component={HomeScreen} user={user} session={session} />
-        <Route path={MY_LIST_PATH} component={MyListScreen} />
+        <Route path={MY_LIST_SECTION.path} component={MyListScreen} />
+        <Route path={SEARCH_SECTION.path} component={SearchScreen} session={session} />
         {SECTIONS.filter(
-          (section) => section.path !== HOME_PATH && section.path !== MY_LIST_PATH,
+          (section) => !PATHS_WITH_THEIR_OWN_SCREEN.includes(section.path),
         ).map((section) => (
           <Route
             key={section.id}
@@ -91,9 +108,6 @@ function ShellFrame({ user, session, device, pictureUrl }: AppShellProps) {
     </div>
   );
 }
-
-/** The section the My List page answers for, so the route and the bars agree. */
-const MY_LIST_PATH = pathOf('my-list');
 
 /**
  * One My List store per (Server, User), read from the Server as soon as the

@@ -62,6 +62,11 @@ export type FakeItem = {
   DateCreated: string;
   /** Keyed by `ImageType`. Omitted entirely when the item has no image at all. */
   ImageTags?: Record<string, string>;
+  /**
+   * Genre *names*, which is what `/Items?genres=` matches on and what `/Genres`
+   * is the distinct set of. Omitted on an item the Server has not classified.
+   */
+  Genres?: string[];
   /** Set on a Season and an Episode: which Series it belongs to. */
   SeriesId?: string;
   SeriesName?: string;
@@ -192,6 +197,8 @@ const SAMPLE_ITEMS: readonly FakeItem[] = [
     Type: 'MusicAlbum',
     DateCreated: '2026-06-18T09:00:00Z',
     ImageTags: { Primary: 'tag-nocturnes' },
+    // A genre no Movie or Series has, so it must never be offered for browsing.
+    Genres: ['Classical'],
     libraryId: 'lib-music',
   },
 
@@ -239,6 +246,7 @@ const SAMPLE_ITEMS: readonly FakeItem[] = [
     Type: 'Movie',
     DateCreated: '2026-06-12T09:00:00Z',
     ImageTags: { Primary: 'tag-paddington' },
+    Genres: ['Comedy', 'Family'],
     libraryId: 'lib-kids',
   },
   // Older than Arrival, so Severance's place in a Row comes from the Episode
@@ -261,6 +269,7 @@ const SAMPLE_ITEMS: readonly FakeItem[] = [
     Type: 'Movie',
     DateCreated: '2026-06-10T09:00:00Z',
     ImageTags: { Primary: 'tag-arrival' },
+    Genres: ['Science Fiction', 'Drama'],
     libraryId: 'lib-movies',
   },
   // A stray video file in a Movies library. Jellyfin really does serve these,
@@ -278,6 +287,7 @@ const SAMPLE_ITEMS: readonly FakeItem[] = [
     Type: 'Movie',
     DateCreated: '2026-06-01T09:00:00Z',
     ImageTags: { Primary: 'tag-heat' },
+    Genres: ['Crime', 'Drama'],
     libraryId: 'lib-movies',
   },
   // No images at all, so a card has to cope without artwork.
@@ -286,6 +296,7 @@ const SAMPLE_ITEMS: readonly FakeItem[] = [
     Name: 'The Unfinished',
     Type: 'Movie',
     DateCreated: '2026-05-20T09:00:00Z',
+    Genres: ['Drama'],
     libraryId: 'lib-movies',
   },
 
@@ -298,6 +309,7 @@ const SAMPLE_ITEMS: readonly FakeItem[] = [
     Type: 'Series',
     DateCreated: '2026-01-05T09:00:00Z',
     ImageTags: { Primary: 'tag-bluey' },
+    Genres: ['Comedy', 'Family'],
     libraryId: 'lib-kids',
   },
   {
@@ -306,6 +318,7 @@ const SAMPLE_ITEMS: readonly FakeItem[] = [
     Type: 'Series',
     DateCreated: '2026-02-01T09:00:00Z',
     ImageTags: { Primary: 'tag-severance' },
+    Genres: ['Drama', 'Science Fiction', 'Thriller'],
     libraryId: 'lib-series',
   },
   {

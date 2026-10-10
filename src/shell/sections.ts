@@ -32,18 +32,16 @@ export const SECTIONS: readonly Section[] = [
  */
 export const BOTTOM_BAR_SECTION_IDS: readonly SectionId[] = ['home', 'search', 'my-list'];
 
-/**
- * One section's address. A screen's own route reads it from here rather than
- * writing the path again, so a section's address stays written once.
- */
-export function pathOf(id: SectionId): string {
-  return sectionsFor([id])[0]?.path ?? HOME_PATH;
+export function sectionsFor(ids: readonly SectionId[]): readonly Section[] {
+  return ids.map(sectionFor);
 }
 
-export function sectionsFor(ids: readonly SectionId[]): readonly Section[] {
-  return ids.map((id) => {
-    const section = SECTIONS.find((candidate) => candidate.id === id);
-    if (section === undefined) throw new Error(`No section is called ${id}.`);
-    return section;
-  });
+/**
+ * One section by its id. A section whose screen is its own module names itself
+ * this way, so its address is still written only here.
+ */
+export function sectionFor(id: SectionId): Section {
+  const section = SECTIONS.find((candidate) => candidate.id === id);
+  if (section === undefined) throw new Error(`No section is called ${id}.`);
+  return section;
 }
