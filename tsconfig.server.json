@@ -1,0 +1,25 @@
+{
+  // The container's server is the one part of this repository that is compiled
+  // and shipped as JavaScript: `npm run build:server` emits it into
+  // `server-dist/`, which the image's runtime stage copies. Node then runs plain
+  // JavaScript with no dependencies and no experimental flags.
+  //
+  // `tsconfig.json` still typechecks the same sources as part of
+  // `npm run typecheck`; this file only adds the emit.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "allowImportingTsExtensions": false,
+    "outDir": "server-dist",
+    "rootDir": "server",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "types": ["node"],
+    "jsx": "preserve",
+    "sourceMap": true,
+    "paths": {}
+  },
+  "include": ["server"]
+}

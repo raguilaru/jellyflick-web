@@ -5,6 +5,18 @@ Companion files: `toolchain.md` (build, CSS, testing, i18n, fonts), `player-subt
 
 Image sizes below were measured on **2026-10-10** by querying the Docker Hub registry API directly for each manifest and summing its compressed layer sizes — not read from docs. Marked **[verified]**.
 
+> **Superseded in part.** §9a's Caddy recommendation and §9b's image no longer apply:
+> ADR 0004 requires the container to proxy MDBList and cache per Title, which a static
+> file server cannot do, so `decisions.md` §9 chose one dependency-free Node server on
+> `node:22-alpine` instead. §9c's runtime config, including `jq -n`, and §9d/§9e's
+> workflow, GHCR facts and OMV8 login UI all still stand. As built, the container is
+> described in `docs/architecture.md`.
+>
+> Two details here were corrected against primary sources while building: the runtime
+> config's keys are `serverAddress` and `appVersion` (not `jellyfinUrl`/`version`), and
+> it never carries the MDBList key — §9c's note flagging that exposure is exactly what
+> ADR 0004 then resolved.
+
 ---
 
 ## Recommendations
