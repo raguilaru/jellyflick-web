@@ -47,7 +47,7 @@ export const displayPreferencesRoutes: readonly FakeRoute[] = [
     method: 'GET',
     path: '/DisplayPreferences/:displayPreferencesId',
     handle: (request, state, params) => {
-      const user = userForToken(request.headers.authorization ?? '', state.users);
+      const user = userForToken(request.headers.authorization ?? '', state);
       if (user === undefined) return { status: 401, body: { error: 'No valid token.' } };
       if (state.failDisplayPreferencesWith !== null) {
         return {
@@ -80,7 +80,7 @@ export const displayPreferencesRoutes: readonly FakeRoute[] = [
     method: 'POST',
     path: '/DisplayPreferences/:displayPreferencesId',
     handle: (request, state, params) => {
-      const user = userForToken(request.headers.authorization ?? '', state.users);
+      const user = userForToken(request.headers.authorization ?? '', state);
       if (user === undefined) return { status: 401, body: { error: 'No valid token.' } };
       if (state.failDisplayPreferencesWith !== null) {
         return {

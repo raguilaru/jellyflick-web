@@ -20,7 +20,7 @@ export const itemRoutes: readonly FakeRoute[] = [
     path: '/Items/Latest',
     handle: (request, state) => {
       // What is new is new to one User, so the Server wants a token.
-      if (userForToken(request.headers.authorization ?? '', state.users) === undefined) {
+      if (userForToken(request.headers.authorization ?? '', state) === undefined) {
         return { status: 401, body: { error: 'No valid token.' } };
       }
 
@@ -71,7 +71,7 @@ export const itemRoutes: readonly FakeRoute[] = [
     handle: (request, state) => {
       // A query across the libraries is a query about what one User can see —
       // and `isFavorite` makes it a query about what one User has saved.
-      const user = userForToken(request.headers.authorization ?? '', state.users);
+      const user = userForToken(request.headers.authorization ?? '', state);
       if (user === undefined) {
         return { status: 401, body: { error: 'No valid token.' } };
       }

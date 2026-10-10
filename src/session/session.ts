@@ -14,9 +14,15 @@ import {
  * Each User owns a token, a DeviceId and enough profile to show who they are.
  * The DeviceId is minted once, when the User signs in, and then kept: the
  * Server allows a single token per DeviceId, so reusing one would knock the
- * other User's token out. This is also why the stored shape is a list of Users
- * with one of them active, even though only one can be signed in today —
- * several at once, the User Picker and switching are a later ticket.
+ * other User's token out. That is what lets several Users of a household be
+ * signed in on one device at the same time, which is the whole point of the
+ * stored shape — a list of Users with at most one of them active.
+ *
+ * "Active" and "signed in" are deliberately different things. Switching User
+ * only moves which stored User is active, so it needs no password (story 16);
+ * signing out takes one User out of the list and leaves the rest alone (story
+ * 18); and nobody active with Users still stored is the state the User Picker
+ * exists for.
  *
  * Nothing here reads `localStorage` directly: device storage is the device
  * layer's, so a browser that refuses it degrades to "sign in again next time".
@@ -71,13 +77,30 @@ export type Session = {
    * Users from two Servers never mix.
    */
   useServer(address: string): void;
+  /** The User who is watching, if one of the signed-in Users is. */
   activeUser(): SignedInUser | undefined;
-  /** Every User signed in on this device. One, until the ticket that adds more. */
+  /**
+   * Every User signed in on this device, in the order they signed in. The
+   * order holds still, because the User Picker shows them in it.
+   */
   signedInUsers(): readonly SignedInUser[];
   signIn(credentials: Credentials): Promise<SignInResult>;
+  /**
+   * Makes an already signed-in User the one who is watching. Their token is
+   * already here, so no password is asked for (story 16). False means that
+   * User is not signed in on this device, and nothing changed.
+   */
+  switchTo(userId: string): boolean;
   /** Confirms the stored token still works and refreshes the stored profile. */
   resume(): Promise<ResumeResult>;
-  signOut(userId: string): void;
+  /**
+   * Takes one User off this device, leaving every other signed-in User alone,
+   * and asks the Server to drop their token so nothing can use it again.
+   *
+   * The local sign-out happens whatever the Server says: a Server that is down
+   * must not be able to keep a User on a device they are trying to leave.
+   */
+  signOut(userId: string): Promise<void>;
   /**
    * The gateway for the active User, carrying their token and DeviceId, or an
    * anonymous one when nobody is signed in. Every request goes through it, so
@@ -222,17 +245,47 @@ export function createSession(options: SessionOptions): Session {
       }
     },
 
-    signOut: (userId) => {
+    switchTo: (userId) => {
+      if (stored === undefined) return false;
+      if (!stored.users.some((candidate) => candidate.userId === userId)) return false;
+      stored = { ...stored, activeUserId: userId };
+      save();
+      return true;
+    },
+
+    signOut: async (userId) => {
+      const leaving = stored?.users.find((candidate) => candidate.userId === userId);
+      // Taken off the device first, and told to the Server afterwards. The
+      // other way round would leave a User stuck on a device whenever the
+      // Server is slow or down, and the token it is about to drop is this
+      // User's alone — every other User is on their own DeviceId.
       forget(userId);
+      if (leaving === undefined) return;
+      try {
+        await gatewayFor(leaving).signOut();
+      } catch {
+        // A token the Server would not drop outlives the User on this device
+        // by a while. That is the lesser of the two problems, and there is
+        // nothing to tell them: they are already signed out.
+      }
     },
 
     gateway: () => gatewayFor(activeUser()),
   };
 
+  /**
+   * Stores a User and makes them the one watching. A User already in the list
+   * keeps their place in it rather than moving to the end: the User Picker
+   * shows them in this order, and `resume` goes through here on every launch,
+   * so moving them would reshuffle the pictures every time the app opened.
+   */
   function remember(user: SignedInUser): void {
     if (stored === undefined) return;
-    const others = stored.users.filter((candidate) => candidate.userId !== user.userId);
-    stored = { ...stored, users: [...others, user], activeUserId: user.userId };
+    const known = stored.users.some((candidate) => candidate.userId === user.userId);
+    const users = known
+      ? stored.users.map((candidate) => (candidate.userId === user.userId ? user : candidate))
+      : [...stored.users, user];
+    stored = { ...stored, users, activeUserId: user.userId };
     save();
   }
 
