@@ -93,6 +93,15 @@ export const es: Messages = {
   'search.genreEmpty': (p) => `Todavía no hay nada en ${p.genre}.`,
   'search.genreUnavailable': (p) => `Jellyflick no pudo leer lo que hay en ${p.genre}.`,
 
+  'users.pickerHeading': '¿Quién está viendo?',
+  'users.pickerExplanation':
+    'Elígete para seguir con tu propio Inicio y tu Mi lista. A nadie se le vuelve a pedir la contraseña.',
+  'users.addUser': 'Añadir otro Usuario',
+  'users.cancelAdding': 'Cancelar',
+  'users.signOut': (p: { name: string }) => `Cerrar la sesión de ${p.name}`,
+  'users.switchUser': (p: { name: string }) => `Cambiar de Usuario, ahora ${p.name}`,
+  'users.keepWatching': (p: { name: string }) => `Seguir viendo como ${p.name}`,
+
   'nav.sections': 'Secciones',
   'nav.home': 'Inicio',
   'nav.movies': 'Películas',

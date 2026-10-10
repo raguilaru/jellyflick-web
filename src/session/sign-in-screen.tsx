@@ -19,6 +19,12 @@ export type SignInScreenProps = {
   /** Shown in the message when the Server cannot be reached. */
   serverAddress: string;
   onSignedIn(): void;
+  /**
+   * Gives up on signing in. Present only when there is something to give up
+   * *to*: another household member being added while Users are already signed
+   * in on the device (#8). The first User on a device has nowhere to go.
+   */
+  onCancel?(): void;
 };
 
 /**
@@ -160,6 +166,17 @@ export function SignInScreen(props: SignInScreenProps) {
               })}
         />
       ) : null}
+
+      {/*
+        Giving up on adding another User, in one place rather than on each of
+        the three views: a Server slow to list its Users must not trap the
+        household member who was already watching either.
+      */}
+      {props.onCancel === undefined ? null : (
+        <button class="button button--quiet" type="button" onClick={props.onCancel}>
+          {t('users.cancelAdding')}
+        </button>
+      )}
     </main>
   );
 }

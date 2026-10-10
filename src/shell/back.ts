@@ -19,6 +19,42 @@ const ROOT_ENTRY = 'jellyflickRoot';
  * was opened directly — a bookmark, a shared address, a reload — it goes to
  * Home, replacing that entry rather than stacking another one on top of it.
  */
+/**
+ * What Back has to do before it is allowed to be a navigation at all: the
+ * overlays over the screen, innermost last.
+ *
+ * An overlay is not a history entry — the User Picker deliberately has no
+ * address — so `history.back()` would navigate the screen behind it and leave
+ * it stranded. Back closes the topmost overlay instead, and only once there
+ * are none left does it mean what it meant before. This is the extension point
+ * the architecture asks a screen needing its own Back to use, rather than
+ * adding a second key listener: the title-page pop-up (#17) and the player
+ * (#26) want the same thing.
+ */
+const overlays: (() => void)[] = [];
+
+/**
+ * Claims Back while an overlay is open. The claim is given up when the overlay
+ * closes or goes away, so nothing has to remember to release it.
+ */
+export function useBackClaim(open: boolean, close: () => void): void {
+  // The newest value of the callback, so a claim never calls a stale one.
+  const current = useRef(close);
+  current.current = close;
+
+  useEffect(() => {
+    if (!open) return;
+    const claim = (): void => {
+      current.current();
+    };
+    overlays.push(claim);
+    return () => {
+      const at = overlays.lastIndexOf(claim);
+      if (at !== -1) overlays.splice(at, 1);
+    };
+  }, [open]);
+}
+
 export function useBackHandler(device: DeviceLayer): void {
   const { path, route } = useLocation();
 
@@ -33,6 +69,12 @@ export function useBackHandler(device: DeviceLayer): void {
   }, []);
 
   const goBack = useCallback(() => {
+    // An overlay over the screen is what Back is about while one is open.
+    const overlay = overlays[overlays.length - 1];
+    if (overlay !== undefined) {
+      overlay();
+      return;
+    }
     if (!isOnRootEntry()) {
       window.history.back();
       return;

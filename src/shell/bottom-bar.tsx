@@ -1,24 +1,26 @@
 import { useTranslate } from '../i18n/index';
-import type { SignedInUser } from '../session/session';
+import type { PickableUser } from '../session/user-picker';
 import { BOTTOM_BAR_SECTION_IDS, sectionsFor } from './sections';
 import { SectionLink } from './section-link';
+import { UserButton } from './user-button';
 
 export type BottomBarProps = {
   currentPath: string;
-  user: SignedInUser;
-  /** The signed-in User's picture, when the Server has one for them. */
-  pictureUrl?: string;
+  /** Who is watching, with their picture when the Server has one for them. */
+  user: PickableUser;
+  /** Opens the User Picker, which is this bar's fourth item (story 61). */
+  onSwitchUser(): void;
 };
 
 /**
  * The navigation at phone widths: Home, Search, My List and the User's picture,
  * which is the shape phone Users already know (story 61).
  *
- * The picture is not a control yet. Switching User and the settings screen are
- * their own tickets (#8, #11); until one of them lands, the picture says who
- * is watching and nothing more, so it is not something to land focus on.
+ * The picture is the way to switch User (#8), so it is a real button and a
+ * focus stop now — #6 left it inert and said so. What it opens is the User
+ * Picker, which is an overlay rather than an address: see `user-picker.tsx`.
  */
-export function BottomBar({ currentPath, user, pictureUrl }: BottomBarProps) {
+export function BottomBar({ currentPath, user, onSwitchUser }: BottomBarProps) {
   const t = useTranslate();
 
   return (
@@ -31,23 +33,7 @@ export function BottomBar({ currentPath, user, pictureUrl }: BottomBarProps) {
           currentPath={currentPath}
         />
       ))}
-      <span class="bottom-bar__user">
-        {pictureUrl === undefined ? (
-          <span class="bottom-bar__initial">{initialOf(user.name)}</span>
-        ) : (
-          <img class="bottom-bar__picture" src={pictureUrl} alt="" />
-        )}
-        <span class="bottom-bar__name">{user.name}</span>
-      </span>
+      <UserButton user={user} bar="bottom-bar" onPress={onSwitchUser} />
     </nav>
   );
-}
-
-/**
- * The first character of a name, for a User with no picture. Taken with
- * `Array.from` rather than `name[0]`, so a name beginning with an emoji or any
- * other character outside the basic plane is not cut in half.
- */
-function initialOf(name: string): string {
-  return (Array.from(name)[0] ?? '').toLocaleUpperCase();
 }

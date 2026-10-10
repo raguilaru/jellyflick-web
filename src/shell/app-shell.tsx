@@ -1,5 +1,5 @@
 import { LocationProvider, Route, Router, useLocation } from 'preact-iso/router';
-import { useEffect, useMemo } from 'preact/hooks';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { DeviceLayer } from '../device/types';
 import { HomeScreen } from '../home/home-screen';
 import { createMyList, type MyList } from '../my-list/my-list';
@@ -7,9 +7,10 @@ import { MyListScreen } from '../my-list/my-list-screen';
 import { MyListProvider } from '../my-list/use-my-list';
 import { SearchScreen } from '../search/search-screen';
 import type { Session, SignedInUser } from '../session/session';
+import { UserPicker, type UsersOnThisDevice } from '../session/user-picker';
 import { HOME_LAYOUT_PATH, HomeLayoutScreen } from '../settings/home-layout-screen';
 import { SettingsProvider } from '../settings/settings-provider';
-import { useBackHandler } from './back';
+import { useBackClaim, useBackHandler } from './back';
 import { useWideScreen } from './layout';
 import { BottomBar } from './bottom-bar';
 import { HOME_PATH, SECTIONS, sectionFor } from './sections';
@@ -22,8 +23,12 @@ export type AppShellProps = {
   session: Session;
   /** Where the Back key comes from, as every device-specific thing does. */
   device: DeviceLayer;
-  /** The signed-in User's picture, when the Server has one for them. */
-  pictureUrl?: string;
+  /**
+   * The Users on this device and what can be done with them. The shell only
+   * hands it to the bars and to the overlay: who is watching is `src/app.tsx`'s
+   * to decide, because it is the question the shell itself hangs from.
+   */
+  users: UsersOnThisDevice;
 };
 
 /**
@@ -58,7 +63,7 @@ const PATHS_WITH_THEIR_OWN_SCREEN: readonly string[] = [
   SEARCH_SECTION.path,
 ];
 
-export function AppShell({ user, session, device, pictureUrl }: AppShellProps) {
+export function AppShell({ user, session, device, users }: AppShellProps) {
   return (
     <LocationProvider>
       {/* One copy of the User's settings for every screen: Home and the Home
@@ -67,7 +72,7 @@ export function AppShell({ user, session, device, pictureUrl }: AppShellProps) {
         {/* And one copy of My List, for the Row on Home, the My List page and
             every card's toggle (#13). */}
         <MyListProvider value={useLoadedMyList(session, user)}>
-          <ShellFrame user={user} session={session} device={device} pictureUrl={pictureUrl} />
+          <ShellFrame user={user} session={session} device={device} users={users} />
         </MyListProvider>
       </SettingsProvider>
     </LocationProvider>
@@ -75,14 +80,48 @@ export function AppShell({ user, session, device, pictureUrl }: AppShellProps) {
 }
 
 /** The shell proper, which has to be inside the `LocationProvider` to ask where it is. */
-function ShellFrame({ user, session, device, pictureUrl }: AppShellProps) {
+function ShellFrame({ user, session, device, users }: AppShellProps) {
   const { path } = useLocation();
   const wide = useWideScreen();
   useBackHandler(device);
 
+  /**
+   * Whether the User Picker is over the screen. It is the shell's state and
+   * not an address — see `user-picker.tsx` for why — so it closes itself when
+   * the User navigates, which is what makes the browser's own back button
+   * leave no overlay stranded over the screen behind it.
+   */
+  const [picking, setPicking] = useState(false);
+
+  /**
+   * Navigating closes it. Only an actual change of address counts, which is
+   * why the address it last saw is kept: an effect also runs when the shell
+   * first appears, and a reset there would close an overlay opened before that
+   * first run had happened.
+   */
+  const addressShown = useRef(path);
+  useEffect(() => {
+    if (addressShown.current === path) return;
+    addressShown.current = path;
+    setPicking(false);
+  }, [path]);
+
+  const closePicker = useCallback(() => {
+    setPicking(false);
+  }, []);
+  // The Back key and Escape close the overlay instead of leaving the section,
+  // through the one Back handler rather than a listener of this screen's own.
+  useBackClaim(picking, closePicker);
+
   return (
     <div class={wide ? 'shell' : 'shell shell--with-bottom-bar'}>
-      {wide ? <TopBar currentPath={path} /> : null}
+      {wide ? (
+        <TopBar
+          currentPath={path}
+          user={users.current ?? { userId: user.userId, name: user.name }}
+          onSwitchUser={() => setPicking(true)}
+        />
+      ) : null}
 
       <Router>
         <Route path={HOME_PATH} component={HomeScreen} user={user} session={session} />
@@ -104,7 +143,15 @@ function ShellFrame({ user, session, device, pictureUrl }: AppShellProps) {
         <Route default component={UnknownSection} />
       </Router>
 
-      {wide ? null : <BottomBar currentPath={path} user={user} pictureUrl={pictureUrl} />}
+      {wide ? null : (
+        <BottomBar
+          currentPath={path}
+          user={users.current ?? { userId: user.userId, name: user.name }}
+          onSwitchUser={() => setPicking(true)}
+        />
+      )}
+
+      {picking ? <UserPicker users={users} onClose={closePicker} /> : null}
     </div>
   );
 }

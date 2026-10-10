@@ -8,6 +8,12 @@ import { useSpatialNavigation } from './navigation/spatial-navigation';
 import type { RuntimeConfig } from './runtime-config';
 import { createSession, type Session, type SignedInUser } from './session/session';
 import { SignInScreen } from './session/sign-in-screen';
+import {
+  pickableUsersOf,
+  UserPicker,
+  type PickableUser,
+  type UsersOnThisDevice,
+} from './session/user-picker';
 import { AppShell } from './shell/app-shell';
 
 /** The application name the Server records for this client. */
@@ -24,10 +30,19 @@ type Connection =
   | { status: 'connecting' }
   | { status: 'connected'; serverName: string; serverAddress: string };
 
-/** Whether the User on this device still has to sign in. */
+/** Who of the household is watching, and what has to happen before they can. */
 type Who =
-  /** Checking the stored token with the Server, which has to answer first. */
+  /** Checking a stored token with the Server, which has to answer first. */
   | { state: 'resuming' }
+  /**
+   * Users are signed in on this device but none of them is watching, so the
+   * User Picker asks which. This is also where the app opens when more than
+   * one User is signed in (story 15).
+   */
+  | { state: 'picking' }
+  /** Another household member is signing in, with the others all kept. */
+  | { state: 'adding' }
+  /** Nobody is signed in on this device at all. */
   | { state: 'signed-out' }
   | { state: 'signed-in'; user: SignedInUser };
 
@@ -105,16 +120,66 @@ export function App({ config, device, messages }: AppProps) {
       // A Server that cannot be reached leaves the stored User in place, but
       // there is nothing to show until it answers, so the password is asked
       // for again rather than trusting a token nothing has confirmed.
-      setWho(
-        result.outcome === 'signed-in'
-          ? { state: 'signed-in', user: result.user }
-          : { state: 'signed-out' },
-      );
+      //
+      // With more than one User signed in, the app opens on the User Picker
+      // rather than on whoever watched last: a device several of a household
+      // share has to ask (story 15). With exactly one it does not ask, because
+      // there would be nothing to choose.
+      if (result.outcome === 'signed-in' && session.signedInUsers().length === 1) {
+        setWho({ state: 'signed-in', user: result.user });
+        return;
+      }
+      setWho(session.signedInUsers().length === 0 ? { state: 'signed-out' } : { state: 'picking' });
     });
     return () => {
       abandoned = true;
     };
   }, [serverAddress, session]);
+
+  /**
+   * Makes a signed-in User the one watching, and confirms their token with the
+   * Server on the way — exactly as opening the app does, because a token can
+   * have been revoked since that User last watched. "Never asks for my
+   * password again" (story 16) is a promise about passwords, not about a token
+   * the Server has stopped accepting: one it has leaves that User to sign in
+   * again, and the others on the device alone.
+   */
+  const pickUser = (userId: string): void => {
+    if (!session.switchTo(userId)) return;
+    setWho({ state: 'resuming' });
+    void session.resume().then((result) => {
+      setWho(
+        result.outcome === 'signed-in' ? { state: 'signed-in', user: result.user } : whoFrom(session),
+      );
+    });
+  };
+
+  /** What the User Picker and both navigation bars act through. */
+  const users: UsersOnThisDevice = {
+    users: pickableUsersOf(session),
+    ...(who.state === 'signed-in' ? { current: pickableUserOf(session, who.user) } : {}),
+
+    pick: pickUser,
+
+    addUser: () => {
+      setWho({ state: 'adding' });
+    },
+
+    signOut: (userId) => {
+      // Taken off the device at once and told to the Server behind it, so a
+      // User leaving never waits for a round trip.
+      void session.signOut(userId);
+      const left = session.signedInUsers();
+      const only = left[0];
+      // One User left and nobody watching is not a choice worth asking about,
+      // because picking them needs no password: the app simply does it.
+      if (left.length === 1 && only !== undefined && session.activeUser() === undefined) {
+        pickUser(only.userId);
+        return;
+      }
+      setWho(whoFrom(session));
+    },
+  };
 
   return (
     <TranslateProvider value={createTranslate(messages)}>
@@ -131,12 +196,23 @@ export function App({ config, device, messages }: AppProps) {
           }}
         />
       ) : who.state === 'signed-in' ? (
-<AppShell
+        /*
+         * Keyed by the User, so switching User builds the shell again from
+         * nothing rather than handing the next User the screens the last one
+         * was looking at. Everything per-User hangs below here — the Client
+         * Settings and so the Home Layout (#10), My List (#13), and whatever a
+         * later ticket adds — and one `key` is the whole guarantee, instead of
+         * every one of them having to remember to reset itself.
+         */
+        <AppShell
+          key={who.user.userId}
           user={who.user}
           session={session}
           device={device}
-          {...pictureOf(who.user, session)}
+          users={users}
         />
+      ) : who.state === 'picking' ? (
+        <UserPicker users={users} />
       ) : who.state === 'resuming' ? null : (
         <SignInScreen
           session={session}
@@ -145,6 +221,13 @@ export function App({ config, device, messages }: AppProps) {
             const user = session.activeUser();
             if (user !== undefined) setWho({ state: 'signed-in', user });
           }}
+          {...(who.state === 'adding'
+            ? {
+                onCancel: () => {
+                  setWho(whoFrom(session));
+                },
+              }
+            : {})}
         />
       )}
     </TranslateProvider>
@@ -152,11 +235,30 @@ export function App({ config, device, messages }: AppProps) {
 }
 
 /**
- * The signed-in User's picture, for the bottom bar. `/UserImage` is anonymous
- * on the Server, so the URL is all the browser needs; a User with no picture
- * has no tag, and the bar shows their initial instead.
+ * Who is watching, read off the session rather than remembered: it is the
+ * answer after anything that changes who is signed in — a User signed out, an
+ * "add another User" given up on, a token the Server no longer accepts.
+ *
+ * It does not second-guess the launch rule above. Asking who is watching when
+ * the app opens is about a shared device being opened; once the User is in the
+ * app, a single User left on it is simply the User, with nothing to choose.
  */
-function pictureOf(user: SignedInUser, session: Session): { pictureUrl?: string } {
-  if (user.primaryImageTag === undefined) return {};
-  return { pictureUrl: session.gateway().userImageUrl(user.userId, user.primaryImageTag) };
+function whoFrom(session: Session): Who {
+  const active = session.activeUser();
+  if (active !== undefined) return { state: 'signed-in', user: active };
+  return session.signedInUsers().length === 0 ? { state: 'signed-out' } : { state: 'picking' };
+}
+
+/**
+ * One signed-in User as the picker and the bars show them. `/UserImage` is
+ * anonymous on the Server, so the URL is all the browser needs; a User with no
+ * picture has no tag, and their initial stands in for one.
+ */
+function pickableUserOf(session: Session, user: SignedInUser): PickableUser {
+  if (user.primaryImageTag === undefined) return { userId: user.userId, name: user.name };
+  return {
+    userId: user.userId,
+    name: user.name,
+    pictureUrl: session.gateway().userImageUrl(user.userId, user.primaryImageTag),
+  };
 }
