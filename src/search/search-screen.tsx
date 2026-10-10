@@ -54,7 +54,14 @@ export function SearchScreen({ session }: SearchScreenProps) {
     <main class="screen">
       <h1 class="screen__heading">{t('search.heading')}</h1>
 
-      <div class="stack">
+      {/*
+        The field is kept narrow rather than running the width of a TV. That is
+        how it reads, and it is also what keeps the arrow keys sensible: the
+        navigator scores a candidate partly by how far its centre is across the
+        direction pressed, so a field spanning 1920px would lose Up from a
+        result to a link in the bar above it.
+      */}
+      <div class="stack search__field">
         <label class="field__label" for={FIELD_ID}>
           {t('search.fieldLabel')}
         </label>

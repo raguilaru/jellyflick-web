@@ -278,6 +278,17 @@ body {
 }
 
 /*
+ * Search's field. Narrow, because a field the width of a TV reads badly — and
+ * because `src/navigation/nearest.ts` scores a candidate partly by how far its
+ * centre is across the direction pressed, so a full-width field would lose Up
+ * from a result to whichever link in the bar above happens to sit over it.
+ */
+.search__field {
+  width: 100%;
+  max-width: 420px;
+}
+
+/*
  * Browsing by genre: the genres as a wrapping set of chips.
  *
  * Flex, because the set has to wrap and grid would force a column count — so
