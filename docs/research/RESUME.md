@@ -13,8 +13,8 @@ up without re-deriving anything.
 | #2 Connect to a Server | merged, issue closed |
 | #3 Sign in with a password | merged, issue closed |
 | #5 Deployable container | merged, issue closed (second box superseded — see below) |
-| #4 New on Jellyflick on Home | merged at `ed9603b`, **issue still open** |
-| #6 App shell | merged at `8225247`, **issue still open** |
+| #4 New on Jellyflick on Home | merged at `ed9603b`, issue closed |
+| #6 App shell | merged at `8225247`, issue closed |
 
 Gate on the integration tip `8225247`, each step's exit code checked individually and
 after an `npm ci`: `lint` 0, `typecheck` 0, **150 unit tests** in 14 files, **78
@@ -25,20 +25,30 @@ implementers' reports.
 The 7 e2e skips are deliberate and correct: #6's viewport-gated journeys (3 wide-screen
 tests skipped on `phone`, 2 phone tests skipped on `desktop` and on `keyboard-only`).
 
-**Nothing is in flight.** No implementers are running, no worktree holds uncommitted work.
+### In flight right now
 
-### The next frontier is #7, #8 and #36 — but close #4 and #6 first
+| Ticket | Branch | Worktree |
+|---|---|---|
+| #7 Rows and arrow-key navigation | `ticket/7-rows-and-arrow-key-navigation` | `.claude/worktrees/ticket-7-rows-and-arrows` |
 
-#7 needs #4 and #6; #8 and #36 need #6. All that work is merged, but because the #4 and
-#6 **issues are still open**, GitHub currently reports `blocked_by: 2` for #7 and
-`blocked_by: 1` for #8 and #36. Close those two issues and the frontier resolves. See
-trap 1.
+Launched in this session off `d1c20a2`, briefed with pointers only, running alone so the
+default test ports are free. Not merged, not pushed, issue not closed — the integrator's
+job. It was given the trap-2 warning explicitly and the baseline it must beat
+(150 unit, 78 e2e with 7 expected skips).
+
+**#8 (Several Users and the User Picker) and #36 (Installable app) are unblocked and not
+started.** Both are a clean next launch.
+
+### The frontier
+
+#4 and #6 are now closed, and with them out of the way #7, #8 and #36 all report
+`blocked_by: 0`. #7 is in flight (below). #7 is the critical path: 2 → 3 → 6 → 7 → 10 → …
 
 ### Three traps that have already bitten this run
 
-**1. A merged ticket is not a closed ticket.** #2, #3 and #5 were merged in the first
-session and never closed, so GitHub reported #4 and #6 as blocked long after their work
-was on the branch. The same thing is true right now of #4 and #6 themselves. Before
+**1. A merged ticket is not a closed ticket.** This bit twice. #2, #3 and #5 were merged
+in the first session and never closed, so GitHub reported #4 and #6 as blocked long after
+their work was on the branch; then #4 and #6 did the same to #7, #8 and #36. Before
 trusting any `blocked_by`, confirm every already-merged ticket is actually closed, and
 close each ticket as part of merging it.
 
@@ -180,13 +190,13 @@ branch is correct — check its tests pass before building on it.
 
 ## Still owed at the end of the run
 
-1. Close #4 and #6.
-2. Every ticket from #7 onward.
-3. `code-review` over the whole integration branch, with findings fixed in one implementer.
-4. **The git history rewrite** described in `decisions.md` §10 — removing the inspiration
+1. Every ticket from #7 onward (#7 in flight, #8 and #36 unblocked and unstarted).
+2. `code-review` over the whole integration branch, with findings fixed in one implementer.
+3. **The git history rewrite** described in `decisions.md` §10 — removing the inspiration
    product's name from the root commit. Must happen with no implementers in flight, and
    the host must then ask GitHub Support to purge the stale objects.
-5. Mark PR #38 ready for review.
-6. Remove the agent worktrees (`git worktree list`, then `git worktree remove`). As of this
+4. Mark PR #38 ready for review.
+5. Remove the agent worktrees (`git worktree list`, then `git worktree remove`). As of this
    session that is three stale `agent-*` worktrees from the first session plus
-   `ticket-4-new-on-home` and `ticket-6-app-shell`, both merged and safe to remove.
+   `ticket-4-new-on-home` and `ticket-6-app-shell` (both merged, safe to remove), and
+   `ticket-7-rows-and-arrows` (in flight).
