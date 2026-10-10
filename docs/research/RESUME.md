@@ -4,41 +4,65 @@ State of the `/implement-spec` run on the integration branch `feat/jellyflick-v1
 (draft PR #38). Update this whenever a wave lands, so a fresh session can pick the work
 up without re-deriving anything.
 
-## START HERE — fourth session stopped at 88% of the 5-hour window
+## START HERE — paused on purpose; #17 and #8 are unmerged but SAFE ON THE REMOTE
 
-The window had reset, so the run resumed: **#13 and #11 landed**, and a wave of three was
-launched on #17, #11 and #8. The session then stopped at **88%** (weekly 58%) with **#17
-and #8 still in flight**, rather than begin a merge it might not finish — a merge plus the
-integrator's own gate run is 10–15 points, and being stranded mid-merge is the one state
-worth avoiding. **Nothing is half-merged; the branch is green.**
+The fourth session was asked to pause everything at a token limit. **Both running
+implementers were stopped mid-work and their branches pushed**, so nothing lives only in a
+worktree that could be cleaned up.
 
-The window resets 2026-10-11 00:40 UTC. **Weekly is now the one to watch**: 58%, and it
-does not reset until 09:00 UTC, so it will bind before the 5-hour window does.
+**The integration branch is green and nothing is half-merged.** Tip `89ea755`, gate
+verified on fresh ports: `lint` 0, `typecheck` 0, `build` 0, **284 unit tests** in 27
+files, **204 Playwright tests (190 passed, 14 skipped, 0 failed)**, 74.16 kB / 24.42 kB gz.
+#13 and #11 landed and closed this session, on top of #36, #10 and #24 from the third.
 
-**The integration branch is green.** Tip `acf6fc9`, gate verified on fresh ports
-(see trap 4): `lint` 0, `typecheck` 0, `build` 0, **264 unit tests** in 25 files,
-**183 Playwright tests (169 passed, 14 skipped, 0 failed)**, 68.84 kB / 22.97 kB gz JS
-and 7.71 kB / 2.13 kB gz CSS.
+### The two paused branches, and how much to trust each
 
-**Seven of the nine remaining non-player tickets are now unblocked.** #13 closing opened
-#17, which is the head of the deepest chain left (#17 → #25 → #26 → #27 → #28) and also
-gates #18, #19, #20 and #21.
+**`origin/ticket/17-title-page` (Title page) — four commits, clean tree, nearly done.**
+At `be1150b`. It had already merged the integration tip and was **about to run its gate**
+when it was stopped, so it has never been verified. Its work is substantial: ~2,074 lines
+across 24 files, including `titleDetailsFrom` in the catalogue, a grown `getTitles` (no new
+`/Items/{itemId}` route, as #24 asked), the page at its own address, Playwright coverage
+and a kept-current `docs/architecture.md`. `package.json` untouched.
+**Resume by running the gate on fresh ports** (`APP_PORT=4217 FAKE_JELLYFIN_PORT=8817` or
+anything free) and merging if green. This is the highest-value thing left: it unblocks
+#18, #19, #20, #21 and #25, and it is what finally closes **#7's "opening a card" box**.
+It was also handed the salvaged design notes from the first, blocked attempt
+(`scratchpad/notes/ticket-17-design.md`) — **ask it, or check, where those notes were
+wrong**, because nobody has confirmed that yet.
+
+**`origin/ticket/8-users-and-user-picker` (Several Users / User Picker) — three real
+commits plus one WIP snapshot you should distrust.**
+At `25ac809`. The bottom three are the implementer's own deliberate steps: several Users in
+the session with sign-out revoking the token, the User Picker and switching from either
+bar, and a test pinning that switching User leaves nothing of the last one behind. **The
+top commit `25ac809` is a snapshot the integrator made so the work would survive** — it was
+stopped mid-way through adding an assertion and re-running the suite. It carries changes to
+`spatial-navigation.ts` and `back.ts` and a new 240-line `several-users.spec.ts`, **and no
+gate has ever been run over that state.** Run the gate before building on it and be ready
+to discard just that commit.
+
+Two things to check on #8 rather than take on trust:
+- **Per-User state is live in three places now** — #10's settings provider, #13's My List
+  store, #11's accent and language. A User switch must leave none of the previous User's
+  behind. #8's third commit claims to pin this; read it.
+- **#8 branched before #11 landed**, and #11 turned the bottom bar's User picture into a
+  "Settings" link and a focus stop (it was inert per #6). That is the same element a
+  User-switch control wants, so **expect a real conflict in `bottom-bar.tsx`** at the merge.
+- Its earlier `test/e2e/zz-debug.spec.ts` scaffolding is **gone** — the integrator checked
+  both branches and neither carries it.
 
 ### Do these, in this order
 
-1. **Check the 5-hour window before anything else.** A wave of three implementers plus the
-   integrator's own gate runs costs roughly 25–30 points of it. The third session measured
-   this properly — the table is further down.
-2. **Merge whatever reported.** #17 and #8 are in flight; see the table below for
-   branches, worktrees and ports. Re-run the gate **on fresh ports** after every merge,
-   each step with its own exit code, and close each ticket as part of merging it.
-3. **Then launch from what is left**: #12, #14, #15, #16 and #35 (opened by #11), plus #9
-   once #8 lands and #18, #19, #20, #21, #25 once #17 does.
-   - **#12, #15 and #16 all touch Home** (`src/home/home-rows.tsx` and the Row registry),
-     so running all three at once will conflict. Two at most, or accept the merge work.
-   - **#14 touches `cardForTitle` in `src/home/row.tsx`**, which #13 and #17 also touch.
-4. **Read trap 4 before running a single gate.** It cost the third session a full false
-   alarm.
+1. **Check both limits first.** The 5-hour window resets 2026-10-11 00:40 UTC; **weekly was
+   58% and does not reset until 09:00 UTC, so weekly is the binding one.**
+2. **Gate and merge #17**, then #8. Fresh ports every run (trap 4), each step its own exit
+   code (trap 2), close each ticket as part of merging it (trap 1).
+3. **Then launch from what is left**: #12, #14, #15, #16, #35, plus #9 once #8 lands and
+   #18, #19, #20, #21, #25 once #17 does. **Tell every implementer to call
+   `EnterWorktree(path=…)` first** (trap 5) — that one line is what killed an implementer
+   this session.
+   - #12, #15 and #16 all touch `src/home/home-rows.tsx`; two at most together.
+   - #14 touches `cardForTitle` in `src/home/row.tsx`, which #13 and #17 also touch.
 
 ### Still owed after the tickets
 
@@ -100,36 +124,24 @@ skipped on `phone`, 2 phone tests skipped on `desktop` and `keyboard-only`) plus
 (1 phone-only test skipped on `desktop` and `keyboard-only`, 3 pointer tests skipped on
 `keyboard-only`).
 
-### In flight right now — #17 and #8
+### Paused, not in flight — nothing is running
 
-| Ticket | Branch | Worktree | `APP_PORT` / `FAKE_JELLYFIN_PORT` |
+Both implementers were stopped deliberately. See "START HERE" above for how far each got
+and how much to trust it. Summary:
+
+| Ticket | Branch (pushed) | At | State |
 |---|---|---|---|
-| #17 Title page | `ticket/17-title-page` | **its own harness-made worktree** (see trap 5) | 4217 / 8817 |
-| #8 Several Users and the User Picker | `ticket/8-users-and-user-picker` | `.claude/worktrees/ticket-8-user-picker` | 4208 / 8808 |
+| #17 Title page | `origin/ticket/17-title-page` | `be1150b` | 4 commits, clean, integration tip merged, **never gated** |
+| #8 Several Users and the User Picker | `origin/ticket/8-users-and-user-picker` | `25ac809` | 3 real commits + 1 **unverified WIP snapshot** |
 
-**#17 was launched twice.** The first implementer was blocked by trap 5 before writing any
-code; the integrator saved its design research to the session scratchpad
-(`scratchpad/notes/ticket-17-design.md`) and relaunched with `isolation: "worktree"`,
-pointing the replacement at those notes as an **unverified** lead. The branch name was
-freed first (old worktree and branch removed; nothing lost, it had no commits). The
-replacement was told to **push its branch**, so look for `origin/ticket/17-title-page`
-rather than a local worktree.
+**Their worktrees may be gone; the pushed branches are the durable copy.** #17's lived in a
+harness-made worktree (`agent-adad6b44306b59a81`), which is exactly why its merge commit
+was pushed before pausing — it was one commit ahead of origin at the time, and that is an
+easy thing to lose.
 
-**#8 was alive and three commits in** at the last write, with uncommitted work in its
-worktree. Two things to check when it reports, rather than taking its word:
-
-- **It had `test/e2e/zz-debug.spec.ts` in its tree.** That is scaffolding and **must not
-  land**. Check the merge diff for it.
-- **Per-User state is now live in three places** — #10's settings provider, #13's My List
-  store, and #11's accent and language — so switching User must not leave the previous
-  User's Home Layout, My List, accent or language on screen. #11's accent in particular is
-  painted on the root element inside the shell. #8 was asked what it found; verify it.
-- #8 may also have had to edit other tickets' specs, since many sign in as Rafael and
-  several assert the literal "Signed in as Rafael." It was told to say which and not to
-  weaken an assertion to make it pass. **Read those diffs.**
-- **#11 turned the bottom bar's User picture into a "Settings" link and a focus stop** (it
-  was inert per #6) — the same element a User-switch control wants. #11 flagged this as a
-  real collision. #8 branched before #11 landed, so its merge is where it lands.
+**Resume from the branches, not the worktrees**, and re-read "Recovering an interrupted
+implementer" below: do not assume an unfinished branch is correct, check its tests pass
+first.
 
 ### What #17 closes that is not its own
 
