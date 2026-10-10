@@ -1,4 +1,6 @@
 import type { AuthenticationResult } from '@jellyfin/sdk/lib/generated-client/models/authentication-result';
+import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models/base-item-dto';
+import type { BaseItemDtoQueryResult } from '@jellyfin/sdk/lib/generated-client/models/base-item-dto-query-result';
 import type { PublicSystemInfo } from '@jellyfin/sdk/lib/generated-client/models/public-system-info';
 import type { UserDto } from '@jellyfin/sdk/lib/generated-client/models/user-dto';
 import { buildAuthorizationHeader, type ServerIdentity } from './authorization';
@@ -43,6 +45,43 @@ export type JellyfinGateway = {
    * picture with CSS.
    */
   userImageUrl(userId: string, tag: string): string;
+  /**
+   * `GET /UserViews` — the libraries this token's User can see. The legacy
+   * `/Users/{userId}/Views` is gone in 12.x, and this one answers with a query
+   * result rather than a bare array.
+   */
+  getUserViews(): Promise<BaseItemDto[]>;
+  /**
+   * `GET /Items/Latest` — one library's newest additions, newest first.
+   *
+   * It answers for a single library, so a view of the whole Server means one
+   * call per library. The response is a **bare array**, not a query result. The
+   * Server's own `groupItems` is deliberately switched off: collapsing Episodes
+   * into their Series is the caller's, which is the only place that has seen
+   * every library.
+   */
+  getLatestItems(options: LatestItemsOptions): Promise<BaseItemDto[]>;
+  /**
+   * The URL of one of an item's images. Anonymous on the Server, so an
+   * `<img src>` needs no token. The tag is the cache-buster: with it the URL
+   * changes when the image does and is otherwise cacheable forever.
+   */
+  itemImageUrl(itemId: string, imageType: ItemImageType, options?: ItemImageOptions): string;
+};
+
+/** The `ImageType` values this app asks for. */
+export type ItemImageType = 'Primary' | 'Backdrop' | 'Logo' | 'Thumb';
+
+export type ItemImageOptions = {
+  tag?: string;
+  /** Asks the Server to resize, so a card does not download a full-size poster. */
+  maxWidth?: number;
+};
+
+export type LatestItemsOptions = {
+  /** The library to ask. Without one the Server answers across all of them. */
+  parentId: string;
+  limit?: number;
 };
 
 export type JellyfinGatewayOptions = ServerIdentity & {
@@ -114,7 +153,46 @@ export function createJellyfinGateway(options: JellyfinGatewayOptions): Jellyfin
       }),
     userImageUrl: (userId, tag) =>
       `${serverAddress}/UserImage?userId=${encodeURIComponent(userId)}&tag=${encodeURIComponent(tag)}`,
+
+    getUserViews: () =>
+      request<BaseItemDtoQueryResult>('GET', '/UserViews').then((result) => result.Items ?? []),
+
+    getLatestItems: (options) =>
+      request<BaseItemDto[]>(
+        'GET',
+        `/Items/Latest${query({
+          parentId: options.parentId,
+          // `DateCreated` is not returned unless it is asked for by name, and
+          // without it there is nothing to merge libraries by.
+          fields: 'DateCreated',
+          // Posters only: the default is every image type, at every size.
+          enableImageTypes: 'Primary',
+          imageTypeLimit: 1,
+          enableUserData: false,
+          groupItems: false,
+          ...(options.limit === undefined ? {} : { limit: options.limit }),
+        })}`,
+      ),
+
+    itemImageUrl: (itemId, imageType, options = {}) =>
+      `${serverAddress}/Items/${encodeURIComponent(itemId)}/Images/${imageType}${query({
+        ...(options.tag === undefined ? {} : { tag: options.tag }),
+        ...(options.maxWidth === undefined ? {} : { maxWidth: options.maxWidth }),
+      })}`,
   };
+}
+
+/**
+ * A query string from values that are already decided. Numbers and booleans are
+ * written the way Jellyfin reads them, and `URLSearchParams` does the escaping.
+ */
+function query(values: Readonly<Record<string, string | number | boolean>>): string {
+  const params = new URLSearchParams();
+  for (const [name, value] of Object.entries(values)) {
+    params.set(name, typeof value === 'string' ? value : String(value));
+  }
+  const search = params.toString();
+  return search === '' ? '' : `?${search}`;
 }
 
 /** Trims whitespace and trailing slashes so paths can always be concatenated. */

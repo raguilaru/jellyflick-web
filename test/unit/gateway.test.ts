@@ -10,6 +10,9 @@ const identity = {
   appVersion: '0.1.0',
 };
 
+/** A token the fake accepts for Rafael: the Server issues one per DeviceId. */
+const tokenFor = (deviceId: string) => `token-user-rafael-${deviceId}`;
+
 describe('the Jellyfin gateway', () => {
   it('reads the Server name and version from system info', async () => {
     const gateway = createJellyfinGateway({
@@ -122,6 +125,68 @@ describe('the Jellyfin gateway', () => {
     expect(gateway.userImageUrl('user-rafael', 'tag-rafael')).toBe(
       'http://server.test/UserImage?userId=user-rafael&tag=tag-rafael',
     );
+  });
+
+  it('lists the libraries the Server offers, with what each one holds', async () => {
+    const gateway = createJellyfinGateway({
+      serverAddress: fakeJellyfinUrl(),
+      deviceId: 'lists-libraries',
+      ...identity,
+      token: tokenFor('lists-libraries'),
+    });
+
+    const libraries = await gateway.getUserViews();
+
+    expect(libraries.map((library) => [library.Name, library.CollectionType])).toEqual([
+      ['Movies', 'movies'],
+      ['Kids', 'movies'],
+      ['Series', 'tvshows'],
+      ['Music', 'music'],
+    ]);
+  });
+
+  it('reads one library’s latest additions, newest first', async () => {
+    const gateway = createJellyfinGateway({
+      serverAddress: fakeJellyfinUrl(),
+      deviceId: 'reads-latest',
+      ...identity,
+      token: tokenFor('reads-latest'),
+    });
+
+    const latest = await gateway.getLatestItems({ parentId: 'lib-kids' });
+
+    // The newest Episode first, then the other, then the Movie: the Series
+    // itself is not among them, which is why a client has to collapse Episodes.
+    expect(latest.map((item) => item.Id)).toEqual([
+      'episode-bluey-s2e3',
+      'episode-bluey-s2e2',
+      'movie-paddington',
+    ]);
+  });
+
+  it('asks for no more of a library’s latest additions than it wants', async () => {
+    const gateway = createJellyfinGateway({
+      serverAddress: fakeJellyfinUrl(),
+      deviceId: 'limits-latest',
+      ...identity,
+      token: tokenFor('limits-latest'),
+    });
+
+    const latest = await gateway.getLatestItems({ parentId: 'lib-kids', limit: 1 });
+
+    expect(latest.map((item) => item.Id)).toEqual(['episode-bluey-s2e3']);
+  });
+
+  it('builds an item image URL from the id, the image type and the tag', () => {
+    const gateway = createJellyfinGateway({
+      serverAddress: 'http://server.test',
+      deviceId: 'item-image',
+      ...identity,
+    });
+
+    expect(
+      gateway.itemImageUrl('series-bluey', 'Primary', { tag: 'tag-bluey', maxWidth: 400 }),
+    ).toBe('http://server.test/Items/series-bluey/Images/Primary?tag=tag-bluey&maxWidth=400');
   });
 
   it('reports an unreachable Server as a transport failure', async () => {

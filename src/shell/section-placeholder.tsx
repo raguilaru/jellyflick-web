@@ -14,7 +14,7 @@ export function SectionPlaceholder({ section }: SectionPlaceholderProps) {
   const t = useTranslate();
 
   return (
-    <main class="screen">
+    <main class="screen screen--top">
       <h1 class="screen__heading">{t(section.labelKey)}</h1>
       <p class="notice">{t('shell.sectionNotBuiltYet')}</p>
     </main>
@@ -26,7 +26,7 @@ export function UnknownSection() {
   const t = useTranslate();
 
   return (
-    <main class="screen">
+    <main class="screen screen--top">
       <h1 class="screen__heading">{t('shell.unknownSectionHeading')}</h1>
       <p class="notice">{t('shell.unknownSection')}</p>
     </main>

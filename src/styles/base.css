@@ -93,6 +93,15 @@ body {
   padding: var(--space-4);
 }
 
+/*
+ * Content from the top rather than stretched down the screen: what a screen
+ * inside the app shell wants, Home and every section placeholder included.
+ */
+.screen--top {
+  align-content: start;
+  gap: var(--space-4);
+}
+
 .screen--centred {
   align-content: center;
   justify-items: center;
@@ -208,6 +217,66 @@ body {
   font-weight: 600;
   text-align: center;
   /* Long names wrap rather than widening the cell. */
+  overflow-wrap: break-word;
+  word-break: break-word;
+  min-width: 0;
+}
+
+/*
+ * A Row and its cards.
+ *
+ * Grid throughout, so `gap` is the Chrome 66 one and not the Chrome 84 flex
+ * one. `grid-auto-flow: column` with a fixed column width gives the horizontal
+ * strip; `overflow-x` scrolls it. No `scroll-snap-*`, which is Chrome 69, and
+ * no `aspect-ratio`, which is Chrome 88 — the poster is a fixed 2:3 box.
+ */
+.row {
+  display: grid;
+  gap: var(--space-2);
+  /* The strip is as wide as the screen, so the Row must not stretch the grid. */
+  min-width: 0;
+}
+
+.row__heading {
+  margin: 0;
+  font-size: clamp(18px, 2vw, 24px);
+  font-weight: 600;
+}
+
+.row__strip {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 150px;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0 0 var(--space-2);
+  list-style: none;
+  overflow-x: auto;
+  /* A Row at its end does not drag the page with it. */
+  overscroll-behavior-x: contain;
+}
+
+.card {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+/* A fixed 2:3 poster box rather than `aspect-ratio`, which ships raw at 88. */
+.card__artwork {
+  width: 150px;
+  height: 225px;
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  object-fit: cover;
+}
+
+.card__artwork--none {
+  border: 1px solid var(--surface-line);
+}
+
+.card__name {
+  font-size: 14px;
   overflow-wrap: break-word;
   word-break: break-word;
   min-width: 0;

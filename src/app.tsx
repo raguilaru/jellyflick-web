@@ -122,7 +122,12 @@ export function App({ config, device, messages }: AppProps) {
           }}
         />
       ) : who.state === 'signed-in' ? (
-        <AppShell user={who.user} device={device} {...pictureOf(who.user, session)} />
+<AppShell
+          user={who.user}
+          session={session}
+          device={device}
+          {...pictureOf(who.user, session)}
+        />
       ) : who.state === 'resuming' ? null : (
         <SignInScreen
           session={session}

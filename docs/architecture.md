@@ -23,10 +23,15 @@ src/
   polyfills.ts          The Chromium 68 shims, and a list of what is NOT shimmed.
   runtime-config.ts     Reads the host's settings once at startup.
   styles/base.css       Design tokens and primitives. Dark only.
+  catalogue/            Jellyfin's items as this app's vocabulary: Title
+                        (Movie or Series), Season and Episode. The one place a
+                        `BaseItemDto` is read.
   connect/              Finding a Server and checking its version.
   device/               The device layer: `types.ts` is the interface,
                         `browser.ts` the implementation that ships now.
-  home/                 Where a signed-in User lands. A placeholder until #4/#6/#7.
+  home/                 Where a signed-in User lands: `row.tsx` is the Row and
+                        its card, one module per Row beside it. The Billboard,
+                        the shell and the navigation are still to come.
   i18n/                 `en.ts` is the key set, `es.ts` is typed against it.
   jellyfin/             The gateway: the only module that talks HTTP to the Server.
   session/              Session & Users: the Server address and the signed-in
@@ -104,6 +109,18 @@ Sample data a test can lean on: four Users — `Rafael` and `Marina` with pictur
 `Nico` without, and `Ghost`, who is hidden from `/Users/Public`. They share one
 password, exported as `SAMPLE_PASSWORD`. `failAuthenticationWith` makes
 `AuthenticateByName` answer with a status whatever the credentials are.
+
+And a sample library: four libraries — `Movies` and `Kids` of Movies, `Series` of
+Series, and `Music`, which holds no Title — with Movies, two Series with a Season
+and Episodes, a stray `Video`, an item with no images at all, and an album that is
+the newest addition on the Server and must never reach a Row. Merged newest-first
+with each Series once, the whole sample library is exactly:
+
+    Bluey, Severance, Paddington, Arrival, Heat, The Unfinished
+
+`failLibraryQueriesWith` makes `/UserViews` and `/Items/Latest` answer with a
+status, for a Server that will not say what it holds. Both of those endpoints
+want a token, as the real Server does.
 
 Vitest uses the helpers in `test/fake-jellyfin/control.ts`; Playwright calls the
 same endpoints through its `request` fixture.
