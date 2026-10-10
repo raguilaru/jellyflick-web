@@ -9,6 +9,11 @@ A map of the code, for whoever picks up the next ticket. Vocabulary is
 index.html              Loads /config.js (classic, blocking) then src/main.tsx.
 public/config.js        Runtime config placeholder. The container overwrites it.
 scripts/build.mjs       vite build, plus the TOLERATED_TRANSFORM guard.
+Dockerfile              The multi-stage image. See "The container" below.
+deploy/                 entrypoint.sh and the example OMV8 compose file.
+server/                 The server inside the container. Not browser code:
+                        `jellyflick-server.ts` is all the behaviour,
+                        `main.ts` is the process. No dependencies.
 src/
   main.tsx              Polyfills, locale, device layer, config, render. No logic.
   app.tsx               Which screen shows, and the connection state machine.
@@ -48,6 +53,7 @@ Where new code belongs:
 | `npm run test:e2e` | Playwright: desktop, phone and keyboard-only, against a production build. |
 | `npm run lint` / `npm run typecheck` | ESLint and `tsc --noEmit`. |
 | `npm run build` | The production build, which CI also uses as a check. |
+| `npm run build:server` | Compiles `server/` into `server-dist/`. Only the image needs it. |
 
 Both runners start the fake Jellyfin themselves, on a fixed port (8787, or
 `FAKE_JELLYFIN_PORT`): Vitest from `test/fake-jellyfin/global-setup.ts`,
@@ -164,3 +170,100 @@ An empty `serverAddress` means "ask the User", not "fail".
 
 There is no container in `vite dev`, so `VITE_SERVER_ADDRESS` in `.env.local`
 stands in for a preset address while developing.
+
+The entrypoint builds the file with `jq -n`, never by interpolating into a
+string: one quote in the address would otherwise emit JavaScript that does not
+parse, and the app would fail to start with no clue why.
+
+## The container
+
+ADR 0004 makes the container a small service rather than a file server: it holds
+`MDBLIST_API_KEY` and caches ratings per Title, which no static file server can
+do. So `server/` is **one dependency-free Node server on `node:22-alpine`**,
+using `node:` built-ins only, doing three things:
+
+1. serve the built assets, with hashed assets under `/assets/` cached hard and
+   the shell and `/config.js` not cached at all
+2. answer an unknown path with `index.html` and a **200**, so a client-side route
+   survives a reload. A path *with* an extension 404s instead — answering a
+   missing `/assets/…js` with the shell would turn a broken deploy into a blank
+   page with no explanation
+3. proxy MDBList on the browser's behalf (below)
+
+`server/` is the only compiled-and-shipped code in the repository:
+`npm run build:server` emits `server-dist/` through `tsconfig.server.json`, and
+the image runs that plain JavaScript — no experimental flags, no dependencies.
+`npm run typecheck` still covers the sources.
+
+Shape of the image:
+
+| Path | What |
+| --- | --- |
+| `/srv/app` | The build output. Read-only. |
+| `/srv/config` | Where the entrypoint writes `config.js`. A **tmpfs**, because the compose file sets `read_only: true`; the container stops with an explanation if it cannot be written. |
+| `/srv/server` | The compiled server. |
+
+Settings come from the environment, and `optionsFromEnvironment` is the only
+place that reads it: `MDBLIST_API_KEY`, `PORT` (8080, so no privileges are
+needed to bind), `HOST`, `JELLYFLICK_ROOT`, `JELLYFLICK_CONFIG_DIR`,
+`RATINGS_CACHE_TTL_SECONDS`. **`JELLYFIN_URL` is deliberately not among them**:
+the preset address reaches the browser through `config.js` and the server has no
+use for it.
+
+`.github/workflows/release.yml` builds `linux/amd64` and `linux/arm64` and
+pushes to GHCR on every push to `main`. It is separate from `ci.yml`, which is
+left alone. `docs/setup.md` is the host's guide.
+
+### The ratings route
+
+```
+GET /api/ratings/:provider/:type/:id
+```
+
+- `:provider` — `imdb`, `tmdb`, `tvdb` or `trakt`
+- `:type` — `movie` or `show`
+- `:id` — the provider's id, `[A-Za-z0-9]{1,32}`
+
+The segments are MDBList's own path shape, so they pass straight through and
+this route stays **transport, not translation**. The key is added here and
+nowhere else, so it never reaches a browser.
+
+| Status | Body | Means |
+| --- | --- | --- |
+| 200 | MDBList's own JSON, unchanged | Cached for a day (`RATINGS_CACHE_TTL_SECONDS`). |
+| 400 | `{ "error": "bad-request" }` | Unrecognised provider, type or id. Nothing is sent upstream. |
+| 404 | `{ "error": "not-found" }` | MDBList has never heard of the Title. Cached, which also spares the quota. |
+| 502 | `{ "error": "mdblist-unavailable" }` | MDBList failed or could not be reached. **Not** cached, so a blip does not switch ratings off for a day. |
+| 503 | `{ "error": "mdblist-not-configured" }` | The host left `MDBLIST_API_KEY` empty, so extra ratings are off. |
+
+**For whoever builds the client-side ratings feature (#20):** call this route,
+never `api.mdblist.com`. Treat anything but a 200 as "no extra ratings" and omit
+them — story 81 says a missing rating is left out, not shown as zero. There is no
+capability flag in the runtime config to check first, by design: the config
+carries `serverAddress` and `appVersion` and nothing else, so no secret can leak
+into it.
+
+Two properties the route already gives you, so do not rebuild them client-side:
+
+- **One entry per Title**, shared by every browser in the household. MDBList's
+  free tier allows 1,000 requests a day *per account*, not per device.
+- **Simultaneous requests for one Title collapse into a single upstream call**,
+  so a Row of cards appearing at once costs one request, not twelve.
+
+`GET /api/health` answers `{ "ok": true }` for the compose healthcheck. Any other
+`/api/` path is a 404, so a future route cannot be shadowed by the SPA fallback.
+
+### Testing it
+
+| Where | What it covers |
+| --- | --- |
+| `test/unit/container-server.test.ts` | The server over a real socket: static serving, the 200 fallback, path traversal, cache headers, and the ratings route's key injection, caching, coalescing and failure mapping. MDBList is the one thing faked, through the `fetch` option. |
+| `test/unit/container-entrypoint.test.ts` | `deploy/entrypoint.sh` as a process: the exact keys written, an empty address not being an error, `jq` escaping a hostile address, and the key never being written or echoed. |
+| `test/e2e/the-container-serves-the-app.spec.ts` | The real entrypoint and the real server serving the real production build, in a browser. |
+
+Both server test files are `@vitest-environment node`: happy-dom's `fetch`
+applies the Same Origin Policy and would block every request to a server on an
+ephemeral port.
+
+What none of them cover is the image itself — the layering, `apk add jq`, the
+`node` user and the tmpfs. Only `docker build` and `docker run` exercise those.
