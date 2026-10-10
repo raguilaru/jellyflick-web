@@ -80,6 +80,14 @@ export type DeviceLayer = {
    */
   newDeviceId(): string;
 
+  /**
+   * The languages this device prefers, best first, as BCP 47 tags. It is what
+   * the app's language falls back to when the User has not chosen one
+   * (story 113), and it is here because it is `navigator.languages` — which
+   * nothing outside this folder may read.
+   */
+  preferredLanguages(): readonly string[];
+
   /** Maps a keyboard or remote-control event onto a logical key. */
   keyFor(event: Pick<KeyboardEvent, 'key' | 'keyCode'>): DeviceKey;
 

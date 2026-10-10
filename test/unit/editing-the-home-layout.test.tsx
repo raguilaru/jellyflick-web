@@ -64,6 +64,12 @@ async function signInAndLand() {
 async function openTheEditor() {
   fireEvent.click(await screen.findByRole('link', { name: 'Edit Home' }));
   await screen.findByRole('heading', { name: 'Edit Home', level: 1 });
+  // The editor offers nothing to press until the Server has answered, so that
+  // a press can never land on the default layout and save it over the User's
+  // own (#11). Waiting for that is what a User does by looking at the screen.
+  await waitFor(() => {
+    expect(screen.queryByText('Looking for your settings…')).toBeNull();
+  });
 }
 
 async function backToHome() {

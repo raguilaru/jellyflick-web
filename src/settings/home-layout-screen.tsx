@@ -37,11 +37,25 @@ export const HOME_LAYOUT_PATH = '/settings/home-layout';
 
 export function HomeLayoutScreen() {
   const t = useTranslate();
-  const { settings, saveFailed, change } = useSettings();
+  const { settings, loaded, saveFailed, change } = useSettings();
   const layout = settings.homeLayout;
 
   const rename = (kind: HomeRowKind): string => t(ROW_NAME_KEYS[kind]);
   const addable = addableRowKinds(layout);
+
+  // Nothing to press until the Server has answered. The provider starts on the
+  // default layout, so buttons drawn before the read lands are buttons for
+  // somebody else's Home: a press then would save the defaults, plus that one
+  // change, over what the User really has. #13 found this as a lost press.
+  if (!loaded) {
+    return (
+      <main class="screen">
+        <h1 class="screen__heading">{t('homeLayout.heading')}</h1>
+        <p class="screen__lead">{t('homeLayout.explanation')}</p>
+        <p class="notice">{t('settings.loading')}</p>
+      </main>
+    );
+  }
 
   return (
     <main class="screen">

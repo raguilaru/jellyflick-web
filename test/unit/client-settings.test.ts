@@ -158,6 +158,39 @@ describe('saving a setting', () => {
   });
 });
 
+describe('the settings the settings screen saves', () => {
+  const layout: HomeLayout = [{ kind: 'new-on-jellyflick' }, { kind: 'my-list', hidden: true }];
+
+  it('reads back the Accent Colour and the language the User chose', async () => {
+    await rafaelsStore().save({ accentColour: 'teal', uiLanguage: 'es' });
+
+    const read = await rafaelsStore().read();
+    expect(read.settings.accentColour).toBe('teal');
+    expect(read.settings.uiLanguage).toBe('es');
+  });
+
+  it('stores going back to the device’s language as a choice of its own', async () => {
+    await rafaelsStore().save({ uiLanguage: 'es' });
+
+    // `CustomPrefs` holds strings, so "no choice" is the empty string rather
+    // than a missing key — and it has to come back as no choice at all.
+    await rafaelsStore().save({ uiLanguage: undefined });
+
+    const read = await rafaelsStore().read();
+    expect(read.settings.uiLanguage).toBeUndefined();
+  });
+
+  it('keeps the Home Layout when only the colour changes', async () => {
+    await rafaelsStore().save({ homeLayout: layout });
+
+    await rafaelsStore().save({ accentColour: 'blue' });
+
+    const read = await rafaelsStore().read();
+    expect(read.settings.homeLayout).toEqual(layout);
+    expect(read.settings.accentColour).toBe('blue');
+  });
+});
+
 describe('a Server that will not answer', () => {
   it('leaves the User with the defaults rather than no Home at all', async () => {
     await setFakeState({ failDisplayPreferencesWith: 500 });

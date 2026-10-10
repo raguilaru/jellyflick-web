@@ -8,7 +8,10 @@ import { MyListProvider } from '../my-list/use-my-list';
 import { SearchScreen } from '../search/search-screen';
 import type { Session, SignedInUser } from '../session/session';
 import { HOME_LAYOUT_PATH, HomeLayoutScreen } from '../settings/home-layout-screen';
+import { SETTINGS_PATH, SettingsScreen } from '../settings/settings-screen';
 import { SettingsProvider } from '../settings/settings-provider';
+import { useAccentColour } from '../settings/use-accent-colour';
+import { UiLanguage } from '../settings/ui-language';
 import { useBackHandler } from './back';
 import { useWideScreen } from './layout';
 import { BottomBar } from './bottom-bar';
@@ -64,11 +67,16 @@ export function AppShell({ user, session, device, pictureUrl }: AppShellProps) {
       {/* One copy of the User's settings for every screen: Home and the Home
           Layout editor are two views of the same thing (#10). */}
       <SettingsProvider gateway={session.gateway()} userId={user.userId}>
-        {/* And one copy of My List, for the Row on Home, the My List page and
-            every card's toggle (#13). */}
-        <MyListProvider value={useLoadedMyList(session, user)}>
-          <ShellFrame user={user} session={session} device={device} pictureUrl={pictureUrl} />
-        </MyListProvider>
+        {/* The User's language, from their settings, falling back to this
+            device's (#11). Inside the provider, because that is where the
+            choice is, and above everything that draws text. */}
+        <UiLanguage device={device}>
+          {/* And one copy of My List, for the Row on Home, the My List page and
+              every card's toggle (#13). */}
+          <MyListProvider value={useLoadedMyList(session, user)}>
+            <ShellFrame user={user} session={session} device={device} pictureUrl={pictureUrl} />
+          </MyListProvider>
+        </UiLanguage>
       </SettingsProvider>
     </LocationProvider>
   );
@@ -79,6 +87,9 @@ function ShellFrame({ user, session, device, pictureUrl }: AppShellProps) {
   const { path } = useLocation();
   const wide = useWideScreen();
   useBackHandler(device);
+  // The User's Accent Colour, painted on the root element so every rule that
+  // reads `--accent` follows it (#11).
+  useAccentColour();
 
   return (
     <div class={wide ? 'shell' : 'shell shell--with-bottom-bar'}>
@@ -98,9 +109,12 @@ function ShellFrame({ user, session, device, pictureUrl }: AppShellProps) {
             section={section}
           />
         ))}
-        {/* Not a section: it is reached from Home, and later from the settings
-            screen (#11/#35), so it is in neither navigation bar. */}
+        {/* Neither of these is a section: each has an address of its own and
+            no place in `SECTIONS`. The Home Layout editor is reached from Home
+            and from the settings screen; the settings screen is reached from
+            whichever navigation bar is on the screen. */}
         <Route path={HOME_LAYOUT_PATH} component={HomeLayoutScreen} />
+        <Route path={SETTINGS_PATH} component={SettingsScreen} device={device} />
         <Route default component={UnknownSection} />
       </Router>
 
