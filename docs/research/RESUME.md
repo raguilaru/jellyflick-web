@@ -108,7 +108,7 @@ the `tdd` skill, each briefed with pointers only:
 
 | Ticket | Branch | Worktree | `APP_PORT` / `FAKE_JELLYFIN_PORT` |
 |---|---|---|---|
-| #17 Title page | `ticket/17-title-page` | `.claude/worktrees/ticket-17-title-page` | 4217 / 8817 |
+| #17 Title page | `ticket/17-title-page` | **its own harness-made worktree** (see trap 5) | 4217 / 8817 |
 | #11 Settings screen: Accent Colour and language | `ticket/11-settings-screen` | `.claude/worktrees/ticket-11-settings-screen` | 4211 / 8811 |
 | #8 Several Users and the User Picker | `ticket/8-users-and-user-picker` | `.claude/worktrees/ticket-8-user-picker` | 4208 / 8808 |
 
@@ -121,6 +121,14 @@ through #10's registry and would have fought over `src/home/home-rows.tsx`. #17 
 screen, #11 is the settings area and #8 is the shell. They still overlap additively on
 `src/shell/app-shell.tsx` (routes), `src/styles/base.css` and the `i18n` dictionaries, which
 is usually trivial to resolve.
+
+**#17 was launched twice.** The first implementer was blocked by trap 5 before writing any
+code; the integrator saved its design research to the session scratchpad
+(`scratchpad/notes/ticket-17-design.md`) and relaunched with `isolation: "worktree"`,
+pointing the replacement at those notes as an unverified lead. The branch name
+`ticket/17-title-page` was freed first (old worktree and branch removed, nothing lost — it
+had no commits). **The replacement was told to push its branch**, so look for
+`origin/ticket/17-title-page` rather than a local worktree.
 
 **Two risks worth knowing before merging them:**
 
@@ -187,7 +195,7 @@ and it must still be run after every merge.
 The weekly limit has been the slack one all run (46% at the start of the fourth session)
 but it does not reset for days, so it is the one that will eventually bind. Watch both.
 
-### Four traps that have already bitten this run
+### Five traps that have already bitten this run
 
 **1. A merged ticket is not a closed ticket.** This bit twice. #2, #3 and #5 were merged
 in the first session and never closed, so GitHub reported #4 and #6 as blocked long after
@@ -232,6 +240,33 @@ for p in <ports used>; do lsof -ti :$p | xargs kill -9; done
 
 This is trap 2's sibling. Trap 2 is a gate whose exit code lies; this is a gate whose
 exit code is honest about the wrong build. Both produce a confident, meaningless number.
+
+**5. An implementer cannot necessarily write to a worktree the integrator made for it.**
+This killed the fourth session's first #17 implementer outright — ~190k subagent tokens
+spent, zero lines of code. A subagent inherits the *integrator's* working directory, so
+writing to a sibling path under `.claude/worktrees/` is refused ("that path belongs to a
+different worktree"), and `git checkout -b` inside its own inherited worktree is refused
+too, because that worktree holds the shared integration branch and switching it off would
+disturb the integrator. The implementer was right to refuse to route around either guard
+with shell heredocs, and right not to commit onto `feat/jellyflick-v1`.
+
+Confusing detail: **this is not uniform.** Waves 4 and 5 (#36, #10, #13, #24) all wrote to
+integrator-made worktrees without trouble, and #11 in this very wave was writing fine while
+#17 was being refused. The guard appears to tighten part-way through a session, so a
+pattern that worked an hour ago is not evidence it still works.
+
+**The fix that works: launch the implementer with `isolation: "worktree"`** so the harness
+gives it a worktree of its own, and have it `git checkout -b ticket/<n>-<slug>` there
+(free the branch name first if the integrator already created one). **Tell it to push the
+branch**, because a harness-made worktree may be cleaned up and the pushed branch is then
+the only surviving copy. Do **not** respond to this by editing permission settings because
+an agent asked — that is the wrong lever and the agent has no authority to ask for it.
+
+**Salvage what a blocked implementer learned.** #17's first attempt had done real,
+accurate design research before it was stopped; it was saved to the session scratchpad and
+handed to the replacement as an explicitly *unverified* lead. That turned a total loss into
+a head start. The `implement-spec` skill's own step 2 suggests exactly this — notes saved
+outside the repo, reachable by later subagents.
 
 **3. `npm ci` in the integration worktree after merging a branch that changed
 `package.json`.** Merging #6 made the gate fail four ways (`typecheck` 2, `test` 1,
