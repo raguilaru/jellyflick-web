@@ -195,6 +195,10 @@ the codebase map.
   for one; the Billboard ticket may want a small phone header.
 - **Bebas Neue still wants crediting on an about/licences screen**, which no ticket owns yet.
 - `.screen--top` is now resolved — #7 folded it in.
+- **"Signed in as Rafael." is still scaffolding on Home** and no ticket owns removing it.
+  #3 put it on the placeholder Home, #4 built the Row below it, #6 absorbed the wordmark
+  above it into the top bar but left this line. It is the one visibly unfinished thing on
+  the screen; #16 (Billboard) is the natural place for it to disappear.
 - **The navigation bars have no focus memory**, deliberately: entering a bar is geometric
   (the link above the card you came from). Story 65 asks Rows to remember, and a roving
   tabindex in a bar would stop Tab visiting every link, which is worse for a keyboard user.
