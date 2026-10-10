@@ -64,8 +64,8 @@ export type ClientSettings = {
   /**
    * The language the User chose for the app, or absent for their browser's.
    * Jellyfin 12.x has no per-user UI language of its own (`decisions.md` §2),
-   * so this one is ours. Read by #11/#35; stored here from the start so the
-   * settings screen is the only thing that ticket has to build.
+   * so this one is ours, and the settings screen says so rather than implying
+   * otherwise. `src/settings/ui-language.tsx` is what reads it (#11).
    */
   readonly uiLanguage?: string;
   /**

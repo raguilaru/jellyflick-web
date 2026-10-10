@@ -16,9 +16,9 @@ import { useSettings } from './settings-provider';
  * The Home Layout editor: add, hide and reorder the Rows on Home (story 48).
  *
  * **Its address is not a section.** `src/shell/sections.ts` is the one list of
- * sections and this is not one of them — it is a screen reached from Home, and
- * later from the settings screen (#11/#35), so it has its own route and no
- * place in either navigation bar.
+ * sections and this is not one of them — it is a screen reached from Home and
+ * from the settings screen (#11), so it has its own route and no place in
+ * either navigation bar.
  *
  * **Reordering is two buttons, not a drag.** A drag cannot be done with a
  * remote, and story 64 says every screen is usable with arrows, Enter and Back.
