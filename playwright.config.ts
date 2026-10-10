@@ -2,7 +2,10 @@ import { defineConfig, devices } from '@playwright/test';
 import type { JellyflickOptions } from './test/e2e/fixtures';
 import { FAKE_JELLYFIN_PORT } from './test/fake-jellyfin/url';
 
-const APP_PORT = 4173;
+// Overridable so two worktrees can run the suite at once. `reuseExistingServer`
+// would otherwise hand one worktree the other's preview build and quietly make
+// the run meaningless. `FAKE_JELLYFIN_PORT` is overridable the same way.
+const APP_PORT = Number(process.env.APP_PORT ?? 4173);
 
 export default defineConfig<JellyflickOptions>({
   testDir: './test/e2e',

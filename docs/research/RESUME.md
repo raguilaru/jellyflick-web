@@ -15,7 +15,7 @@ up without re-deriving anything.
 | #5 Deployable container | merged, issue closed (second box superseded — see below) |
 | #4 New on Jellyflick on Home | merged at `ed9603b`, issue closed |
 | #6 App shell | merged at `8225247`, issue closed |
-| #7 Rows and arrow-key navigation | merged at `49fed11`, **issue still open** |
+| #7 Rows and arrow-key navigation | merged at `49fed11`, issue closed |
 
 Gate on the integration tip `49fed11`, each step's exit code checked individually:
 `lint` 0, `typecheck` 0, **173 unit tests** in 18 files, **114 Playwright tests — 102
@@ -30,11 +30,9 @@ skipped on `phone`, 2 phone tests skipped on `desktop` and `keyboard-only`) plus
 **Nothing is in flight.** No implementers are running; no worktree holds uncommitted
 work. Three waves have landed this session (#4, #6, #7), all verified by the integrator.
 
-### The frontier — close #7 first
+### The frontier is six tickets wide, and verified open
 
-#7's work is merged but **its issue is still open**, so #10, #13, #14 and #24 will all
-report as blocked until it is closed (trap 1, which has now bitten three times). Once it
-is closed the frontier is six tickets wide:
+#7 is closed, so nothing is falsely blocked. All six report `blocked_by: 0`:
 
 | Ticket | Needs | Note |
 |---|---|---|
@@ -46,7 +44,8 @@ is closed the frontier is six tickets wide:
 | #24 Search | #7 | |
 
 #10 and #13 are the two that unlock the most: #10 opens wave 6 (#11, #12, #15, #16) and
-#13 gates #17 → #25 → #26 → #27 → #28, the deepest remaining chain.
+#13 gates #17 → #25 → #26 → #27 → #28, the deepest remaining chain. **Give any two
+concurrent implementers distinct `APP_PORT` and `FAKE_JELLYFIN_PORT` values.**
 
 ### Three traps that have already bitten this run
 
@@ -97,9 +96,13 @@ make a gate run meaningless. #6 worked around it with `FAKE_JELLYFIN_PORT=8796` 
 interim runs and took the final gate on free ports, but left shared config alone to avoid
 colliding with #4.
 
-**Before launching the next multi-implementer wave, make `APP_PORT` env-overridable in
-`playwright.config.ts`** (and confirm `FAKE_JELLYFIN_PORT` already is), or tell each
-implementer to set both to distinct values.
+**This is now fixed.** `APP_PORT` reads `process.env.APP_PORT ?? 4173` in
+`playwright.config.ts`, and `FAKE_JELLYFIN_PORT` already read
+`process.env.FAKE_JELLYFIN_PORT ?? 8787`. Verified by running the whole e2e suite on
+`APP_PORT=4199 FAKE_JELLYFIN_PORT=8799` — identical 102 passed / 12 skipped.
+
+So concurrent implementers just need distinct values for both. Say so in each brief when
+launching two or more at once; the defaults are fine for a lone implementer.
 
 ### Tickets whose acceptance boxes cannot be ticked as written
 
@@ -199,7 +202,12 @@ the codebase map.
   re-reads from the Server, so `preact-iso`'s unconfigurable `scrollTo(0, 0)` stays
   harmless. Whoever makes a section's state outlive a navigation inherits that problem.
 - **No Playwright project sets `hasTouch`**, so real touch gestures are untested
-  anywhere. One added project would fix it for #7 and everything after.
+  anywhere, and #7's touch-swipe box rests on a structural assertion. This is *not* a
+  one-line config fix, despite how it looks: a fourth project would run all 38 specs
+  under touch emulation (114 → ~152 tests), including keyboard journeys and hover tests
+  that would likely fail with no owner. The contained version is a project scoped with
+  `testMatch` to the Row spec **plus a real swipe test that does not exist yet** — so it
+  is ticket work, not config. Sized and left for whoever picks it up.
 
 ## Where the work lives
 
@@ -245,8 +253,8 @@ branch is correct — check its tests pass before building on it.
 
 ## Still owed at the end of the run
 
-1. Close #7, then every ticket from #8 onward. Six are unblocked once #7 closes:
-   #8, #36, #10, #13, #14, #24.
+1. Every ticket from #8 onward. Six are unblocked and unstarted: #8, #36, #10, #13,
+   #14, #24.
 2. `code-review` over the whole integration branch, with findings fixed in one implementer.
 3. **The git history rewrite** described in `decisions.md` §10 — removing the inspiration
    product's name from the root commit. Must happen with no implementers in flight, and
