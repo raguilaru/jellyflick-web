@@ -44,4 +44,15 @@ export const es: Messages = {
     'Jellyflick no pudo leer la lista de usuarios del servidor. Escribe tu nombre de usuario para iniciar sesión.',
 
   'home.signedInAs': (p) => `Sesión iniciada como ${p.name}.`,
+
+  'nav.sections': 'Secciones',
+  'nav.home': 'Inicio',
+  'nav.movies': 'Películas',
+  'nav.series': 'Series',
+  'nav.myList': 'Mi lista',
+  'nav.search': 'Buscar',
+
+  'shell.sectionNotBuiltYet': 'Esta sección todavía no está hecha.',
+  'shell.unknownSectionHeading': 'Aquí no hay nada',
+  'shell.unknownSection': 'No hay nada en esta dirección. Elige una sección para seguir.',
 };

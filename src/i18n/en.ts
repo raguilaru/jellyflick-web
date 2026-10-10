@@ -49,6 +49,17 @@ export const en = {
     'Jellyflick could not read the list of Users from the Server. Type your username to sign in.',
 
   'home.signedInAs': (p: { name: string }) => `Signed in as ${p.name}.`,
+
+  'nav.sections': 'Sections',
+  'nav.home': 'Home',
+  'nav.movies': 'Movies',
+  'nav.series': 'Series',
+  'nav.myList': 'My List',
+  'nav.search': 'Search',
+
+  'shell.sectionNotBuiltYet': 'This section is not built yet.',
+  'shell.unknownSectionHeading': 'Nothing here',
+  'shell.unknownSection': 'There is nothing at this address. Pick a section to carry on.',
 } as const;
 
 /**

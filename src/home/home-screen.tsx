@@ -7,14 +7,13 @@ export type HomeScreenProps = {
 
 /**
  * Where a signed-in User lands. A placeholder on purpose: it shows who is
- * signed in and nothing else, because the app shell, the navigation and Home's
- * Billboard and Rows each belong to their own ticket.
+ * signed in and nothing else, because Home's Billboard and Rows belong to their
+ * own tickets. The wordmark and the navigation around it are the shell's.
  */
 export function HomeScreen({ user }: HomeScreenProps) {
   const t = useTranslate();
   return (
     <main class="screen screen--centred">
-      <h1 class="wordmark">{t('app.name')}</h1>
       <p class="notice">{t('home.signedInAs', { name: user.name })}</p>
     </main>
   );

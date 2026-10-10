@@ -6,6 +6,18 @@
     <meta name="color-scheme" content="dark" />
     <title>Jellyflick</title>
     <!--
+      The wordmark's face, preloaded because the wordmark is the first thing on
+      every screen. `crossorigin` stays even though the font is our own: fonts
+      are fetched in CORS mode, and leaving it out costs a second download.
+    -->
+    <link
+      rel="preload"
+      href="/fonts/bebas-neue-latin-400.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <!--
       The runtime config is a classic script, so it runs synchronously and the
       global is guaranteed to exist by the time the deferred module script does.
       The container writes it at start-up; in `vite dev` the file in public/ is
