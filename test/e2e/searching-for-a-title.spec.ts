@@ -111,11 +111,24 @@ test('the flow is the field, then the results, and Enter opens one', async ({ pa
   await expect.poll(() => focused(page)).toBe('The Unfinished');
   await page.keyboard.press('Enter');
 
-  // Opening a result opens its title page, which is #17's to build, so for now
-  // Enter has nowhere to go and Search must simply stay as it is.
+  // #17 gave Enter on a result somewhere to go: that Title's own page.
+  await expect(page).toHaveURL(/\/title\/movie-unfinished$/);
+  await expect(page.getByRole('heading', { name: 'The Unfinished', level: 1 })).toBeVisible();
+});
+
+test('one Enter leaves the field without also pressing what it landed on', async ({ page }) => {
+  await openSearch(page);
+
+  await page.keyboard.type('he', { delay: KEYSTROKE_DELAY });
+  await expect(results(page).locator('.card__name')).toHaveText(['Heat', 'The Unfinished']);
+
+  // The field's own handler moves focus on Enter, and the navigator presses
+  // whatever focus is on — so one press used to do both and open a title page
+  // the User never chose. A field owns Enter, as it owns the arrow keys.
+  await page.keyboard.press('Enter');
+
   await expect(page).toHaveURL(/\/search$/);
-  await expect(results(page)).toBeVisible();
-  expect(await focused(page)).toBe('The Unfinished');
+  expect(await focused(page)).toBe('Heat');
 });
 
 test('Left and Right stay the caret’s while the User is in the field', async ({ page }) => {

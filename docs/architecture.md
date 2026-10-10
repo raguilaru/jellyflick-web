@@ -60,7 +60,10 @@ src/
   shell/                The app once a User is signed in: `sections.ts` is the
                         one list of sections and their addresses, `app-shell.tsx`
                         the routes and which bar is shown, `back.ts` the single
-                        Back handler, `layout.ts` the one breakpoint.
+                        Back handler, `layout.ts` the breakpoints.
+  title/                The title page: `title-page.ts` is its address and what
+                        it reads from the Server, `title-screen.tsx` the screen
+                        — a pop-up on a wide pointer, a full page elsewhere.
 test/
   setup.ts              Vitest: unmounts components after each test.
   unit/                 Vitest specs. One file per behaviour, not per source file.
@@ -150,8 +153,24 @@ the Titles, in the order `/Genres` serves them, are exactly:
 
     Comedy, Crime, Drama, Family, Science Fiction, Thriller
 
+Arrival and Severance also carry everything a title page shows — a year, an age
+rating, a running time, an overview, a cast, streams in several languages,
+ratings, a logo and a backdrop — and **The Unfinished deliberately carries none
+of it**, with an empty `OfficialRating` and a null `CriticRating`, because those
+are the unguarded fields a client has to cope with itself. `state.played` is
+`UserData.Played` per User, `state.collections` is the one Collection (Crime
+Classics, holding Heat and Arrival) and `state.similar` is the fixed More like
+this relation.
+
+`/Items` honours `ids`, `fields`, `enableImageTypes` and `enableUserData`, so a
+query that forgot to ask for `Overview` fails against the fake rather than only
+against a real Server. `Genres` is deliberately not gated: every query this app
+makes asks for it.
+
 `failLibraryQueriesWith` makes `/UserViews`, `/Items/Latest`, `/Items` and
 `/Genres` answer with a status, for a Server that will not say what it holds.
+`failPlayedWritesWith` and `failRelatedQueriesWith` do the same for the
+`/UserPlayedItems` writes and for `/Items/{id}/Similar` and `/Collections`.
 All four want a token, as the real Server does.
 `failDisplayPreferencesWith` does the same for `/DisplayPreferences`.
 
@@ -358,6 +377,72 @@ where every User starts and is theirs to fill, so a notice on Home on every
 visit would be in the way. The page explains it instead, and also carries the
 "the Server would not say" message.
 
+## The title page
+
+`src/title/` is #17: everything the app knows about one Title, and everything a
+User can do to it short of playing it. It is what a card press opens, so it is
+also what closed #7's and #24's last open box.
+
+- **Its address is not a section.** `/title/:itemId` has its own `<Route>` in
+  the shell and no place in either bar, the same call #10 made for
+  `/settings/home-layout`: a title page is reached from a card, never from a
+  navigation bar, and an entry in `SECTIONS` would put it in both. `SECTIONS`
+  is still the one list of sections. The address is written once, in
+  `titlePathFor` in `src/title/title-page.ts`.
+- **A pop-up where there is a wide precise pointer, a full page everywhere
+  else** — `useWidePointer()` beside `useWideScreen()` in `src/shell/layout.ts`,
+  so one module still owns every breakpoint. It asks the pointer as well as the
+  width because a 1080p TV is the widest screen in the house and is driven with
+  a remote; `pointer` is a media feature (Chrome 41), not a container query, so
+  ADR 0002 leaves it alone. A device with no `matchMedia` gets the full page,
+  which is the layout that works everywhere.
+- **The pop-up is `position: fixed`, and that is not only a look.**
+  `spatial-navigation.ts` tries the page's own flow before anything fixed, and
+  *from* inside something fixed the fixed thing is the flow — so the arrow keys
+  stay inside the pop-up with no focus trapping of ours. #7 wrote that rule for
+  this screen.
+- **It is one route, not an overlay over a live Home.** `preact-iso`'s `Router`
+  renders only the matching route, so opening a title page unmounts the screen
+  behind it: the pop-up is a dialog shape over the app's own background rather
+  than over the Home that was there a moment ago. Hoisting an overlay outside
+  the `Router` and freezing the previous route was the alternative, and it would
+  make the title page the one screen in the app that is not an address and give
+  Back a second meaning. Back is the browser's back button here as everywhere,
+  and Home comes back from the Server, which every section already does.
+- **One gateway query, grown rather than added.** `getTitles({ ids, detail })`
+  reads it: `/Items` rather than `/Items/{itemId}`, deliberately, so the
+  gateway's `includeItemTypes=Movie,Series` goes on protecting it and a
+  hand-typed `/title/album-…` answers with nothing and the page says so. `detail`
+  is the fields no Row needs — `Overview,People,MediaStreams,ProviderIds`, the
+  backdrop and logo image types, and `enableUserData` for the watched state. The
+  ratings, `RunTimeTicks`, `ProductionYear` and `OfficialRating` are **not**
+  `fields` values: the Server always sends them.
+- **`titleDetailsFrom` is in `src/catalogue/catalogue.ts`**, so that module is
+  still the only place a `BaseItemDto` is read. Every field the Server may leave
+  out is left out rather than defaulted, which is story 81 past the ratings as
+  well as in them: the Server omits `CommunityRating` when it is not above zero,
+  and `CriticRating` and `OfficialRating` are unguarded, so a null and an empty
+  string are handled here. A label with nothing after it is left out of the
+  document entirely — "no cast" and "the Server did not say" look the same, and
+  neither is worth a line.
+- **Nothing on it is a second way to do something.** My List is `MyListToggle`
+  over the shell's one store (#13), and it is always drawn here and always a
+  focus stop — on a card in a Row it is hover-only, so **this page is the only
+  way a remote reaches My List** (story 70). The card mapping is `cardForTitle`
+  (#24) and More like this is the `Row` (#7).
+- **Mark watched is local to the screen**, not a store: it shows before the
+  Server has agreed and is taken back with a line that says so, the bargain My
+  List makes. Nothing else shows a watched state yet — Continue Watching (#12)
+  and the enlarged card (#21) are what would make it a store.
+- **The Collection is named, not browsed.** `/Items/{id}/Collections` answers
+  with the BoxSets a Title is in, and the page says their names. Showing the
+  *other Titles* in one means a query per Collection and a BoxSet that can be
+  opened, which is #15's Collection Rows and their `parameter`, not this.
+- **Play is present and does nothing**, for #25 → #28 to wire up.
+- **A language's name is the locale's own.** `title.language` is one message
+  whose function holds a small dictionary per locale, falling back to the code
+  itself. `Intl.DisplayNames` is Chrome 81 and the floor is 68.
+
 ## Arrow keys, focus and Rows
 
 `src/navigation/` is spatial navigation: every screen driveable with the arrow
@@ -397,11 +482,17 @@ it is a key.
   `row.tsx`, because a mouse has no sideways wheel — but only while the Row has
   somewhere to go, so a Row at either end hands the page back its scroll and can
   never trap it. That listener cannot be passive.
-- **A card is a focus stop, not a button.** What pressing one opens is #17's, so
-  `Row` takes an `onCardPress` and Enter clicks the focused card; a Row given no
-  handler is browsable and not pressable. Enter deliberately leaves a real link,
-  button or field alone — the browser presses those itself, and a second click
-  here would press them twice.
+- **A card is a focus stop, not a button.** `Row` takes an `onCardPress` and
+  Enter clicks the focused card; a Row given no handler is browsable and not
+  pressable. Every Row in the app now passes one, and it opens the Title's page
+  (#17). Enter deliberately leaves a real link, button or field alone — the
+  browser presses those itself, and a second click here would press them twice.
+- **A field owns Enter as it owns the arrow keys.** `pressFocusedItem` reads
+  `document.activeElement`, and Search's field moves focus itself on Enter
+  (#24), so one press used to both leave the field *and* press the card it
+  landed on. That was invisible until #17 gave a card somewhere to go, and it is
+  the second half of the rule a screen taking a key back relies on: take the key
+  *before* this handler, and this handler stays out of a field entirely.
 - **The focus highlight is hand-rolled `:focus-visible`.** That selector is
   Chrome 86, so `input-modality.ts` writes the latest kind of input on the root
   element as `data-input` and `base.css` takes the ring away under
@@ -468,10 +559,9 @@ it is a key.
   itself already lives, so every Row asks the Server for artwork at the same
   width. Search and New on Jellyflick both use it; a new Row should too rather
   than build an image URL of its own.
-- **Opening a result is still #17's.** The strip is browsable and Enter presses
-  the focused card, but there is no title page for it to open yet, so the
-  Playwright spec asserts that Enter leaves Search as it is — the same caveat #7
-  recorded for Home.
+- **Opening a result opens its title page** (#17), which is the same handler
+  every Row on Home passes — `useOpenTitle` in `src/home/home-rows.tsx`, where
+  Home already decided what a card offers.
 
 ## Chromium 68 constraints that will bite
 

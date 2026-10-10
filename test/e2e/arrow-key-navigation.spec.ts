@@ -195,7 +195,9 @@ test.describe('driving Home with the arrow keys', () => {
       await expect.poll(() => scrollLeftOfRow(page)).toBeGreaterThan(0);
     });
 
-    test('a card clicked with the mouse is not given the keyboard’s highlight', async ({ page }) => {
+    test('a card pressed with the mouse is not given the keyboard’s highlight', async ({
+      page,
+    }) => {
       await signInAndLand(page);
       const card = strip(page).getByRole('listitem', { name: ROW[1] });
 
@@ -204,11 +206,20 @@ test.describe('driving Home with the arrow keys', () => {
       await page.keyboard.press('ArrowRight');
       expect((await outlineOf(page, ROW[1])).style).toBe('solid');
 
-      await card.click();
+      // The press, not the whole click: since #17 a completed click opens the
+      // Title's page, and this is about the highlight, not about where a card
+      // goes. `input-modality.ts` listens for `pointerdown`, which is what
+      // makes the ring settle before the click would even land.
+      await card.hover();
+      await page.mouse.down();
 
       await expect.poll(async () => (await outlineOf(page, ROW[1])).style).toBe('none');
       // Still focused, though: only the highlight went away.
       expect(await focused(page)).toBe(ROW[1]);
+
+      // Released away from the card, so no click is completed and Home stays.
+      await page.mouse.move(0, 0);
+      await page.mouse.up();
     });
   });
 
@@ -231,17 +242,15 @@ test.describe('driving Home with the arrow keys', () => {
     expect(outline.colour).toBe(await asRgb(page, accent));
   });
 
-  test('Enter presses the card focus is on', async ({ page }) => {
+  test('Enter presses the card focus is on, which opens its title page', async ({ page }) => {
     await signInAndLand(page);
 
     await strip(page).getByRole('listitem', { name: ROW[0] }).focus();
     await page.keyboard.press('Enter');
 
-    // Pressing a card opens its title page, which is #17's to build, so for now
-    // Enter has nowhere to go and Home must simply stay as it is.
-    await expect(page).toHaveURL(/\/$/);
-    await expect(strip(page)).toBeVisible();
-    expect(await focused(page)).toBe(ROW[0]);
+    // #17 gave Enter somewhere to go: the Title's own address.
+    await expect(page).toHaveURL(/\/title\//);
+    await expect(page.getByRole('heading', { name: ROW[0], level: 1 })).toBeVisible();
   });
 
   /**
