@@ -110,6 +110,31 @@ describe('My List', () => {
     expect(myList.unsaved()).toBe(true);
   });
 
+  it('is not undone by a read that was already on its way', async () => {
+    await setFakeState({ favourites: { 'user-rafael': ['movie-heat'] } });
+    const myList = myListFor('my-list-overtakes');
+    await myList.load();
+
+    // A read in flight — the shell asking the Server again — and a change made
+    // before it comes back. The read was asked before the change, so its answer
+    // is out of date and must not put the Title back.
+    const reading = myList.load();
+    await myList.remove('movie-heat');
+    await reading;
+
+    expect(names(myList)).toEqual([]);
+  });
+
+  it('counts its changes, so whoever draws it can see one it has not drawn yet', async () => {
+    const myList = myListFor('my-list-versions');
+    const first = myList.version();
+
+    await myList.load();
+    await myList.add(PADDINGTON);
+
+    expect(myList.version()).toBe(first + 2);
+  });
+
   it('says the list could not be read when the Server will not say what is in it', async () => {
     await setFakeState({ failFavouriteQueriesWith: 500 });
     const myList = myListFor('my-list-read-fails');

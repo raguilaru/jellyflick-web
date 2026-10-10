@@ -21,12 +21,21 @@ export const MyListProvider = MyListContext.Provider;
 export function useMyList(): MyList {
   const myList = useContext(MyListContext);
   const [, setChanges] = useState(0);
+  const rendered = myList?.version();
 
   useEffect(() => {
     if (myList === undefined) return;
-    return myList.subscribe(() => {
+    const changed = (): void => {
       setChanges((changes) => changes + 1);
-    });
+    };
+    const stop = myList.subscribe(changed);
+    // A subscription can only be made once this has rendered, and a change in
+    // between — a press on a card the moment it appeared — would otherwise
+    // never be drawn. This is the one place that gap is closed.
+    if (myList.version() !== rendered) changed();
+    return stop;
+    // `rendered` is deliberately not a dependency: it is only the number this
+    // render saw, and the subscription covers every change after the first.
   }, [myList]);
 
   if (myList === undefined) {

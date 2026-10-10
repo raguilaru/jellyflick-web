@@ -50,6 +50,13 @@ export type MyList = {
    * itself looks like the app losing track.
    */
   unsaved(): boolean;
+  /**
+   * How many times the list has changed. Whoever is showing it subscribes
+   * *after* it has rendered, so a change made in between — a press on a card
+   * the moment it appeared — would otherwise never be drawn. Comparing this
+   * against the number it rendered with is how that change is caught.
+   */
+  version(): number;
   /** Called whenever the list changes. Returns the undo. */
   subscribe(listener: () => void): () => void;
 };
@@ -57,10 +64,12 @@ export type MyList = {
 export function createMyList(gateway: JellyfinGateway): MyList {
   let state: MyListState = { outcome: 'loading' };
   let unsaved = false;
+  let version = 0;
   const listeners = new Set<() => void>();
 
   function publish(next: MyListState): void {
     state = next;
+    version += 1;
     for (const listener of Array.from(listeners)) listener();
   }
 
@@ -70,13 +79,18 @@ export function createMyList(gateway: JellyfinGateway): MyList {
   }
 
   async function load(): Promise<void> {
+    // A read that is overtaken by a change, or by a later read, is thrown away:
+    // it was asked before the change and would put the Title straight back.
+    const asked = version;
     let items;
     try {
       items = await gateway.getFavouriteItems();
     } catch {
+      if (version !== asked) return;
       publish({ outcome: 'unavailable' });
       return;
     }
+    if (version !== asked) return;
 
     const cards: RowCard[] = [];
     for (const dto of items) {
@@ -115,6 +129,7 @@ export function createMyList(gateway: JellyfinGateway): MyList {
 
   return {
     state: () => state,
+    version: () => version,
     has: (titleId) => (titles() ?? []).some((card) => card.titleId === titleId),
     unsaved: () => unsaved,
     load,
