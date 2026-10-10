@@ -4,10 +4,16 @@ State of the `/implement-spec` run on the integration branch `feat/jellyflick-v1
 (draft PR #38). Update this whenever a wave lands, so a fresh session can pick the work
 up without re-deriving anything.
 
-## START HERE — fourth session, three implementers in flight
+## START HERE — fourth session stopped at 88% of the 5-hour window
 
-The 5-hour window reset, so the run resumed. **#13 landed**, and a wave of three was
-launched on #17, #11 and #8.
+The window had reset, so the run resumed: **#13 and #11 landed**, and a wave of three was
+launched on #17, #11 and #8. The session then stopped at **88%** (weekly 58%) with **#17
+and #8 still in flight**, rather than begin a merge it might not finish — a merge plus the
+integrator's own gate run is 10–15 points, and being stranded mid-merge is the one state
+worth avoiding. **Nothing is half-merged; the branch is green.**
+
+The window resets 2026-10-11 00:40 UTC. **Weekly is now the one to watch**: 58%, and it
+does not reset until 09:00 UTC, so it will bind before the 5-hour window does.
 
 **The integration branch is green.** Tip `acf6fc9`, gate verified on fresh ports
 (see trap 4): `lint` 0, `typecheck` 0, `build` 0, **264 unit tests** in 25 files,
