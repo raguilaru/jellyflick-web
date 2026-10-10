@@ -50,4 +50,15 @@ export const es: Messages = {
   'home.newOnJellyflick': 'Novedades en Jellyflick',
   'home.newOnJellyflick.empty': 'Todavía no se ha añadido nada a tus bibliotecas.',
   'home.newOnJellyflick.unavailable': 'Jellyflick no pudo leer las novedades del servidor.',
+
+  'nav.sections': 'Secciones',
+  'nav.home': 'Inicio',
+  'nav.movies': 'Películas',
+  'nav.series': 'Series',
+  'nav.myList': 'Mi lista',
+  'nav.search': 'Buscar',
+
+  'shell.sectionNotBuiltYet': 'Esta sección todavía no está hecha.',
+  'shell.unknownSectionHeading': 'Aquí no hay nada',
+  'shell.unknownSection': 'No hay nada en esta dirección. Elige una sección para seguir.',
 };

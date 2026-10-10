@@ -16,6 +16,25 @@
  * using it is dropped whole on the target. Write selector lists out instead.
  */
 
+/*
+ * The wordmark's face: Bebas Neue, SIL OFL 1.1, self-hosted so the app works on
+ * a LAN with no internet and asks nothing of a third party. One weight is all
+ * this family has (`public/fonts/bebas-neue-OFL.txt` travels with it), so the
+ * type scale differentiates by size and letter-spacing, never by weight —
+ * a synthesised bold on a condensed face looks wrong.
+ *
+ * `font-display: swap` is Chrome 60, so the fallback shows for the moment the
+ * font takes and is then replaced. Latin only: it is the wordmark's face, and
+ * every other glyph falls through to the stack below.
+ */
+@font-face {
+  font-family: 'Bebas Neue';
+  src: url('/fonts/bebas-neue-latin-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   color-scheme: dark;
 
@@ -41,12 +60,8 @@
 
   --radius: 4px;
 
-  /*
-   * A condensed display face for the wordmark arrives with the logo ticket.
-   * The stack already names condensed fallbacks so the layout does not reflow
-   * when it does.
-   */
-  --font-display: 'Haettenschweiler', 'Arial Narrow', Impact, sans-serif;
+  /* Condensed fallbacks, so the layout barely moves while the face loads. */
+  --font-display: 'Bebas Neue', 'Haettenschweiler', 'Arial Narrow', Impact, sans-serif;
   --font-ui: system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
 }
 
@@ -79,8 +94,8 @@ body {
 }
 
 /*
- * Content from the top rather than stretched down the screen. Home uses it
- * until the app shell and its navigation arrive.
+ * Content from the top rather than stretched down the screen: what a screen
+ * inside the app shell wants, Home and every section placeholder included.
  */
 .screen--top {
   align-content: start;
@@ -358,4 +373,147 @@ textarea:focus,
     outline: 3px solid var(--accent);
     outline-offset: 2px;
   }
+}
+
+/*
+ * The app shell: one navigation bar at a time, chosen in JavaScript from a
+ * media query (`src/shell/layout.ts`), so only the bar in use is in the
+ * document. ADR 0002 bans container queries, and this is a page-level
+ * breakpoint anyway.
+ */
+.shell {
+  min-height: 100vh;
+}
+
+/* Room for the phone's bottom bar, which is fixed and would cover content. */
+.shell--with-bottom-bar {
+  padding-bottom: 72px;
+}
+
+/*
+ * The top bar sits over the Billboard and is transparent until the page moves,
+ * with a gradient so the links stay readable over artwork from the first pixel
+ * (story 62). A gradient rather than `backdrop-filter`, which is Chrome 76.
+ */
+.top-bar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-2) var(--space-4);
+  background-image: linear-gradient(to bottom, rgb(0 0 0 / 70%), rgb(0 0 0 / 0%));
+  transition: background-color 150ms ease-out;
+}
+
+.top-bar--solid {
+  background-color: var(--surface-base);
+  background-image: none;
+  border-bottom: 1px solid var(--surface-line);
+}
+
+.top-bar__wordmark {
+  /* Smaller than the wordmark on the sign-in screens, and never wrapped. */
+  font-size: 30px;
+  line-height: 1.2;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+/* Grid, so `gap` is the Chrome 66 one rather than the Chrome 84 flex one. */
+.top-bar__sections {
+  display: grid;
+  grid-auto-flow: column;
+  justify-content: start;
+  gap: var(--space-4);
+  /* Narrow laptops scroll the sections rather than squashing the wordmark. */
+  overflow-x: auto;
+}
+
+.top-bar__link {
+  padding: var(--space-1) 0;
+  color: var(--text-muted);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.top-bar__link:hover {
+  color: var(--text-strong);
+}
+
+.top-bar__link--current {
+  color: var(--text-strong);
+  font-weight: 600;
+  box-shadow: inset 0 -2px 0 0 var(--accent);
+}
+
+/*
+ * The phone's bottom bar: Home, Search, My List and who is watching, the shape
+ * phone Users already know (story 61). Fixed, because it is the one thing that
+ * must stay reachable however far a Row has been scrolled.
+ */
+.bottom-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  align-items: start;
+  padding: var(--space-2) var(--space-1);
+  background: var(--surface-base);
+  border-top: 1px solid var(--surface-line);
+}
+
+.bottom-bar__link,
+.bottom-bar__user {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: center;
+  text-decoration: none;
+}
+
+.bottom-bar__link--current {
+  color: var(--text-strong);
+  font-weight: 600;
+}
+
+/* A fixed square rather than `aspect-ratio`, which is Chrome 88. */
+.bottom-bar__picture,
+.bottom-bar__initial {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--surface-raised);
+}
+
+.bottom-bar__picture {
+  object-fit: cover;
+}
+
+.bottom-bar__initial {
+  display: grid;
+  align-content: center;
+  justify-content: center;
+  border: 1px solid var(--surface-line);
+  font-family: var(--font-display);
+  font-size: 14px;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.bottom-bar__name {
+  /* A long name must not widen its column and squeeze the links. */
+  max-width: 10ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

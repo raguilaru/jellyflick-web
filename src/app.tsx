@@ -2,11 +2,11 @@ import { useEffect, useMemo, useState } from 'preact/hooks';
 import { connectToServer } from './connect/connect-to-server';
 import { ServerAddressScreen, type ConnectionFailure } from './connect/server-address-screen';
 import type { DeviceLayer } from './device/types';
-import { HomeScreen } from './home/home-screen';
 import { createTranslate, TranslateProvider, type Messages } from './i18n/index';
 import type { RuntimeConfig } from './runtime-config';
-import { createSession, type SignedInUser } from './session/session';
+import { createSession, type Session, type SignedInUser } from './session/session';
 import { SignInScreen } from './session/sign-in-screen';
+import { AppShell } from './shell/app-shell';
 
 /** The application name the Server records for this client. */
 export const CLIENT_NAME = 'Jellyflick';
@@ -37,8 +37,8 @@ type Who =
  * there is a Server, a User already signed in on this device goes straight to
  * Home, and anyone else signs in with a password.
  *
- * The app shell, navigation and Home's own content are later tickets, so Home
- * is a placeholder that shows whose it is.
+ * A signed-in User gets the app shell, which owns the look, the navigation and
+ * every section's address from then on.
  */
 export function App({ config, device, messages }: AppProps) {
   const [address, setAddress] = useState(config.presetServerAddress ?? '');
@@ -122,7 +122,12 @@ export function App({ config, device, messages }: AppProps) {
           }}
         />
       ) : who.state === 'signed-in' ? (
-        <HomeScreen user={who.user} session={session} />
+<AppShell
+          user={who.user}
+          session={session}
+          device={device}
+          {...pictureOf(who.user, session)}
+        />
       ) : who.state === 'resuming' ? null : (
         <SignInScreen
           session={session}
@@ -135,4 +140,14 @@ export function App({ config, device, messages }: AppProps) {
       )}
     </TranslateProvider>
   );
+}
+
+/**
+ * The signed-in User's picture, for the bottom bar. `/UserImage` is anonymous
+ * on the Server, so the URL is all the browser needs; a User with no picture
+ * has no tag, and the bar shows their initial instead.
+ */
+function pictureOf(user: SignedInUser, session: Session): { pictureUrl?: string } {
+  if (user.primaryImageTag === undefined) return {};
+  return { pictureUrl: session.gateway().userImageUrl(user.userId, user.primaryImageTag) };
 }

@@ -6,8 +6,10 @@ A map of the code, for whoever picks up the next ticket. Vocabulary is
 ## Directory layout
 
 ```
-index.html              Loads /config.js (classic, blocking) then src/main.tsx.
+index.html              Loads /config.js (classic, blocking) then src/main.tsx,
+                        and preloads the wordmark's font.
 public/config.js        Runtime config placeholder. The container overwrites it.
+public/fonts/           Bebas Neue, self-hosted, with its OFL licence beside it.
 scripts/build.mjs       vite build, plus the TOLERATED_TRANSFORM guard.
 Dockerfile              The multi-stage image. See "The container" below.
 deploy/                 entrypoint.sh and the example OMV8 compose file.
@@ -34,6 +36,10 @@ src/
   jellyfin/             The gateway: the only module that talks HTTP to the Server.
   session/              Session & Users: the Server address and the signed-in
                         Users in device storage, plus the sign-in screen.
+  shell/                The app once a User is signed in: `sections.ts` is the
+                        one list of sections and their addresses, `app-shell.tsx`
+                        the routes and which bar is shown, `back.ts` the single
+                        Back handler, `layout.ts` the one breakpoint.
 test/
   setup.ts              Vitest: unmounts components after each test.
   unit/                 Vitest specs. One file per behaviour, not per source file.
@@ -140,6 +146,39 @@ Formatting goes through `Intl.NumberFormat`, `Intl.DateTimeFormat` and
 `Intl.PluralRules`, which are native on the target. `Intl.RelativeTimeFormat`
 (71), `Intl.ListFormat` (72) and `Intl.Locale` (74) are **not** — write the three
 lines by hand instead of adding a polyfill.
+
+## The shell: sections, routing and Back
+
+`src/shell/` owns everything around a screen, and nothing inside one.
+
+- **A section's address** lives once, in `SECTIONS` in `src/shell/sections.ts`,
+  with the key of its translated name. Both navigation bars and the router read
+  that list, so adding a section is one entry plus one route.
+- **Taking a section over** (Movies and Series are #7, My List #8, Search #9)
+  means pointing its `<Route>` in `src/shell/app-shell.tsx` at your own folder
+  under `src/` instead of `SectionPlaceholder`, and nothing else.
+- **The router is `preact-iso`**, imported as `preact-iso/router`, never the
+  barrel, which pulls in `preact-render-to-string`. It pushes real history
+  entries, so a section can be bookmarked, shared and reloaded — which is why
+  the container answers an unknown path with `index.html` and a 200. Note that
+  it calls `scrollTo(0, 0)` on a push: a Row that restores its scroll position
+  will have to work around that.
+- **One navigation bar is in the document at a time** — the top bar above 768px,
+  the bottom bar below it — chosen in JavaScript in `src/shell/layout.ts`, so
+  there is never a second copy of every link for a screen reader or a test to
+  find. ADR 0002 bans container queries; this is a page-level breakpoint anyway.
+- **Back is one handler**, `src/shell/back.ts`. The Back key — a remote's, or
+  `Escape` — does nothing of its own: it calls `history.back()`, which is the
+  browser's back button, so the two cannot drift apart. The entry the app was
+  opened on is marked in `history.state`, which is how Back knows not to leave
+  Jellyflick from Home, and to go to Home from a section that was opened
+  directly. A screen that needs Back to mean something else (the player, an
+  overlay) should extend that module rather than add a second listener.
+- **The wordmark** is flat on purpose: upright condensed capitals, no curve.
+  Bebas Neue has one weight only, so distinguish type by size and letter
+  spacing, never by weight — browsers synthesise a bold that looks wrong on it.
+  The licence has to travel with the file, so `public/fonts/bebas-neue-OFL.txt`
+  ships with the app and the family still wants crediting on an about screen.
 
 ## Chromium 68 constraints that will bite
 

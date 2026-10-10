@@ -12,7 +12,8 @@ export type HomeScreenProps = {
 /**
  * Where a signed-in User lands: the New on Jellyflick Row, and for now nothing
  * above it. The Billboard, the other Rows and the Home Layout are each their
- * own ticket, and so are the app shell and the navigation around this screen.
+ * own ticket. The wordmark and the navigation around this screen are the
+ * shell's.
  */
 export function HomeScreen({ user, session }: HomeScreenProps) {
   const t = useTranslate();
@@ -38,7 +39,6 @@ export function HomeScreen({ user, session }: HomeScreenProps) {
 
   return (
     <main class="screen screen--top">
-      <h1 class="wordmark">{t('app.name')}</h1>
       <p class="notice">{t('home.signedInAs', { name: user.name })}</p>
 
       {newOnJellyflick === undefined ? (

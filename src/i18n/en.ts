@@ -54,6 +54,17 @@ export const en = {
   'home.newOnJellyflick': 'New on Jellyflick',
   'home.newOnJellyflick.empty': 'Nothing has been added to your libraries yet.',
   'home.newOnJellyflick.unavailable': 'Jellyflick could not read what is new from the Server.',
+
+  'nav.sections': 'Sections',
+  'nav.home': 'Home',
+  'nav.movies': 'Movies',
+  'nav.series': 'Series',
+  'nav.myList': 'My List',
+  'nav.search': 'Search',
+
+  'shell.sectionNotBuiltYet': 'This section is not built yet.',
+  'shell.unknownSectionHeading': 'Nothing here',
+  'shell.unknownSection': 'There is nothing at this address. Pick a section to carry on.',
 } as const;
 
 /**
