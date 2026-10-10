@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'preact/hooks';
+import { useCallback, useEffect, useRef } from 'preact/hooks';
 import { useLocation } from 'preact-iso/router';
 import type { DeviceLayer } from '../device/types';
 import { HOME_PATH } from './sections';
@@ -40,6 +40,12 @@ export function useBackHandler(device: DeviceLayer): void {
     if (path !== HOME_PATH) route(HOME_PATH, true);
   }, [path, route]);
 
+  // The listener goes on once and stays on. Re-registering it whenever the
+  // section changes would leave a frame with no listener at all, and a Back
+  // pressed in that frame would be lost.
+  const handler = useRef(goBack);
+  handler.current = goBack;
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (device.keyFor(event) !== 'Back') return;
@@ -47,13 +53,13 @@ export function useBackHandler(device: DeviceLayer): void {
       // the field has to win: Search is a field a User types into.
       if (isTyping(event.target)) return;
       event.preventDefault();
-      goBack();
+      handler.current();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => {
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [device, goBack]);
+  }, [device]);
 }
 
 function isOnRootEntry(): boolean {
