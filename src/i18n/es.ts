@@ -44,4 +44,10 @@ export const es: Messages = {
     'Jellyflick no pudo leer la lista de usuarios del servidor. Escribe tu nombre de usuario para iniciar sesión.',
 
   'home.signedInAs': (p) => `Sesión iniciada como ${p.name}.`,
+  'home.rowLoading': 'Buscando títulos…',
+
+  // El nombre de la fila es el nombre de la aplicación, así que no se traduce.
+  'home.newOnJellyflick': 'Novedades en Jellyflick',
+  'home.newOnJellyflick.empty': 'Todavía no se ha añadido nada a tus bibliotecas.',
+  'home.newOnJellyflick.unavailable': 'Jellyflick no pudo leer las novedades del servidor.',
 };

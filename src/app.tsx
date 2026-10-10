@@ -122,7 +122,7 @@ export function App({ config, device, messages }: AppProps) {
           }}
         />
       ) : who.state === 'signed-in' ? (
-        <HomeScreen user={who.user} />
+        <HomeScreen user={who.user} session={session} />
       ) : who.state === 'resuming' ? null : (
         <SignInScreen
           session={session}

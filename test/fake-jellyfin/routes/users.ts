@@ -90,7 +90,11 @@ function authenticationResultFor(user: FakeUser, headers: Record<string, string>
   };
 }
 
-function userForToken(authorization: string, users: readonly FakeUser[]): FakeUser | undefined {
+/** The user a request's token belongs to, or `undefined` for no usable token. */
+export function userForToken(
+  authorization: string,
+  users: readonly FakeUser[],
+): FakeUser | undefined {
   const token = valueFromAuthorization(authorization, 'Token');
   if (token === undefined) return undefined;
   return users.find((user) => token.startsWith(`token-${user.Id}-`));

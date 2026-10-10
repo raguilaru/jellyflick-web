@@ -35,15 +35,62 @@ export type FakeUser = {
   password: string;
 };
 
+/**
+ * A library on the Server, as `GET /UserViews` serves it. `CollectionType` is
+ * what tells a client whether a library holds Titles at all: Jellyfin's own
+ * values are `movies`, `tvshows`, `music`, `books`, `photos` and friends, and it
+ * is absent on a library of mixed content.
+ */
+export type FakeLibrary = {
+  Id: string;
+  Name: string;
+  Type: 'CollectionFolder';
+  CollectionType?: string;
+};
+
+/**
+ * One item in a library: a Movie, a Series, a Season, an Episode, or one of the
+ * kinds the app does not show. `BaseItemDto`-shaped, with the library it belongs
+ * to kept alongside it — the real Server answers per library through `parentId`
+ * rather than returning the id on the item, so it is stripped before serving.
+ */
+export type FakeItem = {
+  Id: string;
+  Name: string;
+  /** A `BaseItemKind`: `Movie`, `Series`, `Season`, `Episode`, `Video`, … */
+  Type: string;
+  DateCreated: string;
+  /** Keyed by `ImageType`. Omitted entirely when the item has no image at all. */
+  ImageTags?: Record<string, string>;
+  /** Set on a Season and an Episode: which Series it belongs to. */
+  SeriesId?: string;
+  SeriesName?: string;
+  SeriesPrimaryImageTag?: string;
+  /** The Season's number on a Season, the Episode's number on an Episode. */
+  IndexNumber?: number;
+  /** The Season's number, on an Episode. */
+  ParentIndexNumber?: number;
+  /** The fake's own field: which library serves this item. */
+  libraryId: string;
+};
+
 export type FakeJellyfinState = {
   systemInfo: FakeSystemInfo;
   users: FakeUser[];
+  libraries: FakeLibrary[];
+  items: FakeItem[];
   /**
    * A status `AuthenticateByName` answers with whatever the credentials are, so
    * a test can see what a Server that is having a bad day looks like. Null is
    * the normal Server.
    */
   failAuthenticationWith: number | null;
+  /**
+   * A status the library endpoints — `/UserViews` and `/Items/Latest` — answer
+   * with whatever was asked, so a test can see what Home looks like when the
+   * Server will not say what it holds. Null is the normal Server.
+   */
+  failLibraryQueriesWith: number | null;
 };
 
 const SERVER_ID = '0f1e2d3c4b5a69788796a5b4c3d2e1f0';
@@ -51,6 +98,9 @@ const SERVER_ID = '0f1e2d3c4b5a69788796a5b4c3d2e1f0';
 export function createSampleData(): FakeJellyfinState {
   return {
     failAuthenticationWith: null,
+    failLibraryQueriesWith: null,
+    libraries: SAMPLE_LIBRARIES.map((library) => ({ ...library })),
+    items: SAMPLE_ITEMS.map((item) => ({ ...item })),
     users: [
       fakeUser({ Id: 'user-rafael', Name: 'Rafael', PrimaryImageTag: 'tag-rafael' }),
       fakeUser({ Id: 'user-marina', Name: 'Marina', PrimaryImageTag: 'tag-marina' }),
@@ -72,6 +122,172 @@ export function createSampleData(): FakeJellyfinState {
 
 /** The password every sample user has, unless a test patches one. */
 export const SAMPLE_PASSWORD = 'correct horse';
+
+/**
+ * Four libraries, so a client has to merge several and skip the ones that hold
+ * no Titles: two of Movies, one of Series, and one of music.
+ */
+const SAMPLE_LIBRARIES: readonly FakeLibrary[] = [
+  { Id: 'lib-movies', Name: 'Movies', Type: 'CollectionFolder', CollectionType: 'movies' },
+  { Id: 'lib-kids', Name: 'Kids', Type: 'CollectionFolder', CollectionType: 'movies' },
+  { Id: 'lib-series', Name: 'Series', Type: 'CollectionFolder', CollectionType: 'tvshows' },
+  { Id: 'lib-music', Name: 'Music', Type: 'CollectionFolder', CollectionType: 'music' },
+];
+
+/**
+ * The sample library, dated so that the newest additions interleave across
+ * libraries and two Episodes of one Series are the newest of all. Newest first,
+ * and the order a client should end up with is:
+ *
+ *   Bluey, Severance, Paddington, Arrival, Heat, The Unfinished
+ *
+ * which is every Movie and Series, each Series once, with the music library and
+ * the stray Video left out.
+ */
+const SAMPLE_ITEMS: readonly FakeItem[] = [
+  // Never seen by a client that skips libraries holding no Titles, even though
+  // it is the newest addition on the whole Server.
+  {
+    Id: 'album-nocturnes',
+    Name: 'Nocturnes',
+    Type: 'MusicAlbum',
+    DateCreated: '2026-06-18T09:00:00Z',
+    ImageTags: { Primary: 'tag-nocturnes' },
+    libraryId: 'lib-music',
+  },
+
+  // Two Episodes of one Series, added an hour apart: the Series is shown once,
+  // in the place of the newer of them.
+  {
+    Id: 'episode-bluey-s2e3',
+    Name: 'Sleepytime',
+    Type: 'Episode',
+    DateCreated: '2026-06-14T20:00:00Z',
+    SeriesId: 'series-bluey',
+    SeriesName: 'Bluey',
+    SeriesPrimaryImageTag: 'tag-bluey',
+    ParentIndexNumber: 2,
+    IndexNumber: 3,
+    libraryId: 'lib-kids',
+  },
+  {
+    Id: 'episode-bluey-s2e2',
+    Name: 'The Pool',
+    Type: 'Episode',
+    DateCreated: '2026-06-14T19:00:00Z',
+    SeriesId: 'series-bluey',
+    SeriesName: 'Bluey',
+    SeriesPrimaryImageTag: 'tag-bluey',
+    ParentIndexNumber: 2,
+    IndexNumber: 2,
+    libraryId: 'lib-kids',
+  },
+  {
+    Id: 'episode-severance-s2e4',
+    Name: 'Woe’s Hollow',
+    Type: 'Episode',
+    DateCreated: '2026-06-13T18:00:00Z',
+    SeriesId: 'series-severance',
+    SeriesName: 'Severance',
+    SeriesPrimaryImageTag: 'tag-severance',
+    ParentIndexNumber: 2,
+    IndexNumber: 4,
+    libraryId: 'lib-series',
+  },
+  {
+    Id: 'movie-paddington',
+    Name: 'Paddington',
+    Type: 'Movie',
+    DateCreated: '2026-06-12T09:00:00Z',
+    ImageTags: { Primary: 'tag-paddington' },
+    libraryId: 'lib-kids',
+  },
+  // Older than Arrival, so Severance's place in a Row comes from the Episode
+  // above and not from this one.
+  {
+    Id: 'episode-severance-s2e3',
+    Name: 'Who Is Alive?',
+    Type: 'Episode',
+    DateCreated: '2026-06-11T08:00:00Z',
+    SeriesId: 'series-severance',
+    SeriesName: 'Severance',
+    SeriesPrimaryImageTag: 'tag-severance',
+    ParentIndexNumber: 2,
+    IndexNumber: 3,
+    libraryId: 'lib-series',
+  },
+  {
+    Id: 'movie-arrival',
+    Name: 'Arrival',
+    Type: 'Movie',
+    DateCreated: '2026-06-10T09:00:00Z',
+    ImageTags: { Primary: 'tag-arrival' },
+    libraryId: 'lib-movies',
+  },
+  // A stray video file in a Movies library. Jellyfin really does serve these,
+  // and they are not a Title, so no client should show it.
+  {
+    Id: 'video-holiday',
+    Name: 'Holiday 2019',
+    Type: 'Video',
+    DateCreated: '2026-06-05T09:00:00Z',
+    libraryId: 'lib-movies',
+  },
+  {
+    Id: 'movie-heat',
+    Name: 'Heat',
+    Type: 'Movie',
+    DateCreated: '2026-06-01T09:00:00Z',
+    ImageTags: { Primary: 'tag-heat' },
+    libraryId: 'lib-movies',
+  },
+  // No images at all, so a card has to cope without artwork.
+  {
+    Id: 'movie-unfinished',
+    Name: 'The Unfinished',
+    Type: 'Movie',
+    DateCreated: '2026-05-20T09:00:00Z',
+    libraryId: 'lib-movies',
+  },
+
+  // The Series themselves. `/Items/Latest` answers with the newest Episodes
+  // rather than these, but they hold the artwork their Episodes point at, and a
+  // Season sits between the two.
+  {
+    Id: 'series-bluey',
+    Name: 'Bluey',
+    Type: 'Series',
+    DateCreated: '2026-01-05T09:00:00Z',
+    ImageTags: { Primary: 'tag-bluey' },
+    libraryId: 'lib-kids',
+  },
+  {
+    Id: 'series-severance',
+    Name: 'Severance',
+    Type: 'Series',
+    DateCreated: '2026-02-01T09:00:00Z',
+    ImageTags: { Primary: 'tag-severance' },
+    libraryId: 'lib-series',
+  },
+  {
+    Id: 'season-severance-s2',
+    Name: 'Season 2',
+    Type: 'Season',
+    DateCreated: '2026-06-09T07:00:00Z',
+    SeriesId: 'series-severance',
+    SeriesName: 'Severance',
+    SeriesPrimaryImageTag: 'tag-severance',
+    IndexNumber: 2,
+    libraryId: 'lib-series',
+  },
+];
+
+/** An item as the Server serves it: the fake's own `libraryId` is not a field. */
+export function servedViewOf(item: FakeItem): Omit<FakeItem, 'libraryId'> {
+  const dto: Record<string, unknown> = { ...item };
+  delete dto.libraryId;
+  return dto as Omit<FakeItem, 'libraryId'>;
+}
 
 function fakeUser(
   user: Pick<FakeUser, 'Id' | 'Name'> & {
