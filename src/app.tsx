@@ -3,6 +3,8 @@ import { connectToServer } from './connect/connect-to-server';
 import { ServerAddressScreen, type ConnectionFailure } from './connect/server-address-screen';
 import type { DeviceLayer } from './device/types';
 import { createTranslate, TranslateProvider, type Messages } from './i18n/index';
+import { useInputModality } from './navigation/input-modality';
+import { useSpatialNavigation } from './navigation/spatial-navigation';
 import type { RuntimeConfig } from './runtime-config';
 import { createSession, type Session, type SignedInUser } from './session/session';
 import { SignInScreen } from './session/sign-in-screen';
@@ -46,6 +48,13 @@ export function App({ config, device, messages }: AppProps) {
     config.presetServerAddress === undefined ? { status: 'asking' } : { status: 'connecting' },
   );
   const [who, setWho] = useState<Who>({ state: 'resuming' });
+
+  // Every screen is driveable by arrows, Enter and Back (story 64), so the
+  // arrow keys are installed here rather than in the shell: signing in comes
+  // before the shell and has to work on a remote too. Back is the shell's,
+  // because it is the browser's back button as much as it is a key.
+  useSpatialNavigation(device);
+  useInputModality();
 
   // One session per app: it owns the stored Users, so a second one would be a
   // second opinion about who is signed in.
