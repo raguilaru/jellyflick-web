@@ -46,7 +46,9 @@ test('a preset Server address set on the container reaches the browser', async (
 
   await page.goto(container.url);
 
-  await expect(page.getByText('Connected to Fake Jellyfin.')).toBeVisible();
+  // The preset address connects on its own, so the app goes straight to asking
+  // who is watching and never asks for an address.
+  await expect(page.getByRole('heading', { name: 'Choose your User' })).toBeVisible();
   await expect(page.getByLabel('Server address')).toHaveCount(0);
 });
 
@@ -60,7 +62,7 @@ test('an empty Server address setting still serves a working app', async ({ page
 
   await address.fill(FAKE_JELLYFIN_URL);
   await address.press('Enter');
-  await expect(page.getByText('Connected to Fake Jellyfin.')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Choose your User' })).toBeVisible();
 });
 
 test('a deep link answers with the app rather than a 404, so a reload works', async ({ page }) => {
@@ -69,7 +71,7 @@ test('a deep link answers with the app rather than a 404, so a reload works', as
   const response = await page.goto(`${container.url}/title/abc`);
 
   expect(response?.status()).toBe(200);
-  await expect(page.getByText('Connected to Fake Jellyfin.')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Choose your User' })).toBeVisible();
 });
 
 test('the MDBList key is nowhere the browser can read it', async ({ page }) => {
