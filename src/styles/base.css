@@ -93,15 +93,6 @@ body {
   padding: var(--space-4);
 }
 
-/*
- * Content from the top rather than stretched down the screen: what a screen
- * inside the app shell wants, Home and every section placeholder included.
- */
-.screen--top {
-  align-content: start;
-  gap: var(--space-4);
-}
-
 .screen--centred {
   align-content: center;
   justify-items: center;
@@ -384,6 +375,16 @@ html[data-input='pointer'] [tabindex]:focus {
  */
 .shell {
   min-height: 100vh;
+}
+
+/*
+ * A screen inside the shell runs from the top rather than being stretched down
+ * the viewport, which is what Home and every section wants. It is the shell's
+ * doing rather than each screen's, so no screen has to remember to ask.
+ */
+.shell .screen {
+  align-content: start;
+  gap: var(--space-4);
 }
 
 /* Room for the phone's bottom bar, which is fixed and would cover content. */
