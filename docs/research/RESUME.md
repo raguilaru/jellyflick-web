@@ -4,74 +4,73 @@ State of the `/implement-spec` run on the integration branch `feat/jellyflick-v1
 (draft PR #38). Update this whenever a wave lands, so a fresh session can pick the work
 up without re-deriving anything.
 
-## START HERE — paused at the spending limit; #25 and #9 are DONE but unmerged
+## START HERE — nothing is in flight; the whole frontier is open
 
-The fifth session merged #17, #8 and #35, then launched #25 and #9 — **both of which
-finished, gated themselves green and pushed.** It stopped before merging them because the
-5-hour window reached **95%**, past the 94% the host asked not to cross mid-ticket.
+The sixth session merged **#25 and #9**, the two branches the fifth had finished but could
+not land. **Every ticket the task graph had reached is now merged and closed, nothing is
+half-merged, and no implementer is running.**
 
-**Nothing is at risk and nothing is half-merged.** Both branches are on the remote with
-clean worktrees, and both report a gate run over their own current tip.
+Integration tip **`7498792`**, pushed, draft PR #38 open (still draft). Gate verified on
+fresh ports `4263/8863`, each step's own exit code: `lint` 0, `typecheck` 0, `build` 0,
+**415 unit tests** in 38 files, **306 Playwright tests (286 passed, 20 skipped, 0 failed)**,
+main JS **106.57 kB / 33.32 kB gz**, a 10.99 kB / 3.80 kB gz Spanish chunk,
+11.73 kB / 2.81 kB gz CSS, and **hls.js in its own lazy 584.35 kB / 181.54 kB gz chunk that
+only a transcode fetches**.
 
-Integration tip **`5955b9c`**, pushed, draft PR #38 open (still draft, CI green). Gate on
-that tip: `lint` 0, `typecheck` 0, `build` 0, **341 unit tests** in 31 files, **279
-Playwright tests (259 passed, 20 skipped, 0 failed)**, **92.00 kB / 29.03 kB gz**.
+### Run `npm ci` in your worktree before anything else
 
-### The two finished branches — merge these first
+**#25 added the project's first runtime dependency (`hls.js`).** Any worktree whose
+`node_modules` predates `35ca1f1` will fail `typecheck`, `test` **and** `build` — #9's merge
+showed **14 failing test files** from this one cause. The integration worktree has been
+reinstalled; a fresh one has not. This is trap 3 and it now has teeth it did not have before.
 
-| Ticket | Branch | Tip | Based on | State |
-|---|---|---|---|---|
-| #25 Play and report progress | `origin/ticket/25-play-and-report-progress` | `4a67810` | `bd3faac` | **complete, all six boxes, gated post-merge** |
-| #9 Quick Connect sign-in | `origin/ticket/9-quick-connect` | `f913583` | `bd3faac` | **complete, all five boxes, gated post-merge** |
+### The frontier — eleven open and unblocked, nothing taken
 
-Their self-reported gates, **not yet independently re-run** (the integrator always re-runs;
-this is the one thing this session could not afford to do):
+| Ticket | Note |
+|---|---|
+| #26 Player controls | **the deepest chain**: gates #27 → #28 → #29/#30, plus #31, #32. #25 left it a minimum honest player |
+| #12 Continue Watching | adds a Row via #10's registry; **#25's `state.playbackPositions` is what makes it real** |
+| #15 More Row types | `HomeRow.parameter` is already round-tripped unread for its genre/Collection Rows |
+| #16 Billboard with Spotlight | the natural place for the leftover "Signed in as Rafael." line to disappear |
+| #14 Title Labels | touches `cardForTitle` in `src/home/row.tsx`, which #13 and #17 also touch |
+| #18 Series on the title page | touches `src/title/title-screen.tsx` |
+| #19 Trailers and Download File | touches `src/title/title-screen.tsx` |
+| #20 MDBList ratings | touches `src/title/title-screen.tsx`; **ADR 0004 forbids the key reaching the browser** |
+| #21 Desktop hover cards | takes `Row`'s `cardControl` render prop from #13; #8's "a Row is a line" was made for it |
+| #33 Cast | `decisions.md` §8 says it must read `user.Configuration.CastReceiverId` at runtime — #35 made the fake serve that |
+| #34 Play On | — |
 
-- **#25**: 377 unit tests in 35 files, 262 passed / 20 skipped / 0 failed, main JS
-  **94.83 kB / 30.60 kB gz**, plus a **new lazy `hls-*.js` chunk, 584.35 kB / 181.54 kB gz**,
-  fetched only when a transcode must be played — an e2e test fails if a direct play fetches it.
-- **#9**: 351 unit tests in 32 files, 259 passed / 20 skipped / 0 failed, JS
-  **90.58 kB / 28.95 kB gz**.
+**Conflict groups — do not launch two from the same group:**
+- **`src/home/home-rows.tsx` and the Row registry**: #12, #15, #16. Two at most.
+- **`src/title/title-screen.tsx`**: #18, #19, #20, #21. **One at a time**, and #25 has just
+  changed that file (it wired Play and gave `TitleScreen` a `device` prop).
+- **The player**: #26 alone owns `src/playback/`.
 
-**Both branched from `bd3faac`, which is before #35 merged at `5955b9c`.** So neither has
-seen #35, and **#25 and #9 have not seen each other either.** Expect conflicts in
-`src/shell/app-shell.tsx` (#35 added `PlaybackPreferencesProvider`; #25 added the player
-overlay and a `device` prop on `TitleScreen`; #9 added its sign-in route), both `src/i18n/`
-dictionaries, `src/jellyfin/gateway.ts`, `test/fake-jellyfin/routes/index.ts` and
-`docs/architecture.md`. #25 also raises `chunkSizeWarningLimit` in `vite.config.ts`.
-
-**Resolve on the ticket branch, not in the integration worktree** — that is what made this
-session's merges provably equivalent to an already-gated tree. Then re-gate: this session
-learned twice that **a clean textual merge is not a compiling merge.**
+#26 plus one Home ticket plus one title-page ticket is the clean shape for a wave of three.
 
 ### Do these, in this order
 
-1. **Check both limits first.** The 5-hour window resets 2026-10-11 06:00 UTC; the weekly
-   was 71% and resets 09:00 UTC. **Budget roughly 10 points of a 5-hour window per merge**
-   with conflicts and a full gate.
-2. **Merge #25, then #9** — #25 first, because it is the head of the deepest chain and #9
-   touches less. Close each ticket as part of merging it (trap 1).
-3. **Then `code-review` over the whole branch**, which is owed and has never run.
-4. **Then the git history rewrite** in `decisions.md` §10 — **no implementer may be in
-   flight, and none is right now.** The host must then ask GitHub Support to purge the stale
-   objects.
-5. **Then mark PR #38 ready**, and remove the three remaining worktrees.
+1. **Check both limits.** A wave of three implementers costs **most of a 5-hour window** —
+   see the corrected figures below. Hold back the integrator's own merge and gate budget.
+2. **`code-review` over the whole branch** — owed since the beginning and **still never
+   run.** Worth doing *before* the next wave, while nothing is in flight and the branch is
+   a coherent whole: eleven tickets have landed since anyone looked at it end to end.
+3. **The git history rewrite** in `decisions.md` §10 — **no implementer is in flight, so
+   this is the moment.** The host must then ask GitHub Support to purge the stale objects.
+4. Then launch the next wave, and merge each branch as it reports.
+5. **Mark PR #38 ready** when the tickets are done.
 
-**Do not launch another wave until #25 and #9 are merged.** Everything still open touches
-what they changed: #18, #19, #20 and #21 all edit `src/title/title-screen.tsx`, which #25
-has just changed; #26 is behind #25 entirely.
+### What a wave of three actually cost — the earlier estimate was wrong
 
-### What a wave of three actually cost — correct the earlier estimate
+The old "25–30 points of the 5-hour window" figure was for a wave of three. **It is wrong.**
+Measured over the fifth session: 5% at the start, 17% after merging two paused branches and
+launching three, then **95% once those three had run.** The subagents reported 211k, 318k and
+251k tokens — **780k between them.**
 
-**The "25–30 points of the 5-hour window" figure below is wrong for three implementers that
-all do substantial work.** Measured this session: 5% at the start, 17% after merging two
-paused branches and launching three, then **95% once those three had run.** The three
-subagents reported 211k, 318k and 251k tokens — **780k between them.**
-
-So: **a wave of three costs most of a 5-hour window on its own.** Launch three only on a
-fresh window with nothing else planned; otherwise two, and keep the integrator's own merge
-and gate budget in reserve, because that is what turns a finished branch into a landed one.
-Recovering a paused branch is about half the cost of implementing one.
+So: **three implementers cost most of a 5-hour window on their own.** Launch three only on a
+fresh window with nothing else planned; otherwise two. **Recovering a finished-but-unmerged
+branch is cheap** — the sixth session landed both of the fifth's leftovers, including two
+real conflict resolutions and two full gates, for well under a quarter of a window.
 
 ### A design call made during #8's merge that a human may want to revisit
 
@@ -81,25 +80,38 @@ by no test — **and the User Picker now carries the link to the settings screen
 User can still get there. The bar stays at the four items story 61 asks for.
 
 Nothing in the spec or `decisions.md` says where a phone reaches settings from. Both answers
-are defensible and this one is reversible. The full reasoning is in the closing comment on
-#8. It is the only place in this run where a user-facing design question was settled by the
-integrator rather than by a ticket.
+are defensible and this one is reversible. Full reasoning in #8's closing comment. It is the
+only place in this run where a user-facing design question was settled by the integrator
+rather than by a ticket.
 
-### Three more things a human may want to look at
+### Four more things a human may want to look at
 
-- **`decisions.md` §11 is new** (#9): the Server **cannot tell an expired Quick Connect code
-  from a withdrawn one** — `GET /QuickConnect/Connect` answers 404 identically for expired,
-  denied and already-spent, and Jellyfin has no deny endpoint. So one message offers both
-  readings. The box asked for clear messages for expiry *and* denial; this is as clear as the
-  Server permits, and claiming to distinguish them would be a lie.
-- **The player is deliberately the minimum honest player** (#25): picture, play/pause, close,
-  reports. No seek bar, times, auto-hide or retry, because those are #26's boxes — **so it
-  will look unfinished on screen until #26 lands.**
-- **The fake has no transcoder**, so `master.m3u8` answers **501 with a message saying why**,
-  and the transcode *decision* is asserted from `PlaybackInfo` in unit tests instead. Whoever
-  needs a browser to really play a transcode (#26's error paths, #27's HLS subtitles) owns
-  growing a playlist in `test/fake-jellyfin/routes/videos.ts`. #25 flagged this itself rather
-  than hiding it.
+- **The player looks unfinished on purpose.** #25 is the minimum honest player — picture,
+  play/pause, close, reports — because a seek bar, times, auto-hide and retry are **#26's**
+  acceptance criteria. Nothing is wrong with it; #26 finishes it.
+- **`decisions.md` §11** (#9): Jellyfin **cannot tell an expired Quick Connect code from a
+  withdrawn one** — `GET /QuickConnect/Connect` answers 404 identically for expired, denied
+  and already-spent, and there is no deny endpoint. One message offers both readings, because
+  claiming to distinguish them would be a lie.
+- **#35's "changes take effect on the next playback" is ticked on the mechanism only.** The
+  choice provably lands in the Server's own `UserConfiguration`; **#27 owes the actual read
+  at playback start**, and `usePlaybackPreferences()` is waiting for it.
+- **The main bundle crossed 100 kB raw at #25** and is now 106.57 kB. The lightness
+  constraint is about what reaches a TV, and the thing protecting it is a **negative e2e test
+  that fails if a direct play fetches hls.js**. Do not let that rot.
+
+### The fake's two deliberate gaps
+
+- **No transcoder.** `master.m3u8` answers **501 with a message saying why**, and the
+  transcode *decision* is asserted from `PlaybackInfo` in unit tests instead. Whoever needs a
+  browser to really play a transcode — **#26's error paths, #27's HLS subtitles** — owns
+  growing a playlist in `test/fake-jellyfin/routes/videos.ts`.
+- **It serves real bytes, but only one file.** `test/fake-jellyfin/media/test-video.webm`,
+  6 s of VP9/WebM, ~11 kB, committed, drawn by `node scripts/make-test-video.mjs`. **VP9
+  because plain Chromium ships no H.264 decoder.** `FakeItem.media` is what the Server
+  *claims* a file is — everything the negotiation reads — while the bytes are always that one
+  video. Arrival direct-plays; Heat is 4K HEVC so it cannot; Paddington's only problem is its
+  height; The Unfinished has no file at all.
 
 ### A process fix owed before the next implementer is launched
 
@@ -109,35 +121,36 @@ Every brief in this run has told implementers to "drive the `tdd` skill", so eit
 exposure or **tell them to read the file directly**. Worth checking whether earlier
 implementers silently did neither.
 
-### Two merges' worth of lessons from this session
+### Five merges' worth of lessons — read before merging anything
 
-- **A clean textual merge is not a compiling merge.** #8 changed `userForToken` to take the
-  fake's state rather than `state.users`; #17 added three routes that called it the old way.
-  Both branches type-checked green alone, git merged both without a conflict, and the result
-  did not compile. **Gate every merge; never trust a conflict-free merge.**
+- **A clean textual merge is not a compiling merge.** This happened twice. #8 changed
+  `userForToken` to take the fake's state and #17 added callers of the old shape; both
+  branches were green alone, git merged them without a conflict, and the result did not
+  compile. **Gate every merge.**
+- **Failing suites can mean one missing dependency.** #9's merge failed `typecheck`, `test`
+  and `build` with 14 failing test files, entirely because `hls.js` was not installed. Check
+  `git diff <prev-tip> <new-tip> -- package.json` against the **working tree**, not `HEAD`,
+  before concluding a merge broke something — an uncommitted merge leaves `HEAD` behind.
 - **A merge can change timing enough to break an honest test.** #8's "nothing after the
-  switch carries the last User's token" went red because #11's extra startup work meant a
-  request the previous User legitimately started was still in flight when the request log
-  was cleared. The fix was to wait for the fake to go quiet on both sides of the switch —
-  **a false alarm, not a leak.** Suspect this shape before suspecting a regression.
-- **Proving a gate carries beats re-running it.** All three of this session's merges landed
-  trees byte-identical to trees already gated on the ticket branches
-  (`git diff --stat <gated> HEAD`), so the gate carried without a second full run. Resolve
-  conflicts **on the ticket branch**, where they arise.
-- **The paused WIP commit was sound and was kept.** `25ac809` said to distrust it; gated on
-  its own it was green, and its two source changes ("a Row is a line" in
-  `spatial-navigation.ts`, and `useBackClaim` as a layout effect) are both load-bearing.
-  **Gate an interrupted branch before discarding anything.**
+  switch carries the last User's token" went red because #11's extra startup work left an
+  earlier request in flight when the log was cleared. **A false alarm, not a leak.**
+- **Resolve conflicts on the ticket branch, not in the integration worktree.** All five of
+  this run's recent merges then landed trees **byte-identical** to trees already gated
+  (`git diff --stat <gated> HEAD` empty), so the gate carried without a second full run.
+- **Gate an interrupted branch before discarding anything.** #8's WIP commit told its reader
+  to distrust it; gated on its own it was green, and its two changes are load-bearing.
 - **The e2e suite cannot see a layout that overflows**, because Playwright scrolls an element
   into view before pressing it. #35 shipped nine languages running off the side of the screen
-  with every test passing, and caught it only by rendering the screen and looking. Worth
-  doing for any screen with a row of choices.
+  with every test passing. Render the screen and look, for any row of choices.
+- **Check which tests the skip count is**, not just the number. It has risen 12 → 14 → 20
+  across the run and every rise has been legitimate viewport/pointer gating, confirmed each
+  time by reading the names rather than accepting the total.
 
-### Still owed after the tickets
+### Still owed at the end of the run
 
-`code-review` over the whole branch (never run), the git history rewrite in `decisions.md`
-§10 (**no implementer is in flight now — this is the moment for it**), marking PR #38 ready,
-and removing the three remaining worktrees. The full list is at the bottom of this file.
+`code-review` over the whole branch (**never run**), the git history rewrite in
+`decisions.md` §10 (**unblocked right now**), and marking PR #38 ready. Worktree cleanup is **done** —
+nothing is owed there. The full list is at the bottom of this file.
 
 Two things a human may want to decide, neither of which any ticket owns:
 **the app icon is a plain generated "J"** an agent produced because no design asset existed
@@ -164,7 +177,9 @@ natural place) must update them.
 | #11 Settings screen: Accent Colour and language | merged at `89ea755`, issue closed |
 | #17 Title page | merged at `38ace9a`, issue closed — all seven boxes, and it closed #7's last one |
 | #8 Several Users and the User Picker | merged at `1f6d1f7`, issue closed — all seven boxes; see the design call above |
-| #35 Playback preferences in settings | merged at `5955b9c`, issue closed — third box ticked on the mechanism only (see below) |
+| #35 Playback preferences in settings | merged at `5955b9c`, issue closed — third box ticked on the mechanism only (see above) |
+| #25 Play and report progress | merged at `35ca1f1`, issue closed — all six boxes; first lazy chunk in the app |
+| #9 Quick Connect sign-in | merged at `7498792`, issue closed — all five boxes; see `decisions.md` §11 |
 
 Gate on the integration tip `1f6d1f7` after #8 merged, on fresh ports `4222/8822`, each
 step's own exit code: `lint` 0, `typecheck` 0, `build` 0, **327 unit tests** in 30 files,
@@ -694,7 +709,9 @@ branch is correct — check its tests pass before building on it.
    `ticket-24-search` and `ticket-36-installable-app`. Each was verified clean
    (`git status --short` empty) and fully merged (`git rev-list --count <branch>
    ^feat/jellyflick-v1` = 0) first, and **every branch was kept** — 16 of them exist.
-   `ticket-35-playback-prefs` is merged and removable now. Still to remove when they merge:
-   `ticket-25-play-and-progress`, `ticket-9-quick-connect`.
+   The sixth session removed the last three — `ticket-35-playback-prefs`,
+   `ticket-25-play-and-progress` and `ticket-9-quick-connect`. **Nothing is owed here: the
+   only worktrees left are the integrator's own and two belonging to other Claude
+   sessions.** All 16 ticket branches were kept.
    **Leave `implement-spec-88c250` and `remote-setup-2e9b22` alone — they belong to other
    Claude sessions, not this run.**
