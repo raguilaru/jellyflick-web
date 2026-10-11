@@ -347,7 +347,7 @@ describe('a User choosing what plays', () => {
 
     expect(
       screen.getByText(
-        'These three are kept by Jellyfin on your account, not by Jellyflick, so every Jellyfin app you use follows them — and a change here shows up the next time you play something.',
+        'These are kept by Jellyfin on your account, not by Jellyflick, so every Jellyfin app you use follows them — and a change here shows up the next time you play something.',
       ),
     ).toBeTruthy();
     expect(

@@ -161,7 +161,7 @@ export const en = {
   // rather than in the middle of what is playing now.
   'settings.playbackHeading': 'What plays',
   'settings.playbackExplanation':
-    'These three are kept by Jellyfin on your account, not by Jellyflick, so every Jellyfin app you use follows them — and a change here shows up the next time you play something.',
+    'These are kept by Jellyfin on your account, not by Jellyflick, so every Jellyfin app you use follows them — and a change here shows up the next time you play something.',
 
   'settings.audioHeading': 'Audio language',
   // Said plainly, because the setting above this one is the language the app is

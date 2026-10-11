@@ -1032,6 +1032,9 @@ html[data-input='pointer'] [tabindex]:focus {
  * the Chromium 68 floor and does not in grid (`decisions.md` §6).
  */
 .settings-choices--wrap {
+  /* `grid-auto-flow: row` as well, or the rule above lays all nine out in one
+     row and the last of them runs off the side of the screen. */
+  grid-auto-flow: row;
   grid-template-columns: repeat(auto-fill, minmax(140px, 180px));
 }
 

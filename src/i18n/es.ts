@@ -135,7 +135,7 @@ export const es: Messages = {
 
   'settings.playbackHeading': 'Qué se reproduce',
   'settings.playbackExplanation':
-    'Estos tres ajustes los guarda Jellyfin en tu cuenta, no Jellyflick, así que todas tus aplicaciones de Jellyfin los siguen, y un cambio aquí se aplica la próxima vez que reproduzcas algo.',
+    'Estos ajustes los guarda Jellyfin en tu cuenta, no Jellyflick, así que todas tus aplicaciones de Jellyfin los siguen, y un cambio aquí se aplica la próxima vez que reproduzcas algo.',
 
   'settings.audioHeading': 'Idioma del audio',
   'settings.audioExplanation':
