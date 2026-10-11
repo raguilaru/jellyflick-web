@@ -219,6 +219,16 @@ export const es: Messages = {
   'title.moreLikeThis': 'Más como esto',
   'title.language': (p) => LANGUAGE_NAMES_ES[p.code] ?? p.code.toUpperCase(),
 
+  'player.label': (p) => `Reproduciendo ${p.name}`,
+  'player.play': (p) => `Reproducir ${p.name}`,
+  'player.pause': (p) => `Pausar ${p.name}`,
+  'player.close': 'Cerrar',
+  'player.starting': 'Empezando…',
+  'player.cannotPlay': 'Jellyflick no puede reproducir ese título en este dispositivo.',
+  'player.unavailable': 'Jellyflick no pudo preguntar al servidor cómo reproducir ese título.',
+  'player.failed': 'Algo fue mal al reproducir ese título.',
+  'player.unreported': 'Jellyflick no pudo contarle al servidor cuánto has visto.',
+
   'nav.sections': 'Secciones',
   'nav.home': 'Inicio',
   'nav.movies': 'Películas',

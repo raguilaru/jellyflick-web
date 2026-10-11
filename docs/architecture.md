@@ -15,6 +15,10 @@ public/manifest.webmanifest
 public/icons/           The app icons, written by scripts/make-icons.mjs.
 scripts/build.mjs       vite build, plus the TOLERATED_TRANSFORM guard.
 scripts/make-icons.mjs  Draws public/icons/. Run by hand, output committed.
+scripts/make-test-video.mjs
+                        Draws test/fake-jellyfin/media/test-video.webm the same
+                        way: run by hand, output committed. See "The fake
+                        Jellyfin serves real video" below.
 Dockerfile              The multi-stage image. See "The container" below.
 deploy/                 entrypoint.sh and the example OMV8 compose file.
 server/                 The server inside the container. Not browser code:
@@ -44,6 +48,12 @@ src/
                         the store every screen reads, `use-my-list.ts` the
                         context and hook, `my-list-toggle.tsx` the control on a
                         card, `my-list-screen.tsx` the My List page.
+  playback/             Playing a Title (#25): `device-profile.ts` is what the
+                        Server negotiates against, `planning.ts` asks it how to
+                        play and reads its answer, `video-source.ts` gets that
+                        into a `<video>` (and is the one `import()` in the app),
+                        `reporting.ts` tells the Server what is happening, and
+                        `player.tsx` is the overlay itself.
   navigation/           Arrow keys and focus: `nearest.ts` the geometry,
                         `reveal.ts` how far a scroller must move, `focusable.ts`
                         what the arrows reach, `spatial-navigation.ts` the
@@ -73,6 +83,7 @@ src/
   title/                The title page: `title-page.ts` is its address and what
                         it reads from the Server, `title-screen.tsx` the screen
                         — a pop-up on a wide pointer, a full page elsewhere.
+                        Its Play button opens `playback/`'s player.
 test/
   setup.ts              Vitest: unmounts components after each test.
   unit/                 Vitest specs. One file per behaviour, not per source file.
@@ -97,6 +108,10 @@ Where new code belongs:
   see "Client Settings and the Home Layout" below.
 - **A screen or a feature** → its own folder under `src/`, holding its logic and
   its components together (`connect/` is the pattern).
+- **Something loaded only when it is needed** → an `import()` at the point of
+  use, as `src/playback/video-source.ts` does for hls.js, and a line in this
+  file saying why. The spec's lightness constraint is about the bundle a TV
+  downloads, so a dependency only some devices need does not belong in it.
 - **A new focusable thing** → nothing. The arrow keys find anything focusable by
   themselves. A new *strip* that should be entered where focus left it marks
   itself with `FOCUS_GROUP_ATTRIBUTE` and keeps one tab stop, as `Row` does.
@@ -130,6 +145,11 @@ Jellyfin holds mutable sample data for the whole run.
    controller — exporting a `readonly FakeRoute[]`. Path parameters are `:name`,
    e.g. `/Items/:itemId/Similar`.
 3. Spread it into `jellyfinRoutes` in `test/fake-jellyfin/routes/index.ts`.
+
+A route normally answers with JSON. One answers with bytes — the video in
+`routes/videos.ts` — through `bytes` and `contentType` on `FakeResponse`, with
+`headers` for `Content-Range` and friends. See "The fake Jellyfin serves real
+video" below before adding a second.
 
 An unknown path returns 404 with a message naming what to add, so a missing route
 never looks like a product bug.
@@ -187,6 +207,13 @@ All four want a token, as the real Server does.
 **`/Users/Me` as well as `POST /Users/Configuration`**, because 12.x has no
 `GET /Users/Configuration` and that is where a client reads it. Set it after
 signing in: it is also the endpoint the session reads.
+`failPlaybackInfoWith` and `failPlaybackReportsWith` do it for
+`POST /Items/{id}/PlaybackInfo` and for the three `/Sessions/Playing` reports,
+and `playbackErrorCode` makes `PlaybackInfo` answer with a `PlaybackErrorCode`
+and no playable source — which is a healthy Server refusing, not a failure.
+`state.playbackPositions` is `UserData.PlaybackPositionTicks` per User, written
+by the progress and stop reports, so a test can watch a resume point arrive and
+then be honoured.
 
 Each User's `UserConfiguration` lives in `state.userConfiguration`, keyed by
 user id, per User and seeded empty as `favourites` and `played` are — so a User
@@ -616,10 +643,124 @@ also what closed #7's and #24's last open box.
   with the BoxSets a Title is in, and the page says their names. Showing the
   *other Titles* in one means a query per Collection and a BoxSet that can be
   opened, which is #15's Collection Rows and their `parameter`, not this.
-- **Play is present and does nothing**, for #25 → #28 to wire up.
+- **Play opens the player** (#25), which is an overlay over this page rather
+  than an address of its own — see "Playing a Title" below. The page passes it
+  the resume point it already read, so Play resumes without asking again.
 - **A language's name is the locale's own.** `title.language` is one message
   whose function holds a small dictionary per locale, falling back to the code
   itself. `Intl.DisplayNames` is Chrome 81 and the floor is 68.
+
+## Playing a Title
+
+`src/playback/` is #25: Play on a title page, through Jellyfin's negotiation,
+to a `<video>` that reports what it is doing. #26 grows the controls, #27 the
+tracks, #28 the Subtitle Offset, #33 Cast and #34 Play On.
+
+- **The DeviceProfile is the whole negotiation**, and it is built from the
+  device layer and nothing else (`device-profile.ts`). The Server reads it and
+  decides between the file untouched, a remux and a transcode, so a profile that
+  claims the wrong container is the one bug that looks like a broken player.
+  The shapes are **written out rather than imported from `@jellyfin/sdk`**: its
+  `DeviceProfile` is typed against generated *enums*, and only its types may be
+  used (`decisions.md` §4). HLS is asked for wherever there is something to play
+  a playlist with, and a progressive mp4 is always offered too, so no device is
+  left with no fallback at all. A transcode is asked for in h264/aac — the
+  narrowest pair every target decodes — rather than the device's best, because
+  spending the Server's CPU on HEVC to reach a device that would have
+  direct-played is the wrong trade.
+- **`POST /Items/{id}/PlaybackInfo`, body only.** The `GET` form cannot carry a
+  profile at all and the `POST` form's query parameters are the older way of
+  saying the same things. **The fake refuses a query parameter outright**, so a
+  client that sends one is caught here rather than on a real Server.
+- **`TranscodingUrl`, `SupportsDirectPlay` and `SupportsDirectStream` are per
+  media source, never on the response.** That is the single most common mistake
+  with this endpoint. The transcoding URL is server-relative, already fully
+  parameterised and already carrying its own `ApiKey`: it is used verbatim, and
+  `gateway.absoluteUrl` is the only thing done to it.
+- **Three outcomes, and two of them are failures that are not the same thing.**
+  `planning.ts` answers `play`, `cannot-play` or `unavailable`: a Server that
+  would not answer is a problem with the Server, and a Server that answered
+  "there is no way to play this" is a healthy Server saying no. #26 shows a
+  different message for each.
+- **The resume point goes into the request, not only into the player.** A
+  transcode is cut from `StartTimeTicks` by the Server, so a client cannot seek
+  into segments that do not exist; a direct-played file is seeked by the player
+  and a transcode deliberately is not. The point itself is
+  `UserData.PlaybackPositionTicks`, read in `src/catalogue/catalogue.ts` with
+  everything else, and **left out when it is zero** — "start from the
+  beginning" is the absence of a resume point, not a resume point of zero.
+- **hls.js is the app's first lazily loaded thing**, and the pattern for the
+  next one. `video-source.ts` holds the one `import()` in the app, so hls.js is
+  a chunk of its own (584 kB raw, 182 kB gz) that is fetched only when a
+  playlist has to be played on a device with no HLS player of its own. An e2e
+  test fails if a direct play fetches it. `vite.config.ts` raises the chunk-size
+  warning just past it rather than switching the warning off.
+- **`Hls.isSupported()` before `canPlayType()`** (`decisions.md` §8) is kept one
+  level down: `src/device/browser.ts` only claims `playsHlsNatively` where there
+  is no Media Source to prefer, because `canPlayType` answers a truthy `"maybe"`
+  for HLS in Chrome. The full build, not `hls.light`, which drops the alternate
+  audio and subtitles #27 needs.
+- **Four reports are the whole of what Jellyfin knows about a session**:
+  `Playing`, `Playing/Progress`, `Playing/Stopped` and `Playing/Ping`. They
+  drive the resume point, Continue Watching, the Server's own session list and
+  keeping a transcode alive. `PlaybackStopInfo` is a **different, smaller**
+  shape — no `IsPaused`, no `PlayMethod`, and a `Failed` flag the others lack —
+  and the ping's argument is the only one that goes in the **query**.
+- **The reporter has no timers.** The player already has the video's own events
+  and one interval, and a second schedule would be a second thing to keep in
+  step with the picture; it would also make every test of the throttle a test of
+  fake timers. The clock is injected instead. A pause or a seek is reported at
+  once; the position creeping along four times a second is not, and goes every
+  ten seconds. **Stopping is idempotent**: a Title running to its end both
+  reports the stop and closes the player, and closing reports the stop.
+- **A Server that will not record progress never stops a User's film.** Every
+  report failure is swallowed, and `unreported()` is how the player says so
+  beside the picture rather than instead of it.
+- **The player is an overlay, not an address** — the same call the User Picker
+  made (#8), and for the same reason: a player is something over the Title a
+  User was looking at, not a place they navigated to, and an address would put a
+  history entry between the two and make Back mean something different inside
+  the player. It claims Back with `useBackClaim`, which is the one Back
+  handler's own extension point.
+- **`position: fixed` is load-bearing.** From inside something fixed the fixed
+  thing is the arrow keys' flow (#7), so the player's controls keep focus with
+  **no focus-trapping code at all**, exactly as #17's pop-up does.
+- **The media keys are a listener of their own**, not something taken off the
+  navigator: Play, Pause, PlayPause and Stop are not keys it owns. A key press
+  on one of the player's own buttons is left alone, for the reason #7 wrote
+  down — the browser presses a focused button itself, and acting on the key as
+  well would toggle twice for one press. **#26's arrow keys are the ones that
+  have to be taken *before* the navigator**, not beside it.
+- **Both controls carry the Title's name** ("Pause Arrival"), as a card's My
+  List toggle does: a screen reader hears what is being paused, and the
+  player's Play is never confused with the title page's underneath it.
+
+## The fake Jellyfin serves real video
+
+`test/fake-jellyfin/routes/videos.ts` is the one place a fake owes a client
+**real data** rather than a shape to assert on — a browser has to decode what it
+is given. `test/fake-jellyfin/media/test-video.webm` is six seconds of VP9 in
+WebM, about 11 kB, drawn by `node scripts/make-test-video.mjs` and committed the
+way the icons are.
+
+- **VP9, not H.264.** Plain Chromium ships no H.264 or AAC decoder, so an MP4
+  would not play in the browser Playwright runs.
+- **It is made from two things already installed**: Playwright's Chromium
+  records a canvas with `MediaRecorder`, and Playwright's own bundled ffmpeg
+  remuxes that recording — a live recording's header carries no duration and no
+  cues, so without that step a browser can neither report its length nor seek.
+  Nothing was added to the project to make it.
+- **Every source serves that one file**, whatever `PlaybackInfo` *claims* the
+  file is. `FakeItem.media` is the claim, and the claim is all the negotiation
+  reads: Arrival is WebM/VP9 so it direct-plays in a browser, Heat is 4K HEVC in
+  Matroska so it cannot, Paddington's only problem is its height, and The
+  Unfinished has no file at all.
+- **Range requests are answered**, because a browser seeks with them, and
+  seeking is how a resume point is honoured on a direct-played file.
+- **There is no transcoder, so there is no real HLS.** A `master.m3u8` answers
+  **501** with a message saying so. The transcode *decision* is asserted from
+  `PlaybackInfo` in `test/unit/planning-playback.test.ts` instead; whoever needs
+  a browser to really play a transcode has to grow a playlist here.
 
 ## Arrow keys, focus and Rows
 

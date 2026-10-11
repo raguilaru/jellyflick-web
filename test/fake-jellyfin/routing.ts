@@ -12,8 +12,17 @@ export type FakeRequest = {
 
 export type FakeResponse = {
   status: number;
-  /** Serialised as JSON. Omit for 204. */
+  /** Serialised as JSON. Omit for 204, or when `bytes` carries the answer. */
   body?: unknown;
+  /**
+   * A body that is not JSON: the test video, or an HLS playlist. Set
+   * `contentType` with it. This is the one endpoint family where a fake owes a
+   * client real bytes — a `<video>` has to decode what it is given.
+   */
+  bytes?: Uint8Array;
+  contentType?: string;
+  /** Extra response headers, lower-cased, for `Content-Range` and friends. */
+  headers?: Record<string, string>;
 };
 
 export type FakeRoute = {

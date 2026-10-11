@@ -166,7 +166,7 @@ function ShellFrame({ user, session, device, users }: AppShellProps) {
         {/* Nor is the title page, for the same reason, and one of its own: it is
             reached from a card, never from a navigation bar, so an entry in
             `SECTIONS` would put it in both bars (#17). */}
-        <Route path={TITLE_PATH} component={TitleScreen} session={session} />
+        <Route path={TITLE_PATH} component={TitleScreen} session={session} device={device} />
         <Route default component={UnknownSection} />
       </Router>
 
