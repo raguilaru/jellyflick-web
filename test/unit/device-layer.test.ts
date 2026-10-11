@@ -35,7 +35,76 @@ describe('the browser device layer', () => {
   it('always offers plain-text subtitle rendering, which is the common case', () => {
     expect(device.subtitleCapabilities().canRenderText).toBe(true);
   });
+
+  /**
+   * happy-dom presents a desktop: `(any-pointer: fine)` matches and there are
+   * no touch points. So the honest answer here is `computer`, and the three
+   * tests below drive the environment itself — `matchMedia` and
+   * `maxTouchPoints` are the device, not an internal collaborator, and they
+   * are the only things the answer is allowed to come from. A user agent is
+   * deliberately never consulted: `deviceName()` is the one place that reads
+   * it, and only for a label.
+   */
+  it('calls the environment it is tested in a computer, which is what it is', () => {
+    expect(device.deviceForm()).toBe('computer');
+  });
+
+  it('calls a device with no fine pointer and nothing to touch a TV', () => {
+    withDevice({ finePointer: false, touchPoints: 0 }, () => {
+      expect(createBrowserDeviceLayer().deviceForm()).toBe('tv');
+    });
+  });
+
+  it('calls a device with touch but no fine pointer a handheld', () => {
+    withDevice({ finePointer: false, touchPoints: 5 }, () => {
+      expect(createBrowserDeviceLayer().deviceForm()).toBe('handheld');
+    });
+  });
+
+  /**
+   * A device too old to answer a media query is called a computer, because
+   * that is the form whose screen works with every kind of input: a wrong
+   * guess costs a User one extra press rather than a screen they cannot use.
+   */
+  it('falls back to a computer where there is no matchMedia to ask', () => {
+    withDevice({ finePointer: undefined, touchPoints: 0 }, () => {
+      expect(createBrowserDeviceLayer().deviceForm()).toBe('computer');
+    });
+  });
 });
+
+/**
+ * Runs a test against a different device: a given answer to the pointer media
+ * query — or no `matchMedia` at all — and a given number of touch points.
+ * Everything is put back afterwards, whatever the test did.
+ */
+function withDevice(
+  shape: { finePointer: boolean | undefined; touchPoints: number },
+  body: () => void,
+): void {
+  const realMatchMedia = window.matchMedia;
+  const realTouchPoints = navigator.maxTouchPoints;
+  const define = (target: object, name: string, value: unknown) => {
+    Object.defineProperty(target, name, { value, configurable: true, writable: true });
+  };
+
+  define(navigator, 'maxTouchPoints', shape.touchPoints);
+  if (shape.finePointer === undefined) {
+    define(window, 'matchMedia', undefined);
+  } else {
+    define(window, 'matchMedia', (query: string) => ({
+      matches: query.includes('pointer: fine') ? shape.finePointer : false,
+      media: query,
+    }));
+  }
+
+  try {
+    body();
+  } finally {
+    define(window, 'matchMedia', realMatchMedia);
+    define(navigator, 'maxTouchPoints', realTouchPoints);
+  }
+}
 
 describe('the test device layers', () => {
   it('holds the clock still, so date-derived behaviour is repeatable', () => {
@@ -72,6 +141,17 @@ describe('the test device layers', () => {
 
     expect(device.videoCapabilities().playsHlsNatively).toBe(true);
     expect(device.playbackTargets().airPlay).toBe(true);
+  });
+
+  /**
+   * The form is what decides whether Quick Connect is offered before a
+   * password (#9): typing one with a remote is the thing being avoided, so a
+   * profile that claims the wrong form would quietly test the wrong screen.
+   */
+  it('gives each profile the device form that matches the class it stands for', () => {
+    expect(testDeviceLayer({ profile: 'webos-5-like' }).deviceForm()).toBe('tv');
+    expect(testDeviceLayer({ profile: 'phone-safari' }).deviceForm()).toBe('handheld');
+    expect(testDeviceLayer({ profile: 'modern-desktop-browser' }).deviceForm()).toBe('computer');
   });
 
   it('names one capability profile per device class the project targets', () => {

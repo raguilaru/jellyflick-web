@@ -1,4 +1,5 @@
 import type {
+  DeviceForm,
   DeviceKey,
   DeviceLayer,
   DeviceStorage,
@@ -21,6 +22,8 @@ export function createBrowserDeviceLayer(): DeviceLayer {
 
     deviceName,
     newDeviceId: () => randomId(),
+
+    deviceForm,
 
     preferredLanguages,
 
@@ -46,6 +49,33 @@ function preferredLanguages(): readonly string[] {
   const languages = navigator.languages;
   if (Array.isArray(languages) && languages.length > 0) return languages;
   return navigator.language === '' ? [] : [navigator.language];
+}
+
+/**
+ * What shape of device this is, from what it can do rather than what it calls
+ * itself. A smart-TV browser is the device with **no** fine pointer and
+ * **no** touch: all it has is a remote, which is why Quick Connect is offered
+ * before a password there (#9).
+ *
+ * `pointer` and `any-pointer` are media features (Chrome 41), not container
+ * queries, so ADR 0002 leaves them alone — the same reasoning `useWidePointer`
+ * in `src/shell/layout.ts` already relies on. `maxTouchPoints` is `navigator`,
+ * which is exactly why this lives here.
+ *
+ * A device with no `matchMedia` at all is called a `computer`: that is the form
+ * whose screen works with every kind of input, so a wrong guess costs a User
+ * nothing more than one extra press. The webOS port will not guess — it
+ * answers `tv` outright.
+ */
+function deviceForm(): DeviceForm {
+  const touchPoints = navigator.maxTouchPoints;
+  const touchable = typeof touchPoints === 'number' && touchPoints > 0;
+
+  if (typeof window.matchMedia !== 'function') return 'computer';
+  const hasFinePointer = window.matchMedia('(any-pointer: fine)').matches;
+
+  if (!hasFinePointer && !touchable) return 'tv';
+  return touchable && !hasFinePointer ? 'handheld' : 'computer';
 }
 
 /**

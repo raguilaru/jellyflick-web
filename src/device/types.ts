@@ -21,6 +21,21 @@ export type DeviceKey =
   | 'Rewind'
   | 'Unknown';
 
+/**
+ * The shape of device this is, as far as how a User drives it goes.
+ *
+ * - `tv` — across a room, with a remote: no pointer, nothing to touch, and no
+ *   keyboard worth typing a password on. This is what makes Quick Connect the
+ *   way in rather than an alternative to it (#9).
+ * - `handheld` — a phone or a tablet: touch, and an on-screen keyboard.
+ * - `computer` — a mouse or a trackpad and a real keyboard.
+ *
+ * It is a fact about the device, deliberately not a policy: which sign-in a
+ * screen offers first is the screen's to decide from this, so a later ticket
+ * can read the same fact for its own reasons without inheriting #9's answer.
+ */
+export type DeviceForm = 'tv' | 'handheld' | 'computer';
+
 /** What the device can play, which becomes the Jellyfin DeviceProfile. */
 export type VideoCapabilities = {
   /** Container formats the device plays directly, e.g. `mp4`, `webm`. */
@@ -87,6 +102,13 @@ export type DeviceLayer = {
    * nothing outside this folder may read.
    */
   preferredLanguages(): readonly string[];
+
+  /**
+   * What shape of device this is. Read it rather than asking `navigator` or
+   * `matchMedia` at a call site: the webOS port answers `tv` outright, and
+   * nothing outside this folder may read the user agent at all.
+   */
+  deviceForm(): DeviceForm;
 
   /** Maps a keyboard or remote-control event onto a logical key. */
   keyFor(event: Pick<KeyboardEvent, 'key' | 'keyCode'>): DeviceKey;
