@@ -1020,3 +1020,25 @@ html[data-input='pointer'] [tabindex]:focus {
     grid-auto-flow: column;
   }
 }
+
+/*
+ * A row of choices with too many to sit on one line: the nine languages for
+ * the sound and for the subtitles (#35). They wrap into even columns at any
+ * width rather than scrolling sideways, as the Accent Colour swatches do, so
+ * the arrow keys reach every one of them by direction alone. Both of these sit
+ * after the rule above, which they override.
+ *
+ * Grid rather than wrapped flex on purpose: `gap` needs a fallback in flex on
+ * the Chromium 68 floor and does not in grid (`decisions.md` §6).
+ */
+.settings-choices--wrap {
+  grid-template-columns: repeat(auto-fill, minmax(140px, 180px));
+}
+
+/*
+ * A row of choices whose labels are sentences — when to show subtitles — so one
+ * per line at every width.
+ */
+.settings-choices--stacked {
+  grid-auto-flow: row;
+}

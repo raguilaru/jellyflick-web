@@ -177,7 +177,7 @@ export function SettingsScreen({ device }: SettingsScreenProps) {
             <h3 class="settings-group__heading">{t('settings.subtitleModeHeading')}</h3>
             <p class="notice">{t('settings.subtitleModeExplanation')}</p>
             <p
-              class="settings-choices"
+              class="settings-choices settings-choices--stacked"
               role="group"
               aria-label={t('settings.subtitleModeHeading')}
             >
@@ -257,7 +257,7 @@ type LanguageChoiceProps = {
 function LanguageChoice({ label, chosen, onChoose }: LanguageChoiceProps) {
   const t = useTranslate();
   return (
-    <p class="settings-choices" role="group" aria-label={label}>
+    <p class="settings-choices settings-choices--wrap" role="group" aria-label={label}>
       <button
         type="button"
         class="button button--quiet"

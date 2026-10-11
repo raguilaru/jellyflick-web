@@ -124,9 +124,11 @@ export const en = {
   'homeLayout.nothingToAdd': 'Every Row is already on Home.',
   'homeLayout.notSaved': 'Jellyflick could not save that change to the Server.',
 
-  // The settings screen (#11). The rest of story 114 — audio language,
-  // subtitle language and next-episode autoplay, which really are Jellyfin's
-  // own settings — is #35's and has no copy here yet.
+  // The settings screen: #11's own settings below, and the four the User's
+  // Jellyfin account carries further down (#35, story 114). The loading and
+  // not-saved notices are shared by both: one screen, one message either way.
+  // The two sets of copy have to stay honest about which store each belongs
+  // to — see `docs/architecture.md`, "The settings screen".
   'settings.heading': 'Settings',
   'settings.loading': 'Looking for your settings…',
   'settings.notSaved': 'Jellyflick could not save that change to the Server.',

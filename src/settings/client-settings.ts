@@ -29,6 +29,13 @@ import type { JellyfinGateway } from '../jellyfin/gateway';
  * rather than a person — do **not** belong here. They go through
  * `device.storage()`.
  *
+ * Nor does a setting **Jellyfin itself** acts on. Audio language, subtitle
+ * language, when to show subtitles and next-Episode autoplay are fields on the
+ * User's `UserConfiguration`, shared with every other Jellyfin app, and they
+ * live in `playback-preferences.ts` — a different store with a different
+ * read-modify-write. The `client` partition above is exactly what this store
+ * has and that one does not.
+ *
  * Adding a setting is three steps: a `jf.` key below, a field on
  * `ClientSettings` with a default, and a line each in `settingsFrom` and
  * `prefsFor`.
