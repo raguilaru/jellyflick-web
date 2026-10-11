@@ -75,8 +75,44 @@ export type FakeItem = {
   IndexNumber?: number;
   /** The Season's number, on an Episode. */
   ParentIndexNumber?: number;
+
+  // What only a title page asks for (#17). Every one of them is optional, and
+  // one sample Title deliberately has none of them, because "the Server left it
+  // out" is the case a title page has to cope with.
+
+  ProductionYear?: number;
+  /** The age rating. Unguarded on the real Server, so `''` is possible too. */
+  OfficialRating?: string;
+  /** Jellyfin's 100-nanosecond ticks. Always sent by the real Server. */
+  RunTimeTicks?: number;
+  Overview?: string;
+  /** The Rotten Tomatoes critic score, 0–100. */
+  CriticRating?: number | null;
+  /** The community score, 0–10. The real Server omits it when it is not above zero. */
+  CommunityRating?: number;
+  People?: { Name: string; Type: string; Role?: string }[];
+  MediaStreams?: { Type: string; Language?: string; DisplayTitle?: string }[];
+  /** One tag per backdrop. The array index is the image's `imageIndex`. */
+  BackdropImageTags?: string[];
+  /** Keyed by `MetadataProvider` member name: `Imdb`, `Tmdb`, … */
+  ProviderIds?: Record<string, string>;
+
   /** The fake's own field: which library serves this item. */
   libraryId: string;
+};
+
+/**
+ * A Collection — Jellyfin's `BoxSet` — and the Titles in it. The real Server
+ * answers `/Items/{itemId}/Collections` with the BoxSets an item belongs to, so
+ * the membership is held here rather than on the item.
+ */
+export type FakeCollection = {
+  Id: string;
+  Name: string;
+  Type: 'BoxSet';
+  ImageTags?: Record<string, string>;
+  /** The fake's own field: which items are in this Collection. */
+  itemIds: string[];
 };
 
 export type FakeJellyfinState = {
@@ -94,6 +130,33 @@ export type FakeJellyfinState = {
    * way. A test that needs a list patches this.
    */
   favourites: Record<string, string[]>;
+  /**
+   * Which items each User has marked watched, by user id — Jellyfin's
+   * `UserData.Played`, which `/UserPlayedItems/{itemId}` writes (#17, story 78).
+   * Per User, as the real Server has it, and seeded empty: every User starts
+   * having watched nothing.
+   */
+  played: Record<string, string[]>;
+  /** The Collections on the Server, and which Titles are in each (#17). */
+  collections: FakeCollection[];
+  /**
+   * What `/Items/{itemId}/Similar` answers for each item, by item id. The real
+   * Server works this out from genres and people; a fake owes a client only a
+   * fixed relation it can assert on.
+   */
+  similar: Record<string, string[]>;
+  /**
+   * A status the `/UserPlayedItems` writes answer with, so a test can see what
+   * marking a Title watched looks like when the Server refuses it. Null is the
+   * normal Server.
+   */
+  failPlayedWritesWith: number | null;
+  /**
+   * A status `/Items/{itemId}/Similar` and `/Items/{itemId}/Collections` answer
+   * with, so a test can see a title page whose extra Rows the Server will not
+   * say anything about. Null is the normal Server.
+   */
+  failRelatedQueriesWith: number | null;
   /**
    * A status `AuthenticateByName` answers with whatever the credentials are, so
    * a test can see what a Server that is having a bad day looks like. Null is
@@ -155,10 +218,15 @@ export function createSampleData(): FakeJellyfinState {
     failFavouriteQueriesWith: null,
     failFavouriteWritesWith: null,
     favourites: {},
+    played: {},
+    failPlayedWritesWith: null,
+    failRelatedQueriesWith: null,
     failDisplayPreferencesWith: null,
     displayPreferences: {},
     libraries: SAMPLE_LIBRARIES.map((library) => ({ ...library })),
     items: SAMPLE_ITEMS.map((item) => ({ ...item })),
+    collections: SAMPLE_COLLECTIONS.map((collection) => ({ ...collection })),
+    similar: { ...SAMPLE_SIMILAR },
     users: [
       fakeUser({ Id: 'user-rafael', Name: 'Rafael', PrimaryImageTag: 'tag-rafael' }),
       fakeUser({ Id: 'user-marina', Name: 'Marina', PrimaryImageTag: 'tag-marina' }),
@@ -277,13 +345,36 @@ const SAMPLE_ITEMS: readonly FakeItem[] = [
     IndexNumber: 3,
     libraryId: 'lib-series',
   },
+  // The richest Title on the Server: everything a title page can show is here,
+  // so a missing field in the client is visible rather than indistinguishable
+  // from a Server that did not say.
   {
     Id: 'movie-arrival',
     Name: 'Arrival',
     Type: 'Movie',
     DateCreated: '2026-06-10T09:00:00Z',
-    ImageTags: { Primary: 'tag-arrival' },
+    ImageTags: { Primary: 'tag-arrival', Logo: 'tag-arrival-logo' },
+    BackdropImageTags: ['tag-arrival-backdrop'],
     Genres: ['Science Fiction', 'Drama'],
+    ProductionYear: 2016,
+    OfficialRating: 'PG-13',
+    RunTimeTicks: 116 * 60 * 10_000_000,
+    Overview: 'A linguist is asked to talk to the visitors.',
+    CriticRating: 94,
+    CommunityRating: 7.9,
+    People: [
+      { Name: 'Amy Adams', Type: 'Actor', Role: 'Louise Banks' },
+      { Name: 'Jeremy Renner', Type: 'Actor', Role: 'Ian Donnelly' },
+      { Name: 'Denis Villeneuve', Type: 'Director' },
+    ],
+    MediaStreams: [
+      { Type: 'Video', Language: 'und' },
+      { Type: 'Audio', Language: 'eng', DisplayTitle: 'English' },
+      { Type: 'Audio', Language: 'fra', DisplayTitle: 'French' },
+      { Type: 'Subtitle', Language: 'eng', DisplayTitle: 'English' },
+      { Type: 'Subtitle', Language: 'spa', DisplayTitle: 'Spanish' },
+    ],
+    ProviderIds: { Imdb: 'tt2543164', Tmdb: '329865' },
     libraryId: 'lib-movies',
   },
   // A stray video file in a Movies library. Jellyfin really does serve these,
@@ -302,15 +393,27 @@ const SAMPLE_ITEMS: readonly FakeItem[] = [
     DateCreated: '2026-06-01T09:00:00Z',
     ImageTags: { Primary: 'tag-heat' },
     Genres: ['Crime', 'Drama'],
+    ProductionYear: 1995,
+    OfficialRating: 'R',
+    RunTimeTicks: 170 * 60 * 10_000_000,
+    Overview: 'A detective and a thief recognise each other.',
+    CommunityRating: 8.3,
+    People: [{ Name: 'Al Pacino', Type: 'Actor', Role: 'Vincent Hanna' }],
+    MediaStreams: [{ Type: 'Audio', Language: 'eng', DisplayTitle: 'English' }],
     libraryId: 'lib-movies',
   },
-  // No images at all, so a card has to cope without artwork.
+  // No images at all, so a card has to cope without artwork — and none of the
+  // title page's own fields either, so "the Server left it out" is a Title a
+  // test can open rather than a state it has to patch in.
   {
     Id: 'movie-unfinished',
     Name: 'The Unfinished',
     Type: 'Movie',
     DateCreated: '2026-05-20T09:00:00Z',
     Genres: ['Drama'],
+    // Unguarded on the real Server, so an empty one really does arrive.
+    OfficialRating: '',
+    CriticRating: null,
     libraryId: 'lib-movies',
   },
 
@@ -331,8 +434,20 @@ const SAMPLE_ITEMS: readonly FakeItem[] = [
     Name: 'Severance',
     Type: 'Series',
     DateCreated: '2026-02-01T09:00:00Z',
-    ImageTags: { Primary: 'tag-severance' },
+    ImageTags: { Primary: 'tag-severance', Logo: 'tag-severance-logo' },
+    BackdropImageTags: ['tag-severance-backdrop'],
     Genres: ['Drama', 'Science Fiction', 'Thriller'],
+    ProductionYear: 2022,
+    OfficialRating: 'TV-MA',
+    RunTimeTicks: 50 * 60 * 10_000_000,
+    Overview: 'Work and the rest of life are kept apart, surgically.',
+    CommunityRating: 8.7,
+    People: [{ Name: 'Adam Scott', Type: 'Actor', Role: 'Mark Scout' }],
+    MediaStreams: [
+      { Type: 'Audio', Language: 'eng', DisplayTitle: 'English' },
+      { Type: 'Subtitle', Language: 'eng', DisplayTitle: 'English' },
+    ],
+    ProviderIds: { Imdb: 'tt11280740' },
     libraryId: 'lib-series',
   },
   {
@@ -348,11 +463,46 @@ const SAMPLE_ITEMS: readonly FakeItem[] = [
   },
 ];
 
+/**
+ * One Collection, holding two of the Movies. Only Heat and Arrival are in it,
+ * so a Title that is in no Collection at all is the other case a title page has
+ * to show — Bluey and Severance are both that.
+ */
+const SAMPLE_COLLECTIONS: readonly FakeCollection[] = [
+  {
+    Id: 'boxset-crime-classics',
+    Name: 'Crime Classics',
+    Type: 'BoxSet',
+    ImageTags: { Primary: 'tag-crime-classics' },
+    itemIds: ['movie-heat', 'movie-arrival'],
+  },
+];
+
+/**
+ * What `/Items/{itemId}/Similar` answers, by item id. Fixed rather than worked
+ * out, so a test can assert on the Row: Arrival is like Severance and Heat, and
+ * The Unfinished is like nothing at all, which is the empty case.
+ */
+const SAMPLE_SIMILAR: Readonly<Record<string, string[]>> = {
+  'movie-arrival': ['series-severance', 'movie-heat'],
+  'series-severance': ['movie-arrival'],
+  'movie-heat': ['movie-arrival'],
+};
+
 /** An item as the Server serves it: the fake's own `libraryId` is not a field. */
 export function servedViewOf(item: FakeItem): Omit<FakeItem, 'libraryId'> {
   const dto: Record<string, unknown> = { ...item };
   delete dto.libraryId;
   return dto as Omit<FakeItem, 'libraryId'>;
+}
+
+/** A Collection as the Server serves it: the membership is not a field on it. */
+export function servedCollectionViewOf(
+  collection: FakeCollection,
+): Omit<FakeCollection, 'itemIds'> {
+  const dto: Record<string, unknown> = { ...collection };
+  delete dto.itemIds;
+  return dto as Omit<FakeCollection, 'itemIds'>;
 }
 
 function fakeUser(

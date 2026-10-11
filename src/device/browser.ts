@@ -22,6 +22,8 @@ export function createBrowserDeviceLayer(): DeviceLayer {
     deviceName,
     newDeviceId: () => randomId(),
 
+    preferredLanguages,
+
     keyFor: (event) => keyFor(event),
 
     storage: () => storage,
@@ -33,6 +35,17 @@ export function createBrowserDeviceLayer(): DeviceLayer {
     now: () => Date.now(),
     random: () => Math.random(),
   };
+}
+
+/**
+ * The languages the browser says the User prefers, best first. `languages` is
+ * the ordered list and is native on the target; `language` is the one every
+ * browser has, and is the fallback for anything that lacks the list.
+ */
+function preferredLanguages(): readonly string[] {
+  const languages = navigator.languages;
+  if (Array.isArray(languages) && languages.length > 0) return languages;
+  return navigator.language === '' ? [] : [navigator.language];
 }
 
 /**

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { useTranslate } from '../i18n/index';
 import type { PickableUser } from '../session/user-picker';
+import { SETTINGS_PATH } from '../settings/settings-screen';
 import { HOME_PATH, SECTIONS } from './sections';
 import { SectionLink } from './section-link';
 import { UserButton } from './user-button';
@@ -49,6 +50,19 @@ export function TopBar({ currentPath, user, onSwitchUser }: TopBarProps) {
             currentPath={currentPath}
           />
         ))}
+        {/* Settings is not a section — it has its own address and is not in
+            `SECTIONS` (#11) — so it is a link of its own, after them. */}
+        <a
+          class={
+            currentPath === SETTINGS_PATH
+              ? 'top-bar__link top-bar__link--current'
+              : 'top-bar__link'
+          }
+          href={SETTINGS_PATH}
+          aria-current={currentPath === SETTINGS_PATH ? 'page' : undefined}
+        >
+          {t('nav.settings')}
+        </a>
       </nav>
       <UserButton user={user} bar="top-bar" onPress={onSwitchUser} />
     </header>

@@ -118,8 +118,16 @@ describe('switching User', () => {
     await signInBoth();
     const marina = await tokenOf('user-marina');
 
+    // Marina's own Home has to have finished loading before the log is
+    // cleared. The screen says "Signed in as …" as soon as the session is
+    // made, while her Rows are still being read — so a request she
+    // legitimately started *before* the switch would otherwise still be in
+    // flight when the log is cleared, and would then be read as traffic from
+    // after it. That is a false alarm, not a leak.
+    await requestsHaveSettled();
     await forgetRequests();
     await switchTo('Marina', 'Rafael');
+    await requestsHaveSettled();
 
     // The fake derives a token per User and DeviceId, so a Row read with
     // Marina's token is Marina's Row however the screen is labelled. Nothing
@@ -145,6 +153,21 @@ async function requestsCarryingAToken(): Promise<SeenRequest[]> {
   const response = await fetch(`${fakeJellyfinUrl()}/__fake/requests`);
   const all = (await response.json()) as SeenRequest[];
   return all.filter((entry) => (entry.headers.authorization ?? '').includes('Token="'));
+}
+
+/**
+ * Waits until the fake has stopped being asked things. Used around the switch,
+ * so what is measured is the traffic the switch caused and not whatever the
+ * screen before it still had in the air.
+ */
+async function requestsHaveSettled(): Promise<void> {
+  let previous = -1;
+  await waitFor(async () => {
+    const count = (await requestsCarryingAToken()).length;
+    const unchanged = count === previous;
+    previous = count;
+    expect(unchanged).toBe(true);
+  });
 }
 
 /** The token the fake issued to one User on this device. */

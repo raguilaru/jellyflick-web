@@ -6,6 +6,42 @@
  * `Intl.NumberFormat` / `Intl.DateTimeFormat` / `Intl.PluralRules` inside the
  * function for anything formatted — all three are native on Chromium 68.
  */
+/**
+ * The languages a household's media is most likely to be in, by the ISO 639-2
+ * code Jellyfin puts on a stream. Not exhaustive on purpose: a code that is not
+ * here is shown as itself, which says more than nothing does.
+ */
+const LANGUAGE_NAMES_EN: Readonly<Record<string, string>> = {
+  ara: 'Arabic',
+  ces: 'Czech',
+  cmn: 'Mandarin',
+  dan: 'Danish',
+  deu: 'German',
+  ell: 'Greek',
+  eng: 'English',
+  fin: 'Finnish',
+  fra: 'French',
+  heb: 'Hebrew',
+  hin: 'Hindi',
+  hun: 'Hungarian',
+  ita: 'Italian',
+  jpn: 'Japanese',
+  kor: 'Korean',
+  nld: 'Dutch',
+  nor: 'Norwegian',
+  pol: 'Polish',
+  por: 'Portuguese',
+  ron: 'Romanian',
+  rus: 'Russian',
+  spa: 'Spanish',
+  swe: 'Swedish',
+  tha: 'Thai',
+  tur: 'Turkish',
+  ukr: 'Ukrainian',
+  vie: 'Vietnamese',
+  zho: 'Chinese',
+};
+
 export const en = {
   'app.name': 'Jellyflick',
 
@@ -88,6 +124,37 @@ export const en = {
   'homeLayout.nothingToAdd': 'Every Row is already on Home.',
   'homeLayout.notSaved': 'Jellyflick could not save that change to the Server.',
 
+  // The settings screen (#11). The rest of story 114 — audio language,
+  // subtitle language and next-episode autoplay, which really are Jellyfin's
+  // own settings — is #35's and has no copy here yet.
+  'settings.heading': 'Settings',
+  'settings.loading': 'Looking for your settings…',
+  'settings.notSaved': 'Jellyflick could not save that change to the Server.',
+
+  'settings.accentHeading': 'Accent Colour',
+  'settings.accentExplanation':
+    'The highlight colour for buttons, the wordmark and whatever you have selected. Every colour here is one text stays readable on.',
+  'settings.accent.red': 'Red',
+  'settings.accent.amber': 'Amber',
+  'settings.accent.green': 'Green',
+  'settings.accent.teal': 'Teal',
+  'settings.accent.blue': 'Blue',
+  'settings.accent.violet': 'Violet',
+  'settings.accent.pink': 'Pink',
+
+  'settings.languageHeading': 'Language',
+  // Jellyfin 12.x has no per-user UI language at all (`decisions.md` §2), so
+  // this setting is Jellyflick's own. Saying so is the point of this string:
+  // the screen must not suggest it reaches the User's other Jellyfin apps.
+  'settings.languageExplanation':
+    'The language Jellyflick itself is in. Jellyflick keeps this one for you and it follows you to every device, but Jellyfin has no language setting of its own — so your other Jellyfin apps keep their own language.',
+  'settings.language.deviceIs': (p: { language: string }) => `Match my device (${p.language})`,
+  'settings.language.en': 'English',
+  'settings.language.es': 'Español',
+
+  'settings.homeHeading': 'Home',
+  'settings.homeExplanation': 'Choose the Rows on your Home and the order they come in.',
+
   'search.heading': 'Search',
   'search.fieldLabel': 'Search for a Movie or Series',
   'search.searching': 'Searching…',
@@ -115,6 +182,40 @@ export const en = {
   // what it does, because the picture beside it is the only other clue.
   'users.switchUser': (p: { name: string }) => `Switch User, currently ${p.name}`,
   'users.keepWatching': (p: { name: string }) => `Keep watching as ${p.name}`,
+  // The title page (#17). A Title's own name is its heading, so there is no
+  // key for it: the strings here are the labels around it.
+  'title.loading': 'Looking for that Title…',
+  'title.notFound':
+    'Jellyflick could not find that Title. Only Movies and Series have a page of their own.',
+  'title.unavailable': 'Jellyflick could not read that Title from the Server.',
+  'title.close': 'Close',
+  'title.play': 'Play',
+  'title.markWatched': (p: { name: string }) => `Mark ${p.name} as watched`,
+  'title.markNotWatched': (p: { name: string }) => `Mark ${p.name} as not watched`,
+  'title.watchedUnsaved': 'Jellyflick could not save whether you have watched that on the Server.',
+  // A length in whole minutes, said the way a running time is read out.
+  'title.runtime': (p: { minutes: number }) => {
+    const hours = Math.floor(p.minutes / 60);
+    const minutes = p.minutes % 60;
+    if (hours === 0) return `${String(minutes)}m`;
+    if (minutes === 0) return `${String(hours)}h`;
+    return `${String(hours)}h ${String(minutes)}m`;
+  },
+  'title.criticRating': (p: { score: number }) => `${String(Math.round(p.score))}% critics`,
+  'title.communityRating': (p: { score: number }) => `${String(p.score)} from the community`,
+  'title.cast': 'Cast',
+  'title.audio': 'Audio',
+  'title.subtitles': 'Subtitles',
+  'title.collection': 'Collection',
+  'title.moreLikeThis': 'More like this',
+  /**
+   * One audio or subtitle language, by the three-letter code the Server sends.
+   * The dictionary is the locale's own, because a language's name is as
+   * translated as anything else, and an unlisted code falls back to itself:
+   * `Intl.DisplayNames` is Chrome 81 and the floor is 68.
+   */
+  'title.language': (p: { code: string }) =>
+    LANGUAGE_NAMES_EN[p.code] ?? p.code.toUpperCase(),
 
   'nav.sections': 'Sections',
   'nav.home': 'Home',
@@ -122,6 +223,9 @@ export const en = {
   'nav.series': 'Series',
   'nav.myList': 'My List',
   'nav.search': 'Search',
+  // Not a section — the settings screen has its own address and is reached
+  // from the bars rather than listed in `SECTIONS`.
+  'nav.settings': 'Settings',
 
   'shell.sectionNotBuiltYet': 'This section is not built yet.',
   'shell.unknownSectionHeading': 'Nothing here',

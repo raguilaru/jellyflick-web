@@ -55,12 +55,18 @@ src/
                         Users in device storage, plus the sign-in screen.
   settings/             The Client Settings store, on the Server:
                         `client-settings.ts` is the store, `settings-provider.tsx`
-                        the one copy the screens read, `home-layout-screen.tsx`
-                        the Home Layout editor.
+                        the one copy the screens read, `settings-screen.tsx` the
+                        settings screen, `home-layout-screen.tsx` the Home Layout
+                        editor, `accent-colours.ts` the Accent Colour presets,
+                        `use-accent-colour.ts` what paints them, `ui-language.tsx`
+                        the language the app is drawn in.
   shell/                The app once a User is signed in: `sections.ts` is the
                         one list of sections and their addresses, `app-shell.tsx`
                         the routes and which bar is shown, `back.ts` the single
-                        Back handler, `layout.ts` the one breakpoint.
+                        Back handler, `layout.ts` the breakpoints.
+  title/                The title page: `title-page.ts` is its address and what
+                        it reads from the Server, `title-screen.tsx` the screen
+                        — a pop-up on a wide pointer, a full page elsewhere.
 test/
   setup.ts              Vitest: unmounts components after each test.
   unit/                 Vitest specs. One file per behaviour, not per source file.
@@ -75,8 +81,9 @@ Where new code belongs:
 - **A new Jellyfin endpoint** → one method on the gateway in `src/jellyfin/gateway.ts`,
   and nowhere else. Nothing outside `src/jellyfin/` calls `fetch`.
 - **Anything device-specific** — a key code, a codec probe, the clock, randomness,
-  a renderer capability, storage → `src/device/`. Nothing else reads `navigator`,
-  `window.chrome`, `Date.now()`, `Math.random()` or `localStorage`.
+  a renderer capability, storage, the languages the device prefers → `src/device/`.
+  Nothing else reads `navigator`, `window.chrome`, `Date.now()`, `Math.random()`
+  or `localStorage`.
 - **Anything that must survive a reload** → through `device.storage()`, and under
   one key owned by one module (`session/` owns `jellyflick.session`). Per-User
   settings that follow a User between devices are not this: they belong on the
@@ -150,8 +157,24 @@ the Titles, in the order `/Genres` serves them, are exactly:
 
     Comedy, Crime, Drama, Family, Science Fiction, Thriller
 
+Arrival and Severance also carry everything a title page shows — a year, an age
+rating, a running time, an overview, a cast, streams in several languages,
+ratings, a logo and a backdrop — and **The Unfinished deliberately carries none
+of it**, with an empty `OfficialRating` and a null `CriticRating`, because those
+are the unguarded fields a client has to cope with itself. `state.played` is
+`UserData.Played` per User, `state.collections` is the one Collection (Crime
+Classics, holding Heat and Arrival) and `state.similar` is the fixed More like
+this relation.
+
+`/Items` honours `ids`, `fields`, `enableImageTypes` and `enableUserData`, so a
+query that forgot to ask for `Overview` fails against the fake rather than only
+against a real Server. `Genres` is deliberately not gated: every query this app
+makes asks for it.
+
 `failLibraryQueriesWith` makes `/UserViews`, `/Items/Latest`, `/Items` and
 `/Genres` answer with a status, for a Server that will not say what it holds.
+`failPlayedWritesWith` and `failRelatedQueriesWith` do the same for the
+`/UserPlayedItems` writes and for `/Items/{id}/Similar` and `/Collections`.
 All four want a token, as the real Server does.
 `failDisplayPreferencesWith` does the same for `/DisplayPreferences`.
 
@@ -183,6 +206,13 @@ Nowhere else does this.
 Keys are dot-namespaced by screen or feature (`connect.addressLabel`). No string
 a User can see is ever written inline. Locales load as separate chunks, so a User
 downloads one dictionary.
+
+**Which language the app is drawn in** is a User's own setting, not a build-time
+choice: `src/main.tsx` loads the dictionary for the device's languages
+(`device.preferredLanguages()`) and `src/app.tsx` provides it, and
+`src/settings/ui-language.tsx` provides a second one under it once the User's
+settings have been read. See "The settings screen" below for why the language is
+ours rather than Jellyfin's, and why that provider is always in the tree.
 
 Formatting goes through `Intl.NumberFormat`, `Intl.DateTimeFormat` and
 `Intl.PluralRules`, which are native on the target. `Intl.RelativeTimeFormat`
@@ -253,9 +283,14 @@ belongs to a screen rather than a person.
   The POST answers **204**, which is why the gateway has a request shape that
   reads no body.
 - **A new setting is three lines**: a `jf.` key, a field on `ClientSettings`
-  with a default, and a line each in `settingsFrom` and `prefsFor`. The UI
-  language already has its key (`jf.uiLanguage`) and nothing reading it yet —
-  Jellyfin 12.x has no per-user UI language of its own, so it is ours (#11/#35).
+  with a default, and a line each in `settingsFrom` and `prefsFor`. There are
+  three keys today: `jf.homeLayout`, `jf.uiLanguage` and `jf.accentColour`. A
+  setting whose value is a name rather than a structure is typed as a plain
+  `string`, not a union, so a preset a *newer* Jellyflick offers survives being
+  read by an older one — the reader falls back when it draws it
+  (`accentColourFor`) and never rewrites what it did not understand. "No choice
+  at all" is stored as the empty string, because `CustomPrefs` holds strings:
+  that is how "match my device" differs from "English".
 - **One copy in front of the User.** `settings-provider.tsx` holds it, above the
   router, so Home and the editor are two views of one thing and an edit shows
   without a reload. A change is applied at once and saved behind it — pressing
@@ -265,6 +300,12 @@ belongs to a screen rather than a person.
   to undo their work.
 - **A save that does not land says so** and keeps the User's change on screen.
   A read that does not land hands back the defaults, so Home always draws.
+- **A screen that *edits* settings offers nothing to press until `loaded`.**
+  Home drawing the default layout for a moment is harmless; a *control* drawn
+  from the defaults is not, because pressing it saves the defaults plus that one
+  change over what the User really has. Both the settings screen and the Home
+  Layout editor show `settings.loading` until the read lands. This is the bug #13
+  flagged in #10's editor, fixed in #11 rather than waited out in the tests.
 
 The Home Layout itself is `src/home/home-layout.ts`: an ordered list of Rows,
 each with a kind and an optional `hidden`, and the rules are pure functions of
@@ -289,14 +330,73 @@ The editor, `src/settings/home-layout-screen.tsx`:
 
 - **Its address is not a section.** `/settings/home-layout` has its own `<Route>`
   in the shell and no place in either bar; `SECTIONS` is still the one list of
-  sections. It is reached from Home today and from the settings screen (#11/#35)
-  later.
+  sections. It is reached from Home and from the settings screen.
 - **Reordering is two buttons, not a drag.** A drag cannot be done with a remote
   (story 64), and the navigator owns Up/Down/Left/Right — taking the arrow keys
   here would leave no way to leave the screen. Buttons serve touch, mouse and
   arrow keys at once, and they are reachable because `src/navigation/` reaches
   anything focusable.
 - **There is no Save button**, so there is none to leave unpressed.
+
+## The settings screen, Accent Colour and language
+
+`src/settings/settings-screen.tsx` is the screen a User changes their own things
+on (#11): their Accent Colour, the language the app is in, and the way to their
+Home Layout. Its address `/settings` is **not a section** — `src/shell/sections.ts`
+is still the one list of sections and this is not in it — but both navigation bars
+reach it: the top bar with a link of its own after the sections, and the phone's
+bottom bar through the User's picture, which is where a phone User looks for
+their own settings. The picture used to be inert; it is now a real link named
+"Settings", because that is what pressing it does.
+
+- **Every choice is a `<button>` with `aria-pressed`, never a radio group.**
+  Native radios take Left and Right for themselves to move the selection, and
+  the navigator owns the arrow keys for moving focus — two meanings for one key
+  press, on the screen that most has to work with a remote. Buttons say which
+  one is chosen, leave the arrows alone, and serve touch, mouse and remote at
+  once. #10's Move up / Move down buttons are the same decision.
+- **There is no Save button.** A press applies at once and saves behind the
+  screen, and nothing is offered until the first read has landed (see above).
+
+**Accent Colour** (story 112) is `accent-colours.ts`: seven presets, each
+carrying both the `--accent` colour *and* the `--accent-text` that reads on it,
+because readability picks that, not taste. A fixed set rather than a colour
+picker is what makes "text stays readable" a promise the app can keep — and a
+picker is no way to choose anything with a remote.
+`test/unit/accent-colours.test.ts` measures every preset from the WCAG formula
+against two bars, because `base.css` uses the token two ways: **4.5:1** for
+`--accent-text` on `--accent` (body text on a filled button) and **3:1** for
+`--accent` on `--surface-base` (the wordmark, which is large text, and the focus
+ring and section underline, which are non-text parts of the interface). It also
+holds the default preset against the literal `base.css` ships.
+
+`use-accent-colour.ts` writes the two tokens on the root element in the shell,
+so every rule that already reads `--accent` follows at once and no component
+has to know a colour was chosen. **It does not touch the manifest.** The
+manifest's `theme_color`/`background_color` are `--surface-base`, because the
+manifest is one file for the whole household while the Accent Colour is one
+User's; a unit test from #36 fails if those two drift.
+
+**The language** (story 113) is `ui-language.tsx`, and it is **Jellyflick's own
+setting, not Jellyfin's**. Jellyfin 12.x has no per-user UI language at all —
+the only one it has is the server-wide `ServerConfiguration.UICulture`
+(`decisions.md` §2). Story 114 says the settings screen "edits my Jellyfin
+settings"; that holds for audio language, subtitle language and next-episode
+autoplay, which really are `UserConfiguration` fields and are #35's, and it
+cannot hold for the UI language. So the screen states the difference in words
+(`settings.languageExplanation`) rather than letting a User assume their other
+Jellyfin apps will follow.
+
+- The choice is the User's chosen tag, or **absent**, which means "match my
+  device" and is where `device.preferredLanguages()` comes in. Absent is stored
+  as the empty string, so going back to the device's language is a real choice
+  and not the same as choosing English.
+- `UiLanguage` is **always in the tree**, with only its *value* changing while a
+  dictionary is being fetched. Rendering the children bare and wrapping them in
+  a provider later changes the shape of the tree, which unmounts and remounts
+  the whole shell — losing a typed search term and every Row's state. The
+  dictionary already on the screen stands in meanwhile, so there is no blank
+  screen and no flash of message keys.
 
 ## My List
 
@@ -358,6 +458,72 @@ where every User starts and is theirs to fill, so a notice on Home on every
 visit would be in the way. The page explains it instead, and also carries the
 "the Server would not say" message.
 
+## The title page
+
+`src/title/` is #17: everything the app knows about one Title, and everything a
+User can do to it short of playing it. It is what a card press opens, so it is
+also what closed #7's and #24's last open box.
+
+- **Its address is not a section.** `/title/:itemId` has its own `<Route>` in
+  the shell and no place in either bar, the same call #10 made for
+  `/settings/home-layout`: a title page is reached from a card, never from a
+  navigation bar, and an entry in `SECTIONS` would put it in both. `SECTIONS`
+  is still the one list of sections. The address is written once, in
+  `titlePathFor` in `src/title/title-page.ts`.
+- **A pop-up where there is a wide precise pointer, a full page everywhere
+  else** — `useWidePointer()` beside `useWideScreen()` in `src/shell/layout.ts`,
+  so one module still owns every breakpoint. It asks the pointer as well as the
+  width because a 1080p TV is the widest screen in the house and is driven with
+  a remote; `pointer` is a media feature (Chrome 41), not a container query, so
+  ADR 0002 leaves it alone. A device with no `matchMedia` gets the full page,
+  which is the layout that works everywhere.
+- **The pop-up is `position: fixed`, and that is not only a look.**
+  `spatial-navigation.ts` tries the page's own flow before anything fixed, and
+  *from* inside something fixed the fixed thing is the flow — so the arrow keys
+  stay inside the pop-up with no focus trapping of ours. #7 wrote that rule for
+  this screen.
+- **It is one route, not an overlay over a live Home.** `preact-iso`'s `Router`
+  renders only the matching route, so opening a title page unmounts the screen
+  behind it: the pop-up is a dialog shape over the app's own background rather
+  than over the Home that was there a moment ago. Hoisting an overlay outside
+  the `Router` and freezing the previous route was the alternative, and it would
+  make the title page the one screen in the app that is not an address and give
+  Back a second meaning. Back is the browser's back button here as everywhere,
+  and Home comes back from the Server, which every section already does.
+- **One gateway query, grown rather than added.** `getTitles({ ids, detail })`
+  reads it: `/Items` rather than `/Items/{itemId}`, deliberately, so the
+  gateway's `includeItemTypes=Movie,Series` goes on protecting it and a
+  hand-typed `/title/album-…` answers with nothing and the page says so. `detail`
+  is the fields no Row needs — `Overview,People,MediaStreams,ProviderIds`, the
+  backdrop and logo image types, and `enableUserData` for the watched state. The
+  ratings, `RunTimeTicks`, `ProductionYear` and `OfficialRating` are **not**
+  `fields` values: the Server always sends them.
+- **`titleDetailsFrom` is in `src/catalogue/catalogue.ts`**, so that module is
+  still the only place a `BaseItemDto` is read. Every field the Server may leave
+  out is left out rather than defaulted, which is story 81 past the ratings as
+  well as in them: the Server omits `CommunityRating` when it is not above zero,
+  and `CriticRating` and `OfficialRating` are unguarded, so a null and an empty
+  string are handled here. A label with nothing after it is left out of the
+  document entirely — "no cast" and "the Server did not say" look the same, and
+  neither is worth a line.
+- **Nothing on it is a second way to do something.** My List is `MyListToggle`
+  over the shell's one store (#13), and it is always drawn here and always a
+  focus stop — on a card in a Row it is hover-only, so **this page is the only
+  way a remote reaches My List** (story 70). The card mapping is `cardForTitle`
+  (#24) and More like this is the `Row` (#7).
+- **Mark watched is local to the screen**, not a store: it shows before the
+  Server has agreed and is taken back with a line that says so, the bargain My
+  List makes. Nothing else shows a watched state yet — Continue Watching (#12)
+  and the enlarged card (#21) are what would make it a store.
+- **The Collection is named, not browsed.** `/Items/{id}/Collections` answers
+  with the BoxSets a Title is in, and the page says their names. Showing the
+  *other Titles* in one means a query per Collection and a BoxSet that can be
+  opened, which is #15's Collection Rows and their `parameter`, not this.
+- **Play is present and does nothing**, for #25 → #28 to wire up.
+- **A language's name is the locale's own.** `title.language` is one message
+  whose function holds a small dictionary per locale, falling back to the code
+  itself. `Intl.DisplayNames` is Chrome 81 and the floor is 68.
+
 ## Arrow keys, focus and Rows
 
 `src/navigation/` is spatial navigation: every screen driveable with the arrow
@@ -397,11 +563,17 @@ it is a key.
   `row.tsx`, because a mouse has no sideways wheel — but only while the Row has
   somewhere to go, so a Row at either end hands the page back its scroll and can
   never trap it. That listener cannot be passive.
-- **A card is a focus stop, not a button.** What pressing one opens is #17's, so
-  `Row` takes an `onCardPress` and Enter clicks the focused card; a Row given no
-  handler is browsable and not pressable. Enter deliberately leaves a real link,
-  button or field alone — the browser presses those itself, and a second click
-  here would press them twice.
+- **A card is a focus stop, not a button.** `Row` takes an `onCardPress` and
+  Enter clicks the focused card; a Row given no handler is browsable and not
+  pressable. Every Row in the app now passes one, and it opens the Title's page
+  (#17). Enter deliberately leaves a real link, button or field alone — the
+  browser presses those itself, and a second click here would press them twice.
+- **A field owns Enter as it owns the arrow keys.** `pressFocusedItem` reads
+  `document.activeElement`, and Search's field moves focus itself on Enter
+  (#24), so one press used to both leave the field *and* press the card it
+  landed on. That was invisible until #17 gave a card somewhere to go, and it is
+  the second half of the rule a screen taking a key back relies on: take the key
+  *before* this handler, and this handler stays out of a field entirely.
 - **The focus highlight is hand-rolled `:focus-visible`.** That selector is
   Chrome 86, so `input-modality.ts` writes the latest kind of input on the root
   element as `data-input` and `base.css` takes the ring away under
@@ -468,10 +640,9 @@ it is a key.
   itself already lives, so every Row asks the Server for artwork at the same
   width. Search and New on Jellyflick both use it; a new Row should too rather
   than build an image URL of its own.
-- **Opening a result is still #17's.** The strip is browsable and Enter presses
-  the focused card, but there is no title page for it to open yet, so the
-  Playwright spec asserts that Enter leaves Search as it is — the same caveat #7
-  recorded for Home.
+- **Opening a result opens its title page** (#17), which is the same handler
+  every Row on Home passes — `useOpenTitle` in `src/home/home-rows.tsx`, where
+  Home already decided what a card offers.
 
 ## Chromium 68 constraints that will bite
 

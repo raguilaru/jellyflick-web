@@ -42,6 +42,12 @@ export function useSpatialNavigation(device: DeviceLayer): void {
       const key = latest.current.keyFor(event);
 
       if (key === 'Enter') {
+        // A field owns Enter as it owns the arrow keys. Search's field takes
+        // Enter to hand focus on to its results (#24), and `pressFocusedItem`
+        // reads `document.activeElement` — which that handler has already
+        // moved — so without this one press would both leave the field and
+        // press the card it landed on, opening a title page nobody asked for.
+        if (isEditable(event.target)) return;
         if (pressFocusedItem()) event.preventDefault();
         return;
       }

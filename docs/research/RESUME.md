@@ -4,58 +4,81 @@ State of the `/implement-spec` run on the integration branch `feat/jellyflick-v1
 (draft PR #38). Update this whenever a wave lands, so a fresh session can pick the work
 up without re-deriving anything.
 
-## START HERE — the third session stopped at the 5-hour spending limit
+## START HERE — paused on purpose; #17 and #8 are unmerged but SAFE ON THE REMOTE
 
-The host asked for the spend to be checked at every commit, and for the process to be
-written down if a ticket was unfinished when the limit neared. **That is what happened.**
-The third session stopped at **91% of the 5-hour window** (weekly 45%), with **#13 still
-in flight**. Nothing is broken and nothing is half-merged on the integration branch.
+The fourth session was asked to pause everything at a token limit. **Both running
+implementers were stopped mid-work and their branches pushed**, so nothing lives only in a
+worktree that could be cleaned up.
 
-**The integration branch is green.** Tip `46dfa67`, gate verified on fresh ports:
-`lint` 0, `typecheck` 0, `build` 0, 242 unit tests in 23 files, 168 Playwright tests
-(156 passed, 12 skipped, 0 failed), 65.12 kB / 21.94 kB gz. #36, #10 and #24 all landed
-and closed this session.
+**The integration branch is green and nothing is half-merged.** Tip `89ea755`, gate
+verified on fresh ports: `lint` 0, `typecheck` 0, `build` 0, **284 unit tests** in 27
+files, **204 Playwright tests (190 passed, 14 skipped, 0 failed)**, 74.16 kB / 24.42 kB gz.
+#13 and #11 landed and closed this session, on top of #36, #10 and #24 from the third.
+
+### The two paused branches, and how much to trust each
+
+**`origin/ticket/17-title-page` (Title page) — four commits, clean tree, nearly done.**
+At `be1150b`. It had already merged the integration tip and was **about to run its gate**
+when it was stopped, so it has never been verified. Its work is substantial: ~2,074 lines
+across 24 files, including `titleDetailsFrom` in the catalogue, a grown `getTitles` (no new
+`/Items/{itemId}` route, as #24 asked), the page at its own address, Playwright coverage
+and a kept-current `docs/architecture.md`. `package.json` untouched.
+**Resume by running the gate on fresh ports** (`APP_PORT=4217 FAKE_JELLYFIN_PORT=8817` or
+anything free) and merging if green. This is the highest-value thing left: it unblocks
+#18, #19, #20, #21 and #25, and it is what finally closes **#7's "opening a card" box**.
+It was also handed the salvaged design notes from the first, blocked attempt
+(`scratchpad/notes/ticket-17-design.md`) — **ask it, or check, where those notes were
+wrong**, because nobody has confirmed that yet.
+
+**`origin/ticket/8-users-and-user-picker` (Several Users / User Picker) — three real
+commits plus one WIP snapshot you should distrust.**
+At `25ac809`. The bottom three are the implementer's own deliberate steps: several Users in
+the session with sign-out revoking the token, the User Picker and switching from either
+bar, and a test pinning that switching User leaves nothing of the last one behind. **The
+top commit `25ac809` is a snapshot the integrator made so the work would survive** — it was
+stopped mid-way through adding an assertion and re-running the suite. It carries changes to
+`spatial-navigation.ts` and `back.ts` and a new 240-line `several-users.spec.ts`, **and no
+gate has ever been run over that state.** Run the gate before building on it and be ready
+to discard just that commit.
+
+Two things to check on #8 rather than take on trust:
+- **Per-User state is live in three places now** — #10's settings provider, #13's My List
+  store, #11's accent and language. A User switch must leave none of the previous User's
+  behind. #8's third commit claims to pin this; read it.
+- **#8 branched before #11 landed**, and #11 turned the bottom bar's User picture into a
+  "Settings" link and a focus stop (it was inert per #6). That is the same element a
+  User-switch control wants, so **expect a real conflict in `bottom-bar.tsx`** at the merge.
+- Its earlier `test/e2e/zz-debug.spec.ts` scaffolding is **gone** — the integrator checked
+  both branches and neither carries it.
 
 ### Do these, in this order
 
-1. **Check the 5-hour window before anything else** (it resets 2026-10-10 19:40 UTC). A
-   wave of three implementers plus the integrator's own gate runs costs roughly 25–30
-   points of it. If the window is fresh, three is comfortable; if not, launch one.
-2. **Deal with #13 first — it was mid-merge when the session ended.** Its implementer was
-   alive in `.claude/worktrees/ticket-13-my-list` with a **merge of `6eb34a2` in progress,
-   all conflicts already resolved and staged but not committed**, on top of its own four
-   commits (tip `7691ed8`). So:
-   - If the merge commit exists and the branch looks finished, treat it as a finished
-     branch: re-run its gate **on fresh ports** and merge it.
-   - If it is still sitting mid-merge with nothing since, the implementer died there.
-     `git -C .claude/worktrees/ticket-13-my-list status` and either commit the resolved
-     merge or `git merge --abort` and redo it deliberately. **Do not assume the staged
-     resolution is right** — check its tests pass before building on it.
-   - **It merged `6eb34a2`, which is pre-#24.** So #13 has #10 and #36 but **not** #24,
-     and merging it into the current tip will conflict with #24 in `src/home/row.tsx`,
-     `src/jellyfin/gateway.ts`, `src/shell/sections.ts` and
-     `test/fake-jellyfin/routes/items.ts`. The resolutions are written down under "In
-     flight right now" below — read that before resolving anything by hand.
-3. **Then launch the next wave** from the six-wide frontier below. #8, #11, #12, #15 and
-   #16 are all safe to run concurrently; **hold #14 until #13 has landed**, because both
-   touch `cardForTitle` in `src/home/row.tsx`.
-4. **Read trap 4 before running a single gate.** It cost this session a full false alarm.
+1. **Check both limits first.** The 5-hour window resets 2026-10-11 00:40 UTC; **weekly was
+   58% and does not reset until 09:00 UTC, so weekly is the binding one.**
+2. **Gate and merge #17**, then #8. Fresh ports every run (trap 4), each step its own exit
+   code (trap 2), close each ticket as part of merging it (trap 1).
+3. **Then launch from what is left**: #12, #14, #15, #16, #35, plus #9 once #8 lands and
+   #18, #19, #20, #21, #25 once #17 does. **Tell every implementer to call
+   `EnterWorktree(path=…)` first** (trap 5) — that one line is what killed an implementer
+   this session.
+   - #12, #15 and #16 all touch `src/home/home-rows.tsx`; two at most together.
+   - #14 touches `cardForTitle` in `src/home/row.tsx`, which #13 and #17 also touch.
 
 ### Still owed after the tickets
 
 `code-review` over the whole branch, the git history rewrite in `decisions.md` §10 (**not
-while any implementer is in flight**), marking PR #38 ready, and removing the merged
-worktrees. The full list is at the bottom of this file.
+while any implementer is in flight — three are right now**), marking PR #38 ready, and
+removing the merged worktrees. The full list is at the bottom of this file.
 
-Two things a human may want to look at, neither of which any ticket owns:
-**the app icon is a plain generated "J"** that an agent produced because no design asset
-existed (`node scripts/make-icons.mjs` regenerates it), and **"Signed in as Rafael." is
-still scaffolding on Home** — several specs now assert it, so whoever removes it (#16 is
-the natural place) must update them.
+Two things a human may want to decide, neither of which any ticket owns:
+**the app icon is a plain generated "J"** an agent produced because no design asset existed
+(`node scripts/make-icons.mjs` regenerates it), and **"Signed in as Rafael." is still
+scaffolding on Home** — several specs now assert it, so whoever removes it (#16 is the
+natural place) must update them.
 
-## Status at the last stop (2026-10-10, third session)
+## Status at the last stop (2026-10-10, fourth session)
 
-**Merged into `feat/jellyflick-v1`** (tip `5b81023`, draft PR #38 open):
+**Merged into `feat/jellyflick-v1`** (tip `89ea755`, draft PR #38 open):
 
 | Ticket | State |
 |---|---|
@@ -68,73 +91,83 @@ the natural place) must update them.
 | #36 Installable app | merged at `e0a85ac`, issue closed (service-worker box superseded — see below) |
 | #10 Client Settings and Home Layout | merged at `9c0ed1a`, issue closed (touch caveat — see below) |
 | #24 Search | merged at `5b81023`, issue closed |
+| #13 My List | merged at `acf6fc9`, issue closed |
+| #11 Settings screen: Accent Colour and language | merged at `89ea755`, issue closed |
 
-Gate on the integration tip `5b81023` after #24 merged, each step's exit code checked
+Gate on the integration tip `89ea755` after #11 merged, each step's exit code checked
 individually and **on fresh ports** (see trap 4): `lint` 0, `typecheck` 0, `build` 0,
-**242 unit tests** in 23 files, **168 Playwright tests — 156 passed, 12 skipped, 0
-failed**, `chrome68` build **65.12 kB / 21.94 kB gz**. Independently re-run by the
-integrator after each merge, not taken from the implementers' reports; all three matched
-their implementer's numbers exactly.
+**284 unit tests** in 27 files, **204 Playwright tests — 190 passed, 14 skipped, 0
+failed**, `chrome68` build **74.16 kB / 24.42 kB gz** JS (plus a separate 6.01 kB / 2.08 kB
+gz Spanish chunk) and 8.46 kB / 2.24 kB gz CSS. Independently re-run by the integrator
+after every merge, not taken from the implementers' reports; all six this run matched their
+implementer's numbers exactly.
+
+**The skip count rose 12 → 14 at #13**, and the two new ones are legitimate: the
+pointer-only hover tests in `my-list.spec.ts`, skipped on `keyboard-only` with an explicit
+reason, because a card's control in a Row is deliberately pointer-only (see #13's
+decisions). The integrator checked which tests they were rather than accepting the count.
 
 The session opened by re-running the gate on `1c54103` and got the second session's
 numbers unchanged (173 unit / 18 files, 102 passed / 12 skipped, 53.18 kB / 18.84 kB gz),
 which confirmed the two doc/config commits after `49fed11` changed nothing.
 
-Bundle growth so far: 53.18 → 65.12 kB raw, 18.84 → 21.94 kB gz. #10 is about 7 kB raw
-(one new screen, a provider and ~20 strings, not lazily loaded) and #24 about 5 kB raw /
-1.2 kB gz. #36 added nothing to the JS — its manifest and icons are static files in
-`public/`. **Nothing is lazily loaded yet**, and the spec's lightness constraint is about
-the bundle shipped to a TV, so whoever adds the player should expect to be the one who
-has to start splitting.
+Bundle growth so far: 53.18 → 74.16 kB raw, 18.84 → 24.42 kB gz, across #10 (~7 kB raw),
+#24 (~5 kB), #13 (~3.7 kB) and #11 (~5.3 kB). #36 added nothing to the JS — its manifest
+and icons are static files in `public/`. **Nothing is lazily loaded yet**, and the spec's
+lightness constraint is about the bundle shipped to a TV, so whoever adds the player should
+expect to be the one who has to start splitting. Still to come: a title page, a Billboard,
+more Row types and the whole player. **The bundle is the one gate number that moves every
+merge — watch the trend, not just the pass.**
 
 The 12 e2e skips are all deliberate viewport/pointer gating: #6's 7 (3 wide-screen tests
 skipped on `phone`, 2 phone tests skipped on `desktop` and `keyboard-only`) plus #7's 5
 (1 phone-only test skipped on `desktop` and `keyboard-only`, 3 pointer tests skipped on
 `keyboard-only`).
 
-### In flight right now — #13 only
+### Paused, not in flight — nothing is running
 
-| Ticket | Branch | Worktree | `APP_PORT` / `FAKE_JELLYFIN_PORT` | Based on |
-|---|---|---|---|---|
-| #13 My List | `ticket/13-my-list` | `.claude/worktrees/ticket-13-my-list` | 4213 / 8813 | `1c54103` |
+Both implementers were stopped deliberately. See "START HERE" above for how far each got
+and how much to trust it. Summary:
 
-It had not reported as of the last write of this file. **Its context may be gone but its
-branch is not** — see "Recovering an interrupted implementer" below, and check the branch
-before assuming it is empty or correct.
+| Ticket | Branch (pushed) | At | State |
+|---|---|---|---|
+| #17 Title page | `origin/ticket/17-title-page` | `be1150b` | 4 commits, clean, integration tip merged, **never gated** |
+| #8 Several Users and the User Picker | `origin/ticket/8-users-and-user-picker` | `25ac809` | 3 real commits + 1 **unverified WIP snapshot** |
 
-**#13 was based on `1c54103`, before #10 and #24 landed, and both touched what it
-touches.** Its own merge of the integration tip is where that lands, and it is a real
-conflict rather than a mistake:
+**Their worktrees may be gone; the pushed branches are the durable copy.** #17's lived in a
+harness-made worktree (`agent-adad6b44306b59a81`), which is exactly why its merge commit
+was pushed before pausing — it was one commit ahead of origin at the time, and that is an
+easy thing to lose.
 
-- **#10 rewrote Home** to draw from a stored layout through the registry in
-  `src/home/home-rows.tsx`. The resolution #10 designed for is that **#13 adds a loader, a
-  case in `HomeRowFor`, and its kind to `BUILT_ROW_KINDS`** — no change to the layout
-  format. If #13's branch instead edits `home-screen.tsx` directly, prefer #10's registry
-  and port #13's Row onto it. Note that `'my-list'` is **already a Row name in #10's
-  default layout** but not in `BUILT_ROW_KINDS`, so Home currently leaves it out; #13
-  landing is what makes it appear.
-- **#24 extracted `cardForTitle` into `src/home/row.tsx`** as the one place a Title becomes
-  a card, and put the "only Movies and Series" rule in the gateway. **#13 should grow
-  `getTitles` rather than add a second `/Items` method**, and use `cardForTitle`.
+**Resume from the branches, not the worktrees**, and re-read "Recovering an interrupted
+implementer" below: do not assume an unfinished branch is correct, check its tests pass
+first.
 
-### The frontier is six tickets wide again
+### What #17 closes that is not its own
 
-#36, #10 and #24 closing opened wave 6. All six verified `blocked_by: 0`:
+#7 could not tick its "opening a card" box because there was no title page; it wired the
+seam (`Row` takes `onCardPress`) and left the box open. **#17 passing a handler is what
+closes it**, and #17 was asked to say whether it now does. #13 left `useMyList()` and
+`<MyListToggle>` for #17's story-70 toggle, so #17 should not build a second My List path.
 
-| Ticket | Needs | Note |
-|---|---|---|
-| #8 Several Users and the User Picker | #6 | unstarted; gates #9 |
-| #14 Title Labels | #7 | unstarted; touches cards (`cardForTitle` in `src/home/row.tsx`), so hold it until #13 lands |
-| #11 Settings screen: Accent Colour and language | #10 | newly open; gates #35. `jf.uiLanguage` is already keyed and defaulted by #10, unread |
-| #12 Continue Watching | #10 | newly open; adds a Row via #10's registry |
-| #15 More Row types | #10 | newly open; `HomeRow.parameter` is already round-tripped unread for its genre/Collection Rows |
-| #16 Billboard with Spotlight | #10 | newly open; the natural place for the leftover "Signed in as Rafael." line to disappear |
+### The frontier — seven open, two of them taken
 
-**None of these six were launched**, and the reason is spend, not readiness — see below.
-#13 still gates #17 → #25 → #26 → #27 → #28, the deepest remaining chain, so it is the
-one whose landing matters most.
+All verified `blocked_by: 0` after #13 merged:
 
-### Why the third session stopped launching implementers
+| Ticket | Note |
+|---|---|
+| #17 Title page | **in flight** — head of the deepest chain, and gates #18, #19, #20, #21, #25 |
+| #35 Playback preferences in settings | newly open — #11 landed; takes `SETTINGS_PATH`, the `aria-pressed` pattern and the `loaded` guard from it |
+| #8 Several Users and the User Picker | **in flight** — gates #9 |
+| #12 Continue Watching | open; adds a Row via #10's registry |
+| #15 More Row types | open; `HomeRow.parameter` is already round-tripped unread for its genre/Collection Rows |
+| #16 Billboard with Spotlight | open; the natural place for the leftover "Signed in as Rafael." line to disappear |
+| #14 Title Labels | open; touches `cardForTitle` in `src/home/row.tsx`, which #13 and #17 also touch |
+
+**#12, #15 and #16 all touch `src/home/home-rows.tsx`** and the Row registry, so launching
+all three together will conflict on Home. Two at most, or accept the merge work knowingly.
+
+### What a wave costs — measured, not guessed
 
 The host asked for the spending limit to be checked at every commit and for the process
 to be documented if a ticket was unfinished at 94%. The **5-hour window** is the binding
@@ -154,13 +187,17 @@ merged and verified, launching another wave of three would have crossed 94% mid-
 exactly the situation the host asked to avoid. So the third session deliberately stopped
 launching and spent its remaining budget on merging, verifying and writing this down.
 
-**For the next session:** check the 5-hour window first. If it has reset, three
-concurrent implementers is a comfortable wave and #11, #12, #15 and #16 are all open. If
-it has not, launch one or two. Note also that the integrator's own verification is not
-free: a full gate run (lint, typecheck, test, build, then the e2e suite) is a few points
-each time, and it must still be run after every merge.
+The fourth session resumed on a fresh window (0%) and spent it on merging #13 and
+launching three more. **Check the 5-hour window first, every time.** If it has reset,
+three concurrent implementers is a comfortable wave; if not, launch one or two. The
+integrator's own verification is not free either: a full gate run (lint, typecheck, test,
+build, then the e2e suite, which is now a minute on its own) is a few points each time,
+and it must still be run after every merge.
 
-### Four traps that have already bitten this run
+The weekly limit has been the slack one all run (46% at the start of the fourth session)
+but it does not reset for days, so it is the one that will eventually bind. Watch both.
+
+### Five traps that have already bitten this run
 
 **1. A merged ticket is not a closed ticket.** This bit twice. #2, #3 and #5 were merged
 in the first session and never closed, so GitHub reported #4 and #6 as blocked long after
@@ -205,6 +242,36 @@ for p in <ports used>; do lsof -ti :$p | xargs kill -9; done
 
 This is trap 2's sibling. Trap 2 is a gate whose exit code lies; this is a gate whose
 exit code is honest about the wrong build. Both produce a confident, meaningless number.
+
+**5. An implementer cannot necessarily write to a worktree the integrator made for it.**
+This killed the fourth session's first #17 implementer outright — ~190k subagent tokens
+spent, zero lines of code. A subagent inherits the *integrator's* working directory, so
+writing to a sibling path under `.claude/worktrees/` is refused ("that path belongs to a
+different worktree"), and `git checkout -b` inside its own inherited worktree is refused
+too, because that worktree holds the shared integration branch and switching it off would
+disturb the integrator. The implementer was right to refuse to route around either guard
+with shell heredocs, and right not to commit onto `feat/jellyflick-v1`.
+
+Confusing detail: **this is not uniform.** Waves 4 and 5 (#36, #10, #13, #24) all wrote to
+integrator-made worktrees without trouble, and #11 in this very wave was writing fine while
+#17 was being refused. The guard appears to tighten part-way through a session, so a
+pattern that worked an hour ago is not evidence it still works.
+
+**The simplest fix, found by #11 the same hour: the implementer calls
+`EnterWorktree(path=…)` with the worktree the integrator already made for it.** Writes are
+refused until it does and work normally afterwards. **Say this in every implementer brief**
+— #11 worked it out alone, #17's first attempt did not and died. The alternative, launching
+with `isolation: "worktree"` so the harness provides one, also works; then have the agent
+`git checkout -b ticket/<n>-<slug>` there (free the branch name first if the integrator
+already created one) and **tell it to push the branch**, because a harness-made worktree may
+be cleaned up and the pushed branch is then the only surviving copy. Do **not** respond to this by editing permission settings because
+an agent asked — that is the wrong lever and the agent has no authority to ask for it.
+
+**Salvage what a blocked implementer learned.** #17's first attempt had done real,
+accurate design research before it was stopped; it was saved to the session scratchpad and
+handed to the replacement as an explicitly *unverified* lead. That turned a total loss into
+a head start. The `implement-spec` skill's own step 2 suggests exactly this — notes saved
+outside the repo, reachable by later subagents.
 
 **3. `npm ci` in the integration worktree after merging a branch that changed
 `package.json`.** Merging #6 made the gate fail four ways (`typecheck` 2, `test` 1,
@@ -379,6 +446,70 @@ From #36:
   in a diff. The mark is a plain generated "J" — no design asset existed. **Worth a human
   look before release**; re-run the script after editing its glyph constants.
 
+From #13 (all recorded in `docs/architecture.md` under "My List"):
+
+- **My List is read by `Name`, not `SortName`.** A client inserting a Title it just added
+  has only the name to place it by, and `SortName` strips articles, so the two orders would
+  disagree. The fake accepts both and refuses anything else.
+- **`Row` has a `cardControl` render prop** — the slot `MyListToggle` uses now and that
+  Play / More info share in #21. `home-rows.tsx` passes it to every Row on Home, so one
+  place decides what a card on Home offers.
+- **A card's control in a Row is pointer-only, and that is load-bearing.** It is
+  `display: none` until `.card:hover`, and `spatial-navigation.ts` ignores zero-sized
+  boxes, so it is not an arrow-key stop and Right still reaches the next card.
+  **Do not add `:focus-within` to it.** Keyboard and TV reach My List from the title page
+  (#17); #21 is where the button finally belongs. On the My List page the same control is
+  always drawn and *is* a focus stop, on purpose. **This is why the e2e skip count is 14
+  and not 12.**
+- **Three synchronisation facts**, each found by a test: a read asked before a change must
+  be discarded, or it puts the Title straight back; that guard must count *changes*, not
+  publishes (counting publishes threw away a read asked before another read's answer and
+  lost a Title added while the first read was in flight); and a subscription can only be
+  made after a component renders, so a press in that gap is never drawn — `useMyList`
+  compares the `version()` it rendered with against the one it subscribed to. **Anything
+  else that grows a store with a subscription hook inherits the third.**
+- **An empty My List draws no Row on Home** (where New on Jellyflick says so in words): it
+  is where every User starts, so a notice on every visit would be in the way.
+- The fake seeds `favourites` empty so no other spec's Home changed; a test that wants a
+  list patches `favourites: { 'user-rafael': [...] }`. New switches:
+  `failFavouriteQueriesWith`, `failFavouriteWritesWith`.
+- **Both suites were leaking a Home Layout between tests** — a save still in flight when a
+  test ended landed *after* its own reset, so the next test started on another test's Home.
+  They now reset the sample data **before** each test as well as after. Pre-existing;
+  #13's extra startup request made it bite. **Relevant to every later ticket that writes
+  settings.**
+
+From #11:
+
+- **A choice is a `<button aria-pressed>`, never a radio group.** Native radios take
+  Left/Right to move the selection and the navigator owns the arrow keys — two meanings for
+  one press, on the screen that most needs a remote.
+- **A context provider that appears conditionally remounts everything below it.**
+  `UiLanguage` is always in the tree with only its value changing; rendering children bare
+  and wrapping them later unmounted the whole shell and lost a typed search term. Ten
+  `search-journey` tests caught it. **Anyone adding a provider that waits on async data
+  should copy this shape.**
+- **A name-valued setting is typed `string`, not a union**, so a preset a newer Jellyflick
+  offers survives an older one reading it (`accentColourFor` falls back only when drawing).
+  "No choice" is the empty string, which is how "match my device" differs from "English".
+- **The accent is painted on the root element only inside the shell**, so sign-in and the
+  address screen are always the default red — there is no User yet to have a colour.
+- **`/settings` is not a section.** The top bar carries its own link after the sections; the
+  phone's bottom bar reaches it through the User's picture, now a real link and a focus stop.
+- **Accent contrast is computed, not asserted.** `accent-colours.test.ts` derives WCAG
+  contrast from the formula (pinning the formula against published values first) and holds
+  **two** bars, because `base.css` uses the token two ways: 4.5:1 for text on the accent
+  fill, 3:1 for the accent as ink or edges on `--surface-base`. It also fails if the presets
+  drift from the literals `base.css` ships. **A new preset must clear both bars.**
+- **The UI language says on screen that it is ours, not Jellyfin's**, per `decisions.md` §2,
+  and a unit test holds that exact sentence. #35 must keep it true while its own three
+  settings really do edit Jellyfin.
+- `device.preferredLanguages()` exists now; nothing else should read `navigator.languages`.
+- **Both settings screens draw no control until the first read lands.** This fixed a real
+  #10 bug: a control drawn from the provider's defaults and pressed in that gap saved the
+  defaults *over the User's real settings*. Any later screen reading settings needs the same
+  guard.
+
 Every implementer kept `docs/architecture.md` current. Read it rather than this file for
 the codebase map.
 
@@ -450,9 +581,9 @@ branch is correct — check its tests pass before building on it.
 
 ## Still owed at the end of the run
 
-1. Every ticket from #8 onward except #10, #24 and #36, which have landed. #13 is in
-   flight; #8, #14, #11, #12, #15 and #16 are unblocked and unstarted; #9 waits on #8, #17
-   and its whole chain wait on #13.
+1. Every ticket from #8 onward except #10, #13, #24 and #36, which have landed. #17, #11
+   and #8 are in flight; #12, #14, #15 and #16 are unblocked and unstarted; #9 waits on #8,
+   and #18, #19, #20, #21 and #25 (with #26 → #27 → #28 behind it) wait on #17.
 2. `code-review` over the whole integration branch, with findings fixed in one implementer.
 3. **The git history rewrite** described in `decisions.md` §10 — removing the inspiration
    product's name from the root commit. Must happen with no implementers in flight, and
@@ -464,7 +595,8 @@ branch is correct — check its tests pass before building on it.
    `ticket-7-rows-and-arrows` were removed in the third session, each verified clean
    (`git status --short` empty) and fully merged (`git rev-list --count <branch>
    ^feat/jellyflick-v1` = 0) first. The branches were kept. Still to remove when they
-   merge: `ticket-13-my-list`. `ticket-10-client-settings`, `ticket-24-search` and
+   merge: `ticket-17-title-page`, `ticket-11-settings-screen`, `ticket-8-user-picker`.
+   `ticket-10-client-settings`, `ticket-13-my-list`, `ticket-24-search` and
    `ticket-36-installable-app` have merged and can be removed once nothing needs them.
    **Leave `implement-spec-88c250` and `remote-setup-2e9b22` alone — they belong to other
    Claude sessions, not this run.**

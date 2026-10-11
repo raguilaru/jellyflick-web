@@ -1,4 +1,5 @@
 import { useTranslate } from '../i18n/index';
+import { SETTINGS_PATH } from '../settings/settings-screen';
 import type { Session, SignedInUser } from './session';
 
 /**
@@ -106,9 +107,25 @@ export function UserPicker({ users, onClose }: UserPickerProps) {
         </button>
 
         {onClose === undefined || current === undefined ? null : (
-          <button class="button button--quiet" type="button" onClick={onClose}>
-            {t('users.keepWatching', { name: current.name })}
-          </button>
+          <>
+            {/*
+              The way to the settings screen, and on a phone the only one.
+              `/settings` is not a section, so neither bar lists it; the top bar
+              carries its own link after the sections (#11), but a phone's bottom
+              bar has no room for a fifth item and its User picture is how
+              switching User is reached (#8). This panel is already where a
+              household's own things live, so it is where settings belong too.
+
+              It closes the picker as it navigates: the overlay is state, not an
+              address, so nothing else would take it off the screen.
+            */}
+            <a class="button button--quiet" href={SETTINGS_PATH} onClick={onClose}>
+              {t('nav.settings')}
+            </a>
+            <button class="button button--quiet" type="button" onClick={onClose}>
+              {t('users.keepWatching', { name: current.name })}
+            </button>
+          </>
         )}
       </div>
     </div>

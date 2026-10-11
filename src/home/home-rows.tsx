@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
+import { useLocation } from 'preact-iso/router';
 import { useTranslate, type MessageKey } from '../i18n/index';
+import { titlePathFor } from '../title/title-page';
 import type { JellyfinGateway } from '../jellyfin/gateway';
 import { MyListToggle } from '../my-list/my-list-toggle';
 import { useMyList } from '../my-list/use-my-list';
@@ -42,6 +44,18 @@ export const BUILT_ROW_KINDS: readonly HomeRowKind[] = ['my-list', 'new-on-jelly
  */
 const myListControl = (card: RowCard) => <MyListToggle card={card} />;
 
+/**
+ * What pressing a card on Home does: it opens that Title's page (#17). This is
+ * the handler `Row` has taken since #7 and had nothing to pass it, and Home is
+ * the one place Rows are drawn, so it is the one place that decides.
+ */
+export function useOpenTitle(): (card: RowCard) => void {
+  const { route } = useLocation();
+  return (card) => {
+    route(titlePathFor(card.titleId));
+  };
+}
+
 export function isRowBuilt(kind: HomeRowKind): boolean {
   return BUILT_ROW_KINDS.indexOf(kind) !== -1;
 }
@@ -74,6 +88,7 @@ export function HomeRowFor({ kind, gateway, readKey }: HomeRowProps) {
  */
 function NewOnJellyflickRow({ gateway, readKey }: { gateway: JellyfinGateway; readKey: string }) {
   const t = useTranslate();
+  const openTitle = useOpenTitle();
   const [result, setResult] = useState<NewOnJellyflickResult | undefined>(undefined);
 
   useEffect(() => {
@@ -106,6 +121,7 @@ function NewOnJellyflickRow({ gateway, readKey }: { gateway: JellyfinGateway; re
     <Row
       heading={t('home.newOnJellyflick')}
       cards={result.titles}
+      onCardPress={openTitle}
       cardControl={myListControl}
     />
   );
@@ -126,11 +142,17 @@ function NewOnJellyflickRow({ gateway, readKey }: { gateway: JellyfinGateway; re
  */
 function MyListRow() {
   const t = useTranslate();
+  const openTitle = useOpenTitle();
   const myList = useMyList();
   const state = myList.state();
 
   if (state.outcome !== 'list' || state.titles.length === 0) return null;
   return (
-    <Row heading={t('home.row.myList')} cards={state.titles} cardControl={myListControl} />
+    <Row
+      heading={t('home.row.myList')}
+      cards={state.titles}
+      onCardPress={openTitle}
+      cardControl={myListControl}
+    />
   );
 }

@@ -765,6 +765,134 @@ html[data-input='pointer'] [tabindex]:focus {
   margin: var(--space-5) 0 0;
 }
 
+/*
+ * The title page (#17).
+ *
+ * Two shapes, one document: a full page on a phone and on a TV, and a pop-up
+ * where there is a wide precise pointer. Which one is chosen in JavaScript, in
+ * `src/shell/layout.ts`, as the navigation bars are — not with a CSS-only
+ * breakpoint — because `position: fixed` is what makes the arrow keys treat the
+ * pop-up as the flow (`spatial-navigation.ts`), and that has to be a fact about
+ * the document rather than about the viewport at paint time.
+ */
+.title {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.title--popup {
+  position: fixed;
+  /* Not the `inset` shorthand, which is Chrome 87 and ships raw (ADR 0002). */
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 20;
+  overflow-y: auto;
+  padding: var(--space-5);
+  background: var(--surface-base);
+}
+
+/* The sheet the page's own content sits on, so the pop-up has a width. */
+.title__sheet {
+  display: grid;
+  gap: var(--space-3);
+  max-width: 900px;
+  margin: 0 auto;
+  min-width: 0;
+}
+
+/*
+ * The backdrop. It is an `<img>` rather than a background image so the browser
+ * can lazily decode it and so it is the one request the page makes for artwork;
+ * `object-fit` is Chrome 32 and needs nothing.
+ */
+.title__backdrop {
+  width: 100%;
+  max-height: 42vh;
+  object-fit: cover;
+  border-radius: var(--radius);
+}
+
+.title__heading {
+  margin: 0;
+  font-family: var(--font-display);
+  /* Bebas Neue has one weight: distinguish type by size and spacing, never by
+     weight, or the browser synthesises a bold that looks wrong on it. */
+  font-weight: 400;
+  font-size: 2.5rem;
+  letter-spacing: 0.02em;
+  line-height: 1.1;
+  color: var(--text-strong);
+}
+
+.title__logo {
+  display: block;
+  max-width: min(100%, 360px);
+  height: auto;
+}
+
+/*
+ * The facts line. Grid rather than flex, because flex `gap` is Chrome 84 and
+ * silently does nothing on the floor, while grid `gap` is 66 (ADR 0002).
+ */
+.title__facts {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
+  justify-content: start;
+  gap: var(--space-3);
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.title__actions {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
+  justify-content: start;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+/*
+ * My List, here, is the same control a card carries — and on a card it is drawn
+ * only under the pointer, which is exactly what a remote cannot do. On the
+ * title page it is always drawn and always a focus stop, which is what makes
+ * story 70 reachable without a mouse.
+ */
+.title__actions > .card__control {
+  display: inline-block;
+  position: static;
+  top: auto;
+  right: auto;
+  margin-top: var(--space-2);
+}
+
+.title__overview {
+  margin: 0;
+  max-width: 60ch;
+  color: var(--text-strong);
+}
+
+.title__details {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+}
+
+.title__label {
+  color: var(--text-muted);
+}
+
+.title__value {
+  margin: 0;
+  color: var(--text-strong);
+  min-width: 0;
+}
+
 /* Wide enough for the name and its buttons side by side. */
 @media (min-width: 640px) {
   .layout-row {
@@ -811,4 +939,69 @@ html[data-input='pointer'] [tabindex]:focus {
 .user-picker__panel {
   width: 100%;
   max-width: 720px;
+}
+
+/*
+ * The settings screen (#11): one group per thing a User can change.
+ *
+ * Grid `gap` throughout, which is native on the target — flex `gap` is not,
+ * and silently does nothing there (decisions.md §6).
+ */
+.settings-group {
+  margin: var(--space-5) 0 0;
+}
+
+.settings-group__heading {
+  margin: 0 0 var(--space-2);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.settings-choices {
+  display: grid;
+  gap: var(--space-2);
+  justify-content: start;
+  margin: var(--space-2) 0 0;
+}
+
+/*
+ * The Accent Colour presets. Each swatch is filled with the colour it sets and
+ * carries its own text colour, so a User can see the pair they are choosing
+ * before they choose it. They wrap at any width rather than scrolling.
+ */
+.accents {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 48px);
+  gap: var(--space-2);
+  justify-content: start;
+  margin: var(--space-3) 0 0;
+}
+
+.accent {
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: 2px solid var(--surface-line);
+  border-radius: 50%;
+  font: inherit;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.accent[aria-pressed='true'] {
+  border-color: var(--text-strong);
+}
+
+/* A pressed choice among several: the quiet button, filled in. */
+.button--quiet[aria-pressed='true'] {
+  background: var(--surface-raised);
+  border-color: var(--text-strong);
+  font-weight: 600;
+}
+
+@media (min-width: 640px) {
+  .settings-choices {
+    grid-auto-flow: column;
+  }
 }

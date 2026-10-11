@@ -1,5 +1,37 @@
 import type { Messages } from './en';
 
+/** Los idiomas más probables, por el código ISO 639-2 que envía el servidor. */
+const LANGUAGE_NAMES_ES: Readonly<Record<string, string>> = {
+  ara: 'Árabe',
+  ces: 'Checo',
+  cmn: 'Mandarín',
+  dan: 'Danés',
+  deu: 'Alemán',
+  ell: 'Griego',
+  eng: 'Inglés',
+  fin: 'Finés',
+  fra: 'Francés',
+  heb: 'Hebreo',
+  hin: 'Hindi',
+  hun: 'Húngaro',
+  ita: 'Italiano',
+  jpn: 'Japonés',
+  kor: 'Coreano',
+  nld: 'Neerlandés',
+  nor: 'Noruego',
+  pol: 'Polaco',
+  por: 'Portugués',
+  ron: 'Rumano',
+  rus: 'Ruso',
+  spa: 'Español',
+  swe: 'Sueco',
+  tha: 'Tailandés',
+  tur: 'Turco',
+  ukr: 'Ucraniano',
+  vie: 'Vietnamita',
+  zho: 'Chino',
+};
+
 export const es: Messages = {
   'app.name': 'Jellyflick',
 
@@ -79,6 +111,31 @@ export const es: Messages = {
   'homeLayout.nothingToAdd': 'Todas las filas ya están en Inicio.',
   'homeLayout.notSaved': 'Jellyflick no pudo guardar ese cambio en el servidor.',
 
+  'settings.heading': 'Ajustes',
+  'settings.loading': 'Buscando tus ajustes…',
+  'settings.notSaved': 'Jellyflick no pudo guardar ese cambio en el servidor.',
+
+  'settings.accentHeading': 'Color de acento',
+  'settings.accentExplanation':
+    'El color que resalta los botones, el logotipo y lo que tengas seleccionado. En todos estos colores el texto se lee bien.',
+  'settings.accent.red': 'Rojo',
+  'settings.accent.amber': 'Ámbar',
+  'settings.accent.green': 'Verde',
+  'settings.accent.teal': 'Turquesa',
+  'settings.accent.blue': 'Azul',
+  'settings.accent.violet': 'Violeta',
+  'settings.accent.pink': 'Rosa',
+
+  'settings.languageHeading': 'Idioma',
+  'settings.languageExplanation':
+    'El idioma de Jellyflick. Jellyflick guarda este ajuste por ti y te acompaña en todos tus dispositivos, pero Jellyfin no tiene un ajuste de idioma propio, así que tus otras aplicaciones de Jellyfin conservan el suyo.',
+  'settings.language.deviceIs': (p) => `El de mi dispositivo (${p.language})`,
+  'settings.language.en': 'English',
+  'settings.language.es': 'Español',
+
+  'settings.homeHeading': 'Inicio',
+  'settings.homeExplanation': 'Elige las filas de tu Inicio y el orden en que aparecen.',
+
   'search.heading': 'Buscar',
   'search.fieldLabel': 'Busca una película o una serie',
   'search.searching': 'Buscando…',
@@ -101,6 +158,30 @@ export const es: Messages = {
   'users.signOut': (p: { name: string }) => `Cerrar la sesión de ${p.name}`,
   'users.switchUser': (p: { name: string }) => `Cambiar de Usuario, ahora ${p.name}`,
   'users.keepWatching': (p: { name: string }) => `Seguir viendo como ${p.name}`,
+  'title.loading': 'Buscando ese título…',
+  'title.notFound':
+    'Jellyflick no encontró ese título. Solo las películas y las series tienen página propia.',
+  'title.unavailable': 'Jellyflick no pudo leer ese título del servidor.',
+  'title.close': 'Cerrar',
+  'title.play': 'Reproducir',
+  'title.markWatched': (p) => `Marcar ${p.name} como visto`,
+  'title.markNotWatched': (p) => `Marcar ${p.name} como no visto`,
+  'title.watchedUnsaved': 'Jellyflick no pudo guardar en el servidor si has visto eso.',
+  'title.runtime': (p) => {
+    const hours = Math.floor(p.minutes / 60);
+    const minutes = p.minutes % 60;
+    if (hours === 0) return `${String(minutes)} min`;
+    if (minutes === 0) return `${String(hours)} h`;
+    return `${String(hours)} h ${String(minutes)} min`;
+  },
+  'title.criticRating': (p) => `${String(Math.round(p.score))}% de la crítica`,
+  'title.communityRating': (p) => `${String(p.score)} de la comunidad`,
+  'title.cast': 'Reparto',
+  'title.audio': 'Audio',
+  'title.subtitles': 'Subtítulos',
+  'title.collection': 'Colección',
+  'title.moreLikeThis': 'Más como esto',
+  'title.language': (p) => LANGUAGE_NAMES_ES[p.code] ?? p.code.toUpperCase(),
 
   'nav.sections': 'Secciones',
   'nav.home': 'Inicio',
@@ -108,6 +189,7 @@ export const es: Messages = {
   'nav.series': 'Series',
   'nav.myList': 'Mi lista',
   'nav.search': 'Buscar',
+  'nav.settings': 'Ajustes',
 
   'shell.sectionNotBuiltYet': 'Esta sección todavía no está hecha.',
   'shell.unknownSectionHeading': 'Aquí no hay nada',

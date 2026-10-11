@@ -238,3 +238,27 @@ async function deviceIdsUsedBy(request: RequestReader, userId: string): Promise<
   }
   return [...found];
 }
+
+/**
+ * Settings are reached from the picker, and on a phone this is the only way
+ * there. `/settings` is not a section, so neither bar lists it: the top bar
+ * carries its own link after the sections (#11), while the bottom bar's fourth
+ * item is the User picture, which switches User (#8). Driven with Enter, so it
+ * holds for a remote as well as a phone.
+ */
+test('settings are reached from the picker, which is a phone’s only way there', async ({
+  page,
+}) => {
+  await openApp(page, { serverAddress: FAKE_JELLYFIN_URL });
+  await signInAs(page, 'Rafael');
+  await openThePicker(page, 'Rafael');
+
+  // Scoped to the picker: on a wide screen the top bar carries a Settings
+  // link of its own, so an unscoped locator finds two.
+  await page.locator('.user-picker').getByRole('link', { name: 'Settings' }).press('Enter');
+
+  await expect(page).toHaveURL(/\/settings$/);
+  // The overlay is state rather than an address, so it has to take itself off
+  // the screen — nothing else would.
+  await expect(page.getByRole('heading', { name: 'Who is watching?' })).toHaveCount(0);
+});

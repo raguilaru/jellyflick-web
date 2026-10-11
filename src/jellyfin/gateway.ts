@@ -101,6 +101,26 @@ export type JellyfinGateway = {
    */
   getTitles(options?: TitlesQueryOptions): Promise<BaseItemDto[]>;
   /**
+   * `GET /Items/{itemId}/Similar` — the Titles the Server thinks are like a
+   * given one, which is the title page's More like this Row (#17).
+   *
+   * The Server's own order is kept: "most like this first" is a property of the
+   * answer, not something a client should sort away.
+   */
+  getSimilarTitles(options: SimilarTitlesOptions): Promise<BaseItemDto[]>;
+  /**
+   * `GET /Items/{itemId}/Collections` — the Collections one Title belongs to.
+   * A Title in none is an empty answer rather than a failure.
+   */
+  getCollectionsFor(itemId: string): Promise<BaseItemDto[]>;
+  /**
+   * `POST /UserPlayedItems/{itemId}` — marks a Title watched (story 78). The
+   * 12.x replacement for `/Users/{userId}/PlayedItems/{id}`, which is gone.
+   */
+  markPlayed(itemId: string): Promise<UserItemDataDto>;
+  /** `DELETE /UserPlayedItems/{itemId}` — marks it unwatched again. */
+  markUnplayed(itemId: string): Promise<UserItemDataDto>;
+  /**
    * `GET /Genres` — the distinct genres the Server's Movies and Series are in,
    * in name order. The Server does the collecting, so a client never reads
    * every Title to find out what genres there are.
@@ -171,6 +191,26 @@ export type TitlesQueryOptions = {
   /** A genre *name*, which is what `genres` takes; `genreIds` takes GUIDs. */
   genre?: string;
   limit?: number;
+  /**
+   * Particular items, by id. One id is how the title page reads its Title: it
+   * is `/Items` rather than `/Items/{itemId}` on purpose, so the query's
+   * `includeItemTypes=Movie,Series` goes on protecting it and a hand-typed
+   * address for an Episode or an album comes back empty instead of showing a
+   * page for something the app does not show.
+   */
+  ids?: readonly string[];
+  /**
+   * Everything the title page shows and no Row needs: the overview, the cast,
+   * the streams, the provider ids, the logo and backdrop artwork, and this
+   * User's own data — which is where the watched state is. A Row leaves it off,
+   * so a strip of twenty cards still costs a strip of twenty cards.
+   */
+  detail?: boolean;
+};
+
+export type SimilarTitlesOptions = {
+  itemId: string;
+  limit?: number;
 };
 
 export type JellyfinGatewayOptions = ServerIdentity & {
@@ -185,6 +225,17 @@ export type JellyfinGatewayOptions = ServerIdentity & {
  * place rather than a filter on each screen.
  */
 const TITLE_ITEM_TYPES = 'Movie,Series';
+
+/**
+ * The `fields` a title page needs and a Row does not. The ratings,
+ * `RunTimeTicks`, `ProductionYear` and `OfficialRating` are deliberately absent:
+ * the Server sends all four unasked (`jellyfin-api.md` §4/§17), and naming a
+ * field that is not one would be a quiet lie about where they come from.
+ */
+const TITLE_DETAIL_FIELDS = 'Overview,People,MediaStreams,ProviderIds';
+
+/** Posters, and the artwork only a title page shows: a backdrop and a logo. */
+const TITLE_DETAIL_IMAGE_TYPES = 'Primary,Backdrop,Logo,Thumb';
 
 /** A request that reached the Server but came back with a non-2xx status. */
 export class JellyfinHttpError extends Error {
@@ -332,17 +383,54 @@ export function createJellyfinGateway(options: JellyfinGatewayOptions): Jellyfin
           // same way twice. Positionally paired with `sortBy`.
           sortBy: 'SortName',
           sortOrder: 'Ascending',
-          // Posters only: the default is every image type, at every size.
-          enableImageTypes: 'Primary',
+          // Posters only unless a title page asked for the rest: the default is
+          // every image type, at every size.
+          enableImageTypes:
+            options.detail === true ? TITLE_DETAIL_IMAGE_TYPES : 'Primary',
           imageTypeLimit: 1,
-          enableUserData: false,
+          // The watched state is a `UserData` field, so a title page needs it
+          // and a Row does not.
+          enableUserData: options.detail === true,
+          ...(options.detail === true ? { fields: TITLE_DETAIL_FIELDS } : {}),
           // Nothing shows a total, and asking for one costs the Server a COUNT.
           enableTotalRecordCount: false,
           ...(options.searchTerm === undefined ? {} : { searchTerm: options.searchTerm }),
           ...(options.genre === undefined ? {} : { genres: options.genre }),
+          ...(options.ids === undefined ? {} : { ids: options.ids.join(',') }),
           ...(options.limit === undefined ? {} : { limit: options.limit }),
         })}`,
       ).then((result) => result.Items ?? []),
+
+    getSimilarTitles: (options) =>
+      request<BaseItemDtoQueryResult>(
+        'GET',
+        `/Items/${encodeURIComponent(options.itemId)}/Similar${query({
+          // The Server's "like this" spans everything it holds, so the two
+          // kinds the app shows are narrowed here as everywhere else.
+          includeItemTypes: TITLE_ITEM_TYPES,
+          enableImageTypes: 'Primary',
+          imageTypeLimit: 1,
+          enableUserData: false,
+          enableTotalRecordCount: false,
+          ...(options.limit === undefined ? {} : { limit: options.limit }),
+        })}`,
+      ).then((result) => result.Items ?? []),
+
+    getCollectionsFor: (itemId) =>
+      request<BaseItemDtoQueryResult>(
+        'GET',
+        `/Items/${encodeURIComponent(itemId)}/Collections${query({
+          enableImageTypes: 'Primary',
+          imageTypeLimit: 1,
+          enableTotalRecordCount: false,
+        })}`,
+      ).then((result) => result.Items ?? []),
+
+    markPlayed: (itemId) =>
+      request<UserItemDataDto>('POST', `/UserPlayedItems/${encodeURIComponent(itemId)}`),
+
+    markUnplayed: (itemId) =>
+      request<UserItemDataDto>('DELETE', `/UserPlayedItems/${encodeURIComponent(itemId)}`),
 
     addToFavourites: (itemId) =>
       request<UserItemDataDto>('POST', `/UserFavoriteItems/${encodeURIComponent(itemId)}`),
