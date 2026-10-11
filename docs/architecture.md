@@ -52,7 +52,10 @@ src/
                         results, `genres.tsx` browsing by genre, `search.ts`
                         what the Server is asked.
   session/              Session & Users: the Server address and the signed-in
-                        Users in device storage, plus the sign-in screen.
+                        Users in device storage, plus the sign-in screen,
+                        `user-picker.tsx`, and Quick Connect —
+                        `quick-connect.ts` is the flow and its polling,
+                        `quick-connect-panel.tsx` the screen over it.
   settings/             The Client Settings store, on the Server:
                         `client-settings.ts` is the store, `settings-provider.tsx`
                         the one copy the screens read, `settings-screen.tsx` the
@@ -81,9 +84,11 @@ Where new code belongs:
 - **A new Jellyfin endpoint** → one method on the gateway in `src/jellyfin/gateway.ts`,
   and nowhere else. Nothing outside `src/jellyfin/` calls `fetch`.
 - **Anything device-specific** — a key code, a codec probe, the clock, randomness,
-  a renderer capability, storage, the languages the device prefers → `src/device/`.
-  Nothing else reads `navigator`, `window.chrome`, `Date.now()`, `Math.random()`
-  or `localStorage`.
+  a renderer capability, storage, the languages the device prefers, *what shape
+  of device this is* → `src/device/`. Nothing else reads `navigator`,
+  `window.chrome`, `Date.now()`, `Math.random()` or `localStorage`. A screen
+  that wants to behave differently on a TV asks `device.deviceForm()` rather
+  than sniffing anything: see "Signing in" below.
 - **Anything that must survive a reload** → through `device.storage()`, and under
   one key owned by one module (`session/` owns `jellyflick.session`). Per-User
   settings that follow a User between devices are not this: they belong on the
@@ -136,6 +141,19 @@ Control endpoints, outside Jellyfin's own namespace and shared by both runners:
 | `GET` / `DELETE /__fake/writes` | Every non-GET request: what tests assert was saved. |
 | `GET` / `DELETE /__fake/requests` | Every request, with headers. |
 | `GET` / `POST` / `DELETE /__fake/state` | Read, patch or reseed the sample data. |
+
+`state.quickConnect` is Quick Connect: `enabled` (what
+`GET /QuickConnect/Enabled` answers), the `requests` in flight, `codesIssued`
+so codes are counted rather than random and a test can read one off the screen
+and approve exactly it, and `failInitiateWith` for a Server that will not hand
+out a code. Note that `POST /__fake/state` merges only one level deep, so a
+test changing any of it hands over the whole object.
+
+`POST /QuickConnect/Authorize?code=&userId=` is in the fake as the **approving**
+side — what the other Jellyfin app calls. Jellyflick is only ever the device
+being approved, so the gateway deliberately has no method for it and the tests
+that approve a code call it through `fetch`, with a token minted the way the
+fake derives them.
 
 Sample data a test can lean on: four Users — `Rafael` and `Marina` with pictures,
 `Nico` without, and `Ghost`, who is hidden from `/Users/Public`. They share one
@@ -218,6 +236,90 @@ Formatting goes through `Intl.NumberFormat`, `Intl.DateTimeFormat` and
 `Intl.PluralRules`, which are native on the target. `Intl.RelativeTimeFormat`
 (71), `Intl.ListFormat` (72) and `Intl.Locale` (74) are **not** — write the three
 lines by hand instead of adding a polyfill.
+
+## Signing in
+
+`src/session/` owns who is signed in. Each User has their own token and their
+own DeviceId, because the Server allows one token per DeviceId, and that is
+what lets several of a household be signed in at once (#8). There are two ways
+in, and both end in exactly the same place: an `AuthenticationResult` turned
+into a stored User by `toSignedInUser`, which is the one owner of that job.
+
+- **A password** — `AuthenticateByName`, `src/session/sign-in-screen.tsx`.
+- **A code** — Quick Connect, below.
+
+**Which one is offered first is the device layer's answer.** The screen asks
+`device.deviceForm()`, which is `tv`, `handheld` or `computer`; on a `tv` the
+code comes first, because typing a password with a remote is the thing being
+avoided. The browser implementation works the form out from the pointer media
+query and `navigator.maxTouchPoints` — a TV is the device with no fine pointer
+and nothing to touch — and the webOS port will answer `tv` outright rather than
+detect anything. It is deliberately a *fact about the device* and not a policy,
+so a later ticket can read it without inheriting #9's answer, and nothing
+outside `src/device/` ever reads `navigator`.
+
+### Quick Connect
+
+The flow is the Server's, at the paths 12.2.0 actually has
+(`docs/research/jellyfin-api.md` §2, and ADR 0001 bans the forms that are gone):
+
+    POST /QuickConnect/Initiate        → a Secret and a six-digit Code
+    GET  /QuickConnect/Connect?secret= → until Authenticated is true
+    POST /Users/AuthenticateWithQuickConnect { Secret } → a token
+
+- **One DeviceId for the whole attempt, minted before the first request.** The
+  Server remembers the DeviceId that *initiated* and issues the token against
+  it, so every request in the attempt carries that one and the User keeps it.
+  This is why Quick Connect fits the several-Users model rather than sitting
+  beside it: a User who arrives this way is a User like any other, signed out
+  the same way, with the same token revocation.
+- **`GET /QuickConnect/Enabled` is read once, beside the public Users.** A
+  Server with Quick Connect off is never offered it at all — not even on a TV,
+  where a code nobody could approve would be the only thing that User saw — and
+  a Server that will not answer is read as "off". Nothing is drawn until both
+  answers are in, so a TV never flashes the list of Users first.
+- **Polling stops, and that is the point of the module.** Every ending goes
+  through one `finish` in `quick-connect.ts`, which clears both timers before
+  reporting anything: signed in, the Server no longer holding the request, the
+  app's own deadline, Quick Connect switched off, an unreachable Server,
+  anything else, and `stop()`. The panel starts the attempt in an effect and
+  stops it in that effect's cleanup, so there is no way off the screen that
+  leaves a loop talking to a household's Server. The polls are a **chain**
+  rather than an interval, so a slow answer delays the next question instead of
+  stacking a second one on top of it.
+- **Five seconds between polls, and a five-minute life.** The interval is what
+  `jellyfin-api.md` §2 settles on; the Server states no interval and **no
+  expiry at all**, so the deadline is Jellyflick's own — a code nobody has
+  approved in five minutes is a screen nobody is looking at, and a new one is
+  one press.
+- **The Server cannot tell an expiry from a refusal, so neither does the
+  screen.** `GET /QuickConnect/Connect` answers **404** for a request that ran
+  out of time there, one that was withdrawn and one already spent alike. One
+  `refused` state carries all three and its message offers both readings
+  ("it may have run out of time, or been turned down in the other app"). The
+  separate `expired` state is only for *our own* deadline, where the app knows
+  it was time. Both offer a new code, and a new code is a new attempt — nothing
+  retries an old secret, which is spent or gone by then.
+- **A new way in, not a second way to do something.** The password is always one
+  press away, even on a TV; and the code is reachable from the list of Users and
+  from the typed-username form both, so a User can change their mind either way.
+- **The code's type is the feature.** "Readable from across a room" is a type
+  question, and Bebas Neue has one weight, so `.quick-connect__code` carries it
+  with size (`clamp(56px, 16vw, 140px)`) and letter spacing, with the weight
+  pinned to **400**: a synthesised bold smears the digits. `tabular-nums` keeps
+  them from shifting. A Playwright test measures the computed values, because
+  only a real layout can.
+
+Where each thing is tested: the four endpoints in `test/unit/gateway.test.ts`,
+so "no removed endpoints" cannot quietly rot; the whole flow and every stopping
+rule in `test/unit/quick-connect.test.ts`, at five-millisecond polls; what the
+screen offers and in what order — including a TV being offered the code first —
+in `test/unit/quick-connect-journey.test.tsx`, where the device layer can be a
+TV; and a real sign-in, in a browser, on a production build, in
+`test/e2e/quick-connect-sign-in.spec.ts`. The full approve-and-land-on-Home
+journey is deliberately **not** in the journey test: the app polls every five
+seconds, and making a unit spec sit through that buys nothing the other three
+do not already have.
 
 ## The shell: sections, routing and Back
 
@@ -691,6 +793,11 @@ ADR 0002 sets the floor. These are the traps inside it.
   attempt carries a DeviceId and **no** `Token=`: that is how the Server records
   which device the token it issues belongs to. A wrong password and an unknown
   username are both 401, deliberately indistinguishable.
+- Quick Connect ties the token to the DeviceId that called **`Initiate`**, not
+  the one that called `AuthenticateWithQuickConnect` and not the device that
+  approved. `GET /QuickConnect/Connect` answers **404** for an expired, a
+  withdrawn and an already-spent request alike, so no client can tell those
+  apart. See "Signing in" above.
 - `/Users/Public` omits accounts whose `Policy.IsHidden` is true, which is why
   sign-in also offers a typed username. A null `PrimaryImageTag` means the User
   has no picture: show their initial.

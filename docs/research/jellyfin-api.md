@@ -112,7 +112,7 @@ Flow: `Initiate` → show `Code` to the user → poll `Connect?secret=<Secret>` 
 
 `POST /QuickConnect/Authorize?code=<code>&userId=<id>` is the *approving* side (what the already-signed-in app calls); Jellyflick only needs it if it ever approves another device's code.
 
-**To verify in implementation:** the spec does not state a poll interval or an expiry for a Quick Connect request. Pick a conservative interval (~5 s) and treat `404` from `GET /QuickConnect/Connect` as "expired, start over".
+**Verified in implementation (#9), and recorded as `decisions.md` §11:** the spec states neither a poll interval nor an expiry, so Jellyflick polls every **5 s** and gives a code **5 minutes** of its own before giving up. A `404` from `GET /QuickConnect/Connect` means "start over", but **not** specifically "expired": the Server answers the same way for a request that ran out of time, one that was withdrawn and one already exchanged, so the message a User sees has to offer both readings.
 
 ---
 
