@@ -2,6 +2,7 @@ import type { FakeRoute } from '../routing.ts';
 import { displayPreferencesRoutes } from './display-preferences.ts';
 import { genreRoutes } from './genres.ts';
 import { itemRoutes } from './items.ts';
+import { quickConnectRoutes } from './quick-connect.ts';
 import { mediaInfoRoutes } from './media-info.ts';
 import { sessionRoutes } from './sessions.ts';
 import { systemRoutes } from './system.ts';
@@ -21,6 +22,7 @@ import { videoRoutes } from './videos.ts';
 export const jellyfinRoutes: readonly FakeRoute[] = [
   ...systemRoutes,
   ...userRoutes,
+  ...quickConnectRoutes,
   ...sessionRoutes,
   ...userViewRoutes,
   ...userFavoriteRoutes,

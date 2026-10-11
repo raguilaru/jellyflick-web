@@ -7,6 +7,7 @@
  * replace anything of ours.
  */
 import type {
+  DeviceForm,
   DeviceLayer,
   DeviceStorage,
   PlaybackTargets,
@@ -73,6 +74,7 @@ export function testDeviceLayer(options: TestDeviceOptions = {}): DeviceLayer {
   return {
     name: `test:${profileName}`,
     deviceName: () => profile.deviceName,
+    deviceForm: () => profile.form,
     preferredLanguages: () => options.preferredLanguages ?? ['en'],
     newDeviceId: () => {
       deviceIdCount += 1;
@@ -96,6 +98,12 @@ export function testDeviceLayer(options: TestDeviceOptions = {}): DeviceLayer {
 
 type CapabilityProfile = {
   deviceName: string;
+  /**
+   * What a User drives this class of device with. It is what decides whether
+   * Quick Connect is offered before a password (#9), so it is part of the
+   * profile rather than something a test sets by hand.
+   */
+  form: DeviceForm;
   video: VideoCapabilities;
   subtitles: SubtitleCapabilities;
   targets: PlaybackTargets;
@@ -104,6 +112,7 @@ type CapabilityProfile = {
 export const CAPABILITY_PROFILES: Readonly<Record<CapabilityProfileName, CapabilityProfile>> = {
   'modern-desktop-browser': {
     deviceName: 'Test Desktop Browser',
+    form: 'computer',
     video: {
       containers: ['mp4', 'webm', 'mkv'],
       videoCodecs: ['h264', 'vp8', 'vp9', 'av1'],
@@ -118,6 +127,7 @@ export const CAPABILITY_PROFILES: Readonly<Record<CapabilityProfileName, Capabil
 
   'phone-safari': {
     deviceName: 'Test Phone Safari',
+    form: 'handheld',
     video: {
       containers: ['mp4'],
       videoCodecs: ['h264', 'hevc'],
@@ -136,6 +146,7 @@ export const CAPABILITY_PROFILES: Readonly<Record<CapabilityProfileName, Capabil
    */
   'webos-5-like': {
     deviceName: 'Test TV',
+    form: 'tv',
     video: {
       containers: ['mp4', 'mkv'],
       videoCodecs: ['h264', 'hevc'],

@@ -167,3 +167,27 @@ When the last ticket has merged and before PR #38 is marked ready:
    references them. Only the repo owner can make that request.
 5. Warn that every clone and worktree must be re-cloned or reset, including the other
    Claude session branches `claude/implement-spec-88c250` and `claude/remote-setup-2e9b22`.
+
+## 11. Quick Connect: the interval and the expiry are ours, and 404 is ambiguous
+
+`jellyfin-api.md` §2 left two things "to verify in implementation". Verified in
+#9, against the 12.2.0 shape:
+
+- **The Server states no poll interval.** Jellyflick polls
+  `GET /QuickConnect/Connect` every **5 s**, which is the conservative figure the
+  research note suggested and which costs a household's Server nothing.
+- **The Server states no expiry for a request.** So the deadline is **Jellyflick's
+  own: 5 minutes**, after which it stops polling and offers a new code. It is not
+  a claim about what the Server would still accept — a code may well outlive it —
+  it is the app refusing to poll on behalf of a User who has gone.
+- **A 404 from `GET /QuickConnect/Connect` cannot be read as "expired".** The
+  Server answers the same way for a request that ran out of time, one that was
+  withdrawn, and one already exchanged, and says no more. So the message must
+  offer both readings rather than pick one; only the app's *own* deadline above
+  justifies saying "it ran out of time" outright. Anything later that wants to
+  distinguish a denial is asking the Server for something it does not have.
+- **`POST /QuickConnect/Authorize` is the approving side and Jellyflick never
+  calls it**, so the gateway has no method for it. The fake Jellyfin has the
+  route, for tests that play the other app.
+
+Affects #9 and anything that later shows Quick Connect's state anywhere else.

@@ -1,4 +1,10 @@
+import type { AuthenticationResult } from '@jellyfin/sdk/lib/generated-client/models/authentication-result';
 import type { DeviceLayer, DeviceStorage } from '../device/types';
+import {
+  runQuickConnect,
+  type QuickConnectAttempt,
+  type QuickConnectOptions,
+} from './quick-connect';
 import {
   createJellyfinGateway,
   JellyfinHttpError,
@@ -61,6 +67,16 @@ export type SignInResult =
   | { outcome: 'unreachable' }
   | { outcome: 'server-problem'; status: number };
 
+/**
+ * What a caller says when it starts a Quick Connect attempt. The gateway, the
+ * DeviceId and where the User is stored are the session's, so all that is left
+ * is being told what is happening and, for a test, how fast.
+ */
+export type StartQuickConnectOptions = Pick<
+  QuickConnectOptions,
+  'onState' | 'pollIntervalMs' | 'lifetimeMs'
+>;
+
 /** What came of checking the stored token with the Server. */
 export type ResumeResult =
   | { outcome: 'signed-in'; user: SignedInUser }
@@ -85,6 +101,20 @@ export type Session = {
    */
   signedInUsers(): readonly SignedInUser[];
   signIn(credentials: Credentials): Promise<SignInResult>;
+  /**
+   * Starts a Quick Connect attempt (#9): a code to show, polled until somebody
+   * approves it in another Jellyfin app, and then a token.
+   *
+   * It mints a DeviceId of its own, before the first request, exactly as
+   * `signIn` does and for the same reason — the Server ties the token it issues
+   * to the DeviceId it was asked with, and allows one token per DeviceId. So a
+   * User who arrives this way is a User like any other: their own token, their
+   * own DeviceId, signed out the same way.
+   *
+   * The attempt is the caller's to stop. See `quick-connect.ts` for every way
+   * one ends.
+   */
+  startQuickConnect(options: StartQuickConnectOptions): QuickConnectAttempt;
   /**
    * Makes an already signed-in User the one who is watching. Their token is
    * already here, so no password is asked for (story 16). False means that
@@ -221,6 +251,32 @@ export function createSession(options: SessionOptions): Session {
       }
     },
 
+    startQuickConnect: (quickConnectOptions) => {
+      // A fresh DeviceId per attempt, minted before the first request: the
+      // Server remembers the DeviceId that initiated and issues the token
+      // against it, so every request in the attempt has to carry this one.
+      const deviceId = options.device.newDeviceId();
+      const gateway = createJellyfinGateway({
+        serverAddress: stored?.serverAddress ?? '',
+        client: options.client,
+        device: options.device.deviceName(),
+        deviceId,
+        appVersion: options.appVersion,
+        ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
+      });
+
+      return runQuickConnect({
+        ...quickConnectOptions,
+        gateway,
+        accept: (result) => {
+          const user = toSignedInUser(result, deviceId);
+          if (user === undefined) return undefined;
+          remember(user);
+          return user;
+        },
+      });
+    },
+
     resume: async () => {
       const user = activeUser();
       if (user === undefined) return { outcome: 'signed-out' };
@@ -347,12 +403,13 @@ function isSignedInUser(value: unknown): value is SignedInUser {
   );
 }
 
-/** The parts of an `AuthenticationResult` a signed-in User is made of. */
+/**
+ * The parts of an `AuthenticationResult` a signed-in User is made of. One
+ * owner for one job: a password sign-in and a Quick Connect sign-in both end
+ * with the Server handing over this shape, and both come through here.
+ */
 function toSignedInUser(
-  result: {
-    AccessToken?: string | null;
-    User?: { Id?: string | null; Name?: string | null; PrimaryImageTag?: string | null } | null;
-  },
+  result: AuthenticationResult,
   deviceId: string,
 ): SignedInUser | undefined {
   const token = result.AccessToken;

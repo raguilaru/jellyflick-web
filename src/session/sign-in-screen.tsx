@@ -1,7 +1,9 @@
 import type { ComponentChildren } from 'preact';
 import { useEffect, useId, useState } from 'preact/hooks';
+import type { DeviceLayer } from '../device/types';
 import { useTranslate, type Translate } from '../i18n/index';
 import type { JellyfinGateway } from '../jellyfin/gateway';
+import { QuickConnectPanel } from './quick-connect-panel';
 import type { Credentials, Session, SignInResult } from './session';
 
 /** A public user as the sign-in screen needs them: who to show, and a picture. */
@@ -16,6 +18,12 @@ export type SignInFailure = Exclude<SignInResult, { outcome: 'signed-in' }>;
 
 export type SignInScreenProps = {
   session: Session;
+  /**
+   * Asked what shape of device this is, which is what decides whether Quick
+   * Connect is offered before a password (#9). The screen never reads the user
+   * agent or a media query itself — `device.deviceForm()` is the one answer.
+   */
+  device: DeviceLayer;
   /** Shown in the message when the Server cannot be reached. */
   serverAddress: string;
   onSignedIn(): void;
@@ -35,16 +43,34 @@ export type SignInScreenProps = {
 type PublicUsers = { readonly users: readonly PublicUser[] } | { readonly unavailable: true };
 
 /**
- * Signing in with a password: pick yourself from the Server's public Users, or
- * type a username the Server does not list, then give the password.
+ * Signing in: with a code approved in another Jellyfin app (#9), or with a
+ * password — picking yourself from the Server's public Users, or typing a
+ * username the Server does not list.
  *
  * A Server with no public Users at all — every account hidden, or a Server that
  * will not say — goes straight to the typed path, because an empty list is not
  * a screen worth showing.
+ *
+ * **Which way is offered first is the device's answer, not this screen's
+ * opinion.** On a TV the code comes first, because the thing being avoided is
+ * typing a password with a remote; everywhere else the Users come first and the
+ * code is one press away. The question is put to `device.deviceForm()` so that
+ * the webOS port answers it by being a TV rather than by being sniffed, and so
+ * nothing outside `src/device/` reads `navigator`.
+ *
+ * **A Server with Quick Connect switched off is never offered it at all**, not
+ * even on a TV — a code that could never be approved would be the only thing
+ * such a User saw. `GET /QuickConnect/Enabled` is read once, beside the public
+ * Users, and a Server that will not answer is taken to mean "off": offering
+ * nothing is better than offering something broken.
  */
 export function SignInScreen(props: SignInScreenProps) {
   const t = useTranslate();
   const [publicUsers, setPublicUsers] = useState<PublicUsers | undefined>(undefined);
+  /** Whether the Server has Quick Connect on. Undefined until it has said. */
+  const [quickConnectOffered, setQuickConnectOffered] = useState<boolean | undefined>(undefined);
+  /** The User asked for a code instead, or a TV was offered one first. */
+  const [usingQuickConnect, setUsingQuickConnect] = useState(false);
   /** The public User whose password is being asked for, if one was picked. */
   const [chosen, setChosen] = useState<PublicUser | undefined>(undefined);
   /** The User asked to type a username instead of picking one. */
@@ -60,10 +86,25 @@ export function SignInScreen(props: SignInScreenProps) {
       if (abandoned) return;
       setPublicUsers(users === undefined ? { unavailable: true } : { users });
     });
+    // A Server that will not answer is read as "off": a code it would never
+    // accept is worse than no code at all.
+    void gateway
+      .isQuickConnectEnabled()
+      .catch(() => false)
+      .then((enabled) => {
+        if (abandoned) return;
+        setQuickConnectOffered(enabled === true);
+        // A TV is handed the code straight away, which is the acceptance
+        // criterion: the device layer decides, and this is where its answer is
+        // acted on.
+        if (enabled === true && props.device.deviceForm() === 'tv') {
+          setUsingQuickConnect(true);
+        }
+      });
     return () => {
       abandoned = true;
     };
-    // The list belongs to the Server, so it is read again only if the address
+    // Both belong to the Server, so they are read again only if the address
     // changes. The gateway itself is rebuilt on every render, so the address is
     // the dependency, not the gateway.
   }, [gateway.serverAddress]);
@@ -81,6 +122,25 @@ export function SignInScreen(props: SignInScreenProps) {
     });
   }
 
+  /**
+   * The way to a code from the password path. One element rather than one per
+   * view: a User who got as far as the list, or as far as typing a username,
+   * should still be able to change their mind.
+   */
+  const offerQuickConnect =
+    quickConnectOffered !== true ? null : (
+      <button
+        class="button button--quiet"
+        type="button"
+        onClick={() => {
+          setFailure(undefined);
+          setUsingQuickConnect(true);
+        }}
+      >
+        {t('quickConnect.offer')}
+      </button>
+    );
+
   const problem =
     failure === undefined ? null : (
       <p class="notice notice--problem" role="alert">
@@ -89,20 +149,35 @@ export function SignInScreen(props: SignInScreenProps) {
     );
 
   const listed = publicUsers === undefined || 'unavailable' in publicUsers ? [] : publicUsers.users;
+  // Nothing is drawn until both answers are in, so a TV never shows the list
+  // of Users for a moment before replacing it with a code.
   const view =
-    publicUsers === undefined
+    publicUsers === undefined || quickConnectOffered === undefined
       ? 'loading'
-      : chosen !== undefined
-        ? 'password'
-        : typing || listed.length === 0
-          ? 'typed'
-          : 'choosing';
+      : usingQuickConnect
+        ? 'quick-connect'
+        : chosen !== undefined
+          ? 'password'
+          : typing || listed.length === 0
+            ? 'typed'
+            : 'choosing';
 
   return (
     <main class="screen screen--centred">
       <h1 class="wordmark">{t('app.name')}</h1>
 
       {view === 'loading' ? <p class="notice">{t('signIn.loadingUsers')}</p> : null}
+
+      {view === 'quick-connect' ? (
+        <QuickConnectPanel
+          session={props.session}
+          serverAddress={props.serverAddress}
+          onSignedIn={props.onSignedIn}
+          onUsePassword={() => {
+            setUsingQuickConnect(false);
+          }}
+        />
+      ) : null}
 
       {view === 'choosing' ? (
         <div class="stack panel panel--wide">
@@ -134,6 +209,7 @@ export function SignInScreen(props: SignInScreenProps) {
           >
             {t('signIn.typeUsername')}
           </button>
+          {offerQuickConnect}
         </div>
       ) : null}
 
@@ -151,6 +227,7 @@ export function SignInScreen(props: SignInScreenProps) {
       ) : null}
 
       {view === 'typed' ? (
+        <>
         <TypedCredentialsForm
           usersUnavailable={publicUsers !== undefined && 'unavailable' in publicUsers}
           busy={busy}
@@ -165,6 +242,8 @@ export function SignInScreen(props: SignInScreenProps) {
                 },
               })}
         />
+        {offerQuickConnect}
+        </>
       ) : null}
 
       {/*

@@ -135,6 +135,52 @@ export type FakeCollection = {
   itemIds: string[];
 };
 
+/**
+ * One Quick Connect request the Server is holding, `QuickConnectResult`-shaped
+ * with the User who approved it kept alongside — the real Server keeps that in
+ * its own authorization record and never puts it in the response.
+ *
+ * The Server holds these only until they are spent: exchanging a secret for a
+ * token removes the request, which is why polling one afterwards is a 404.
+ */
+export type FakeQuickConnectRequest = {
+  Secret: string;
+  /** Six digits, which is what the real Server shows the User. */
+  Code: string;
+  /** The device that asked, and so the device the token will belong to. */
+  DeviceId: string;
+  DeviceName: string;
+  AppName: string;
+  AppVersion: string;
+  DateAdded: string;
+  Authenticated: boolean;
+  /** The fake's own field: who approved it, stripped before serving. */
+  authorizedUserId: string | null;
+};
+
+/**
+ * Quick Connect on the Server (#9). `POST /__fake/state` merges one level deep,
+ * so a test that switches it off hands over the whole object rather than just
+ * the flag.
+ */
+export type FakeQuickConnect = {
+  /** What `GET /QuickConnect/Enabled` answers. An admin can turn it off. */
+  enabled: boolean;
+  requests: FakeQuickConnectRequest[];
+  /**
+   * How many codes have been issued, so each one is different and none is a
+   * random number a test cannot predict. Monotonic rather than counted from
+   * `requests`, which shrinks as requests are spent.
+   */
+  codesIssued: number;
+  /**
+   * A status `POST /QuickConnect/Initiate` answers with, so a test can see a
+   * Server that will not hand out a code at all. Null is the normal Server,
+   * and is also what a patch that leaves the field out means.
+   */
+  failInitiateWith?: number | null;
+};
+
 export type FakeJellyfinState = {
   systemInfo: FakeSystemInfo;
   users: FakeUser[];
@@ -249,6 +295,8 @@ export type FakeJellyfinState = {
    * over or keep. Null is the normal Server.
    */
   failDisplayPreferencesWith: number | null;
+  /** Quick Connect: whether it is on, and the requests in flight (#9). */
+  quickConnect: FakeQuickConnect;
   /**
    * Each User's `UserConfiguration`, by user id — their **Jellyfin** settings,
    * which every Jellyfin app shares, as against the per-client `CustomPrefs`
@@ -330,6 +378,9 @@ export function createSampleData(): FakeJellyfinState {
     failRelatedQueriesWith: null,
     failDisplayPreferencesWith: null,
     displayPreferences: {},
+    // Quick Connect is on, as it is on a Server whose admin has enabled it,
+    // and nothing is in flight: a request only exists once a device asks.
+    quickConnect: { enabled: true, requests: [], codesIssued: 0, failInitiateWith: null },
     userConfiguration: {},
     failUserConfigurationWith: null,
     libraries: SAMPLE_LIBRARIES.map((library) => ({ ...library })),
