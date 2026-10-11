@@ -1,4 +1,5 @@
 import { useTranslate } from '../i18n/index';
+import { useOpenTitle } from '../home/home-rows';
 import { CardArtwork } from '../home/row';
 import { MyListToggle } from './my-list-toggle';
 import { useMyList } from './use-my-list';
@@ -20,6 +21,9 @@ import { useMyList } from './use-my-list';
  */
 export function MyListScreen() {
   const t = useTranslate();
+  // A card here opens the same title page a card on Home does (#17): the page
+  // is for managing the list, and looking at a Title is part of that.
+  const openTitle = useOpenTitle();
   const myList = useMyList();
   const state = myList.state();
   const titles = state.outcome === 'list' ? state.titles : undefined;
@@ -43,7 +47,15 @@ export function MyListScreen() {
       ) : (
         <ul class="grid" aria-label={t('nav.myList')}>
           {titles.map((card) => (
-            <li class="card card--managed" key={card.titleId} aria-label={card.name} tabIndex={0}>
+            <li
+              class="card card--managed"
+              key={card.titleId}
+              aria-label={card.name}
+              tabIndex={0}
+              onClick={() => {
+                openTitle(card);
+              }}
+            >
               <CardArtwork card={card} />
               <span class="card__name">{card.name}</span>
               <MyListToggle card={card} />

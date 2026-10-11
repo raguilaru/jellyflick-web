@@ -1,5 +1,37 @@
 import type { Messages } from './en';
 
+/** Los idiomas más probables, por el código ISO 639-2 que envía el servidor. */
+const LANGUAGE_NAMES_ES: Readonly<Record<string, string>> = {
+  ara: 'Árabe',
+  ces: 'Checo',
+  cmn: 'Mandarín',
+  dan: 'Danés',
+  deu: 'Alemán',
+  ell: 'Griego',
+  eng: 'Inglés',
+  fin: 'Finés',
+  fra: 'Francés',
+  heb: 'Hebreo',
+  hin: 'Hindi',
+  hun: 'Húngaro',
+  ita: 'Italiano',
+  jpn: 'Japonés',
+  kor: 'Coreano',
+  nld: 'Neerlandés',
+  nor: 'Noruego',
+  pol: 'Polaco',
+  por: 'Portugués',
+  ron: 'Rumano',
+  rus: 'Ruso',
+  spa: 'Español',
+  swe: 'Sueco',
+  tha: 'Tailandés',
+  tur: 'Turco',
+  ukr: 'Ucraniano',
+  vie: 'Vietnamita',
+  zho: 'Chino',
+};
+
 export const es: Messages = {
   'app.name': 'Jellyflick',
 
@@ -117,6 +149,31 @@ export const es: Messages = {
   'search.allGenres': 'Todos los géneros',
   'search.genreEmpty': (p) => `Todavía no hay nada en ${p.genre}.`,
   'search.genreUnavailable': (p) => `Jellyflick no pudo leer lo que hay en ${p.genre}.`,
+
+  'title.loading': 'Buscando ese título…',
+  'title.notFound':
+    'Jellyflick no encontró ese título. Solo las películas y las series tienen página propia.',
+  'title.unavailable': 'Jellyflick no pudo leer ese título del servidor.',
+  'title.close': 'Cerrar',
+  'title.play': 'Reproducir',
+  'title.markWatched': (p) => `Marcar ${p.name} como visto`,
+  'title.markNotWatched': (p) => `Marcar ${p.name} como no visto`,
+  'title.watchedUnsaved': 'Jellyflick no pudo guardar en el servidor si has visto eso.',
+  'title.runtime': (p) => {
+    const hours = Math.floor(p.minutes / 60);
+    const minutes = p.minutes % 60;
+    if (hours === 0) return `${String(minutes)} min`;
+    if (minutes === 0) return `${String(hours)} h`;
+    return `${String(hours)} h ${String(minutes)} min`;
+  },
+  'title.criticRating': (p) => `${String(Math.round(p.score))}% de la crítica`,
+  'title.communityRating': (p) => `${String(p.score)} de la comunidad`,
+  'title.cast': 'Reparto',
+  'title.audio': 'Audio',
+  'title.subtitles': 'Subtítulos',
+  'title.collection': 'Colección',
+  'title.moreLikeThis': 'Más como esto',
+  'title.language': (p) => LANGUAGE_NAMES_ES[p.code] ?? p.code.toUpperCase(),
 
   'nav.sections': 'Secciones',
   'nav.home': 'Inicio',

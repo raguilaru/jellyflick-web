@@ -1,5 +1,10 @@
-import { servedViewOf, type FakeItem } from '../data.ts';
-import type { FakeRoute } from '../routing.ts';
+import {
+  servedCollectionViewOf,
+  servedViewOf,
+  type FakeItem,
+  type FakeJellyfinState,
+} from '../data.ts';
+import type { FakeRequest, FakeRoute } from '../routing.ts';
 import { userForToken } from './users.ts';
 
 /**
@@ -127,9 +132,11 @@ export const itemRoutes: readonly FakeRoute[] = [
       const includeItemTypes = csvOf(request.query.get('includeItemTypes'));
       const searchTerm = request.query.get('searchTerm');
       const genres = csvOf(request.query.get('genres'));
+      const ids = csvOf(request.query.get('ids'));
       const favourites = state.favourites[user.Id] ?? [];
 
       const matching = state.items
+        .filter((item) => ids.length === 0 || ids.includes(item.Id))
         .filter((item) => !favouritesOnly || favourites.includes(item.Id))
         .filter((item) => includeItemTypes.length === 0 || includeItemTypes.includes(item.Type))
         // The real Server's matching is cleverer than this; a substring of the
@@ -144,12 +151,77 @@ export const itemRoutes: readonly FakeRoute[] = [
         )
         .sort((left, right) => left.Name.localeCompare(right.Name))
         .slice(0, limitOf(request.query.get('limit')))
-        .map(servedViewOf);
+        .map((item) => asAskedFor(item, request, state, user.Id));
 
       // A query result, not a bare array: `/Items/Latest` is the odd one out.
       return {
         status: 200,
         body: { Items: matching, TotalRecordCount: matching.length, StartIndex: 0 },
+      };
+    },
+  },
+
+  /**
+   * `/Items/{itemId}/Similar` — More like this on the title page (#17). Three
+   * segments, so it cannot be confused with the two-segment `/Items/Latest`
+   * however the routes are ordered; a `/Items/:itemId` route would be the one
+   * to watch, and this fake deliberately has none.
+   */
+  {
+    method: 'GET',
+    path: '/Items/:itemId/Similar',
+    handle: (request, state, params) => {
+      const user = userForToken(request.headers.authorization ?? '', state.users);
+      if (user === undefined) {
+        return { status: 401, body: { error: 'No valid token.' } };
+      }
+      if (state.failRelatedQueriesWith !== null) {
+        return {
+          status: state.failRelatedQueriesWith,
+          body: { error: 'The fake Jellyfin was told to fail related queries.' },
+        };
+      }
+
+      const itemId = params.itemId ?? '';
+      if (!state.items.some((item) => item.Id === itemId)) {
+        return { status: 404, body: { error: `No item ${itemId}.` } };
+      }
+
+      // The relation's own order is the Server's answer, so it is kept rather
+      // than sorted: "most like this first" is a real property of the endpoint.
+      const like = (state.similar[itemId] ?? [])
+        .map((id) => state.items.find((item) => item.Id === id))
+        .filter((item): item is FakeItem => item !== undefined)
+        .slice(0, limitOf(request.query.get('limit')))
+        .map((item) => asAskedFor(item, request, state, user.Id));
+
+      return { status: 200, body: { Items: like, TotalRecordCount: like.length, StartIndex: 0 } };
+    },
+  },
+
+  /** `/Items/{itemId}/Collections` — the Collections one Title is in (#17). */
+  {
+    method: 'GET',
+    path: '/Items/:itemId/Collections',
+    handle: (request, state, params) => {
+      if (userForToken(request.headers.authorization ?? '', state.users) === undefined) {
+        return { status: 401, body: { error: 'No valid token.' } };
+      }
+      if (state.failRelatedQueriesWith !== null) {
+        return {
+          status: state.failRelatedQueriesWith,
+          body: { error: 'The fake Jellyfin was told to fail related queries.' },
+        };
+      }
+
+      const itemId = params.itemId ?? '';
+      const holding = state.collections
+        .filter((collection) => collection.itemIds.includes(itemId))
+        .map(servedCollectionViewOf);
+
+      return {
+        status: 200,
+        body: { Items: holding, TotalRecordCount: holding.length, StartIndex: 0 },
       };
     },
   },
@@ -171,6 +243,69 @@ export const itemRoutes: readonly FakeRoute[] = [
     },
   },
 ];
+
+/**
+ * The properties the real Server only sends when `fields` names them. Verified
+ * against `DtoService.cs` (see `docs/research/jellyfin-api.md` §4): the ratings,
+ * `RunTimeTicks` and `ProductionYear` are *not* among them — they are always
+ * sent — and `UserData` is `enableUserData`'s rather than a field's.
+ *
+ * Gating them here is what catches a query that forgot to ask: a client reading
+ * `Overview` off a Row's items would otherwise work against the fake and show
+ * nothing against a real Server.
+ */
+const GATED_BY_FIELDS: Readonly<Record<string, keyof FakeItem>> = {
+  Overview: 'Overview',
+  People: 'People',
+  MediaStreams: 'MediaStreams',
+  ProviderIds: 'ProviderIds',
+};
+
+/**
+ * One item as the query asked for it: the `fields` properties it named, the
+ * image types it enabled, and this User's own `UserData` unless it turned that
+ * off. `Genres` is deliberately not gated — the Server does gate it, and every
+ * query this app makes asks for it, so gating it here would only add noise.
+ */
+function asAskedFor(
+  item: FakeItem,
+  request: FakeRequest,
+  state: FakeJellyfinState,
+  userId: string,
+): Record<string, unknown> {
+  const fields = csvOf(request.query.get('fields'));
+  const dto: Record<string, unknown> = { ...servedViewOf(item) };
+
+  for (const [field, property] of Object.entries(GATED_BY_FIELDS)) {
+    if (!fields.includes(field)) delete dto[property];
+  }
+
+  // Omitted means every image type, which is the real Server's default.
+  const imageTypes = csvOf(request.query.get('enableImageTypes'));
+  if (imageTypes.length > 0) {
+    if (!imageTypes.includes('Backdrop')) delete dto.BackdropImageTags;
+    const tags = item.ImageTags;
+    if (tags !== undefined) {
+      const kept = Object.entries(tags).filter(([type]) => imageTypes.includes(type));
+      dto.ImageTags = Object.fromEntries(kept);
+    }
+  }
+
+  // Omitted means true, which is also the real Server's default.
+  if (request.query.get('enableUserData') === 'false') {
+    delete dto.UserData;
+  } else {
+    dto.UserData = {
+      Key: item.Id,
+      ItemId: item.Id,
+      Played: (state.played[userId] ?? []).includes(item.Id),
+      IsFavorite: (state.favourites[userId] ?? []).includes(item.Id),
+      PlayCount: 0,
+    };
+  }
+
+  return dto;
+}
 
 function imageTagOf(item: FakeItem | undefined, imageType: string): string | undefined {
   if (item === undefined) return undefined;

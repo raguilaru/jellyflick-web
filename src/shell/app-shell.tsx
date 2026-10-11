@@ -12,6 +12,8 @@ import { SETTINGS_PATH, SettingsScreen } from '../settings/settings-screen';
 import { SettingsProvider } from '../settings/settings-provider';
 import { useAccentColour } from '../settings/use-accent-colour';
 import { UiLanguage } from '../settings/ui-language';
+import { TITLE_PATH } from '../title/title-page';
+import { TitleScreen } from '../title/title-screen';
 import { useBackHandler } from './back';
 import { useWideScreen } from './layout';
 import { BottomBar } from './bottom-bar';
@@ -115,6 +117,10 @@ function ShellFrame({ user, session, device, pictureUrl }: AppShellProps) {
             whichever navigation bar is on the screen. */}
         <Route path={HOME_LAYOUT_PATH} component={HomeLayoutScreen} />
         <Route path={SETTINGS_PATH} component={SettingsScreen} device={device} />
+        {/* Nor is the title page, for the same reason, and one of its own: it is
+            reached from a card, never from a navigation bar, so an entry in
+            `SECTIONS` would put it in both bars (#17). */}
+        <Route path={TITLE_PATH} component={TitleScreen} session={session} />
         <Route default component={UnknownSection} />
       </Router>
 

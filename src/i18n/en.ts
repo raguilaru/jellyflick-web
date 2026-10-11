@@ -6,6 +6,42 @@
  * `Intl.NumberFormat` / `Intl.DateTimeFormat` / `Intl.PluralRules` inside the
  * function for anything formatted — all three are native on Chromium 68.
  */
+/**
+ * The languages a household's media is most likely to be in, by the ISO 639-2
+ * code Jellyfin puts on a stream. Not exhaustive on purpose: a code that is not
+ * here is shown as itself, which says more than nothing does.
+ */
+const LANGUAGE_NAMES_EN: Readonly<Record<string, string>> = {
+  ara: 'Arabic',
+  ces: 'Czech',
+  cmn: 'Mandarin',
+  dan: 'Danish',
+  deu: 'German',
+  ell: 'Greek',
+  eng: 'English',
+  fin: 'Finnish',
+  fra: 'French',
+  heb: 'Hebrew',
+  hin: 'Hindi',
+  hun: 'Hungarian',
+  ita: 'Italian',
+  jpn: 'Japanese',
+  kor: 'Korean',
+  nld: 'Dutch',
+  nor: 'Norwegian',
+  pol: 'Polish',
+  por: 'Portuguese',
+  ron: 'Romanian',
+  rus: 'Russian',
+  spa: 'Spanish',
+  swe: 'Swedish',
+  tha: 'Thai',
+  tur: 'Turkish',
+  ukr: 'Ukrainian',
+  vie: 'Vietnamese',
+  zho: 'Chinese',
+};
+
 export const en = {
   'app.name': 'Jellyflick',
 
@@ -134,6 +170,41 @@ export const en = {
   'search.genreEmpty': (p: { genre: string }) => `There is nothing in ${p.genre} yet.`,
   'search.genreUnavailable': (p: { genre: string }) =>
     `Jellyflick could not read what is in ${p.genre}.`,
+
+  // The title page (#17). A Title's own name is its heading, so there is no
+  // key for it: the strings here are the labels around it.
+  'title.loading': 'Looking for that Title…',
+  'title.notFound':
+    'Jellyflick could not find that Title. Only Movies and Series have a page of their own.',
+  'title.unavailable': 'Jellyflick could not read that Title from the Server.',
+  'title.close': 'Close',
+  'title.play': 'Play',
+  'title.markWatched': (p: { name: string }) => `Mark ${p.name} as watched`,
+  'title.markNotWatched': (p: { name: string }) => `Mark ${p.name} as not watched`,
+  'title.watchedUnsaved': 'Jellyflick could not save whether you have watched that on the Server.',
+  // A length in whole minutes, said the way a running time is read out.
+  'title.runtime': (p: { minutes: number }) => {
+    const hours = Math.floor(p.minutes / 60);
+    const minutes = p.minutes % 60;
+    if (hours === 0) return `${String(minutes)}m`;
+    if (minutes === 0) return `${String(hours)}h`;
+    return `${String(hours)}h ${String(minutes)}m`;
+  },
+  'title.criticRating': (p: { score: number }) => `${String(Math.round(p.score))}% critics`,
+  'title.communityRating': (p: { score: number }) => `${String(p.score)} from the community`,
+  'title.cast': 'Cast',
+  'title.audio': 'Audio',
+  'title.subtitles': 'Subtitles',
+  'title.collection': 'Collection',
+  'title.moreLikeThis': 'More like this',
+  /**
+   * One audio or subtitle language, by the three-letter code the Server sends.
+   * The dictionary is the locale's own, because a language's name is as
+   * translated as anything else, and an unlisted code falls back to itself:
+   * `Intl.DisplayNames` is Chrome 81 and the floor is 68.
+   */
+  'title.language': (p: { code: string }) =>
+    LANGUAGE_NAMES_EN[p.code] ?? p.code.toUpperCase(),
 
   'nav.sections': 'Sections',
   'nav.home': 'Home',
