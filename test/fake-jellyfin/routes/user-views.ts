@@ -15,7 +15,7 @@ export const userViewRoutes: readonly FakeRoute[] = [
     handle: (request, state) => {
       // The libraries are the signed-in User's own, so the Server will not list
       // them without a token.
-      if (userForToken(request.headers.authorization ?? '', state.users) === undefined) {
+      if (userForToken(request.headers.authorization ?? '', state) === undefined) {
         return { status: 401, body: { error: 'No valid token.' } };
       }
       if (state.failLibraryQueriesWith !== null) {

@@ -171,6 +171,17 @@ export const en = {
   'search.genreUnavailable': (p: { genre: string }) =>
     `Jellyflick could not read what is in ${p.genre}.`,
 
+  // Several Users on one device, and the User Picker (#8).
+  'users.pickerHeading': 'Who is watching?',
+  'users.pickerExplanation':
+    'Pick yourself to carry on with your own Home and My List. Nobody is asked for a password again.',
+  'users.addUser': 'Add another User',
+  'users.cancelAdding': 'Cancel',
+  'users.signOut': (p: { name: string }) => `Sign out ${p.name}`,
+  // The control in both navigation bars. It says who is watching as well as
+  // what it does, because the picture beside it is the only other clue.
+  'users.switchUser': (p: { name: string }) => `Switch User, currently ${p.name}`,
+  'users.keepWatching': (p: { name: string }) => `Keep watching as ${p.name}`,
   // The title page (#17). A Title's own name is its heading, so there is no
   // key for it: the strings here are the labels around it.
   'title.loading': 'Looking for that Title…',

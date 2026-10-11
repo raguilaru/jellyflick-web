@@ -1,4 +1,4 @@
-import { publicViewOf, type FakeUser } from '../data.ts';
+import { publicViewOf, type FakeJellyfinState, type FakeUser } from '../data.ts';
 import type { FakeRoute } from '../routing.ts';
 
 /**
@@ -56,7 +56,7 @@ export const userRoutes: readonly FakeRoute[] = [
     method: 'GET',
     path: '/Users/Me',
     handle: (request, state) => {
-      const user = userForToken(request.headers.authorization ?? '', state.users);
+      const user = userForToken(request.headers.authorization ?? '', state);
       if (user === undefined) return { status: 401, body: { error: 'No valid token.' } };
       return { status: 200, body: publicViewOf(user) };
     },
@@ -90,14 +90,27 @@ function authenticationResultFor(user: FakeUser, headers: Record<string, string>
   };
 }
 
-/** The user a request's token belongs to, or `undefined` for no usable token. */
+/**
+ * The user a request's token belongs to, or `undefined` for no usable token.
+ *
+ * A token the Server has dropped — `POST /Sessions/Logout` — is no longer
+ * usable anywhere, which is why this reads the whole state rather than just the
+ * users: one User signing out must not be answerable on any endpoint, while the
+ * other Users signed in on the device carry on untouched.
+ */
 export function userForToken(
   authorization: string,
-  users: readonly FakeUser[],
+  state: Pick<FakeJellyfinState, 'users' | 'revokedTokens'>,
 ): FakeUser | undefined {
-  const token = valueFromAuthorization(authorization, 'Token');
+  const token = tokenFromAuthorization(authorization);
   if (token === undefined) return undefined;
-  return users.find((user) => token.startsWith(`token-${user.Id}-`));
+  if (state.revokedTokens.includes(token)) return undefined;
+  return state.users.find((user) => token.startsWith(`token-${user.Id}-`));
+}
+
+/** The access token a request carries, if it carries one at all. */
+export function tokenFromAuthorization(authorization: string): string | undefined {
+  return valueFromAuthorization(authorization, 'Token');
 }
 
 /** One quoted, URL-encoded value out of a `MediaBrowser …` header. */

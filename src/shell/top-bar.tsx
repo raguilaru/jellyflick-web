@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'preact/hooks';
 import { useTranslate } from '../i18n/index';
+import type { PickableUser } from '../session/user-picker';
 import { SETTINGS_PATH } from '../settings/settings-screen';
 import { HOME_PATH, SECTIONS } from './sections';
 import { SectionLink } from './section-link';
+import { UserButton } from './user-button';
 
 /**
  * How far the page has to move before the bar stops being transparent. Small
@@ -14,14 +16,22 @@ const SOLID_AFTER_PIXELS = 16;
 export type TopBarProps = {
   /** The address the User is on, so the section they are in can be marked. */
   currentPath: string;
+  /** Who is watching, with their picture when the Server has one for them. */
+  user: PickableUser;
+  /** Opens the User Picker. Switching User is available from both bars (#8). */
+  onSwitchUser(): void;
 };
 
 /**
- * The navigation for anything wider than a phone: the wordmark, then one link
- * per section. It sits over the Billboard and turns solid as the page scrolls,
- * so the links stay readable over the artwork (story 62).
+ * The navigation for anything wider than a phone: the wordmark, one link per
+ * section, then the User's picture. It sits over the Billboard and turns solid
+ * as the page scrolls, so the links stay readable over the artwork (story 62).
+ *
+ * The picture is at the end rather than among the sections because it is not
+ * one: it opens the User Picker (story 17), and the same control is the fourth
+ * item of the phone's bottom bar.
  */
-export function TopBar({ currentPath }: TopBarProps) {
+export function TopBar({ currentPath, user, onSwitchUser }: TopBarProps) {
   const t = useTranslate();
   const solid = useSolidOnScroll();
 
@@ -54,6 +64,7 @@ export function TopBar({ currentPath }: TopBarProps) {
           {t('nav.settings')}
         </a>
       </nav>
+      <UserButton user={user} bar="top-bar" onPress={onSwitchUser} />
     </header>
   );
 }

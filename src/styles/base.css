@@ -204,6 +204,21 @@ body {
   color: var(--text-muted);
 }
 
+/*
+ * One User in the picker: the tile that picks them, with the sign-out under it.
+ * A grid, so `gap` is the Chrome 66 one.
+ */
+.user-list__entry {
+  display: grid;
+  gap: var(--space-1);
+  align-content: start;
+}
+
+.user-list__sign-out {
+  font-size: 12px;
+  padding: var(--space-1);
+}
+
 .user-list__name {
   font-weight: 600;
   text-align: center;
@@ -509,7 +524,8 @@ html[data-input='pointer'] [tabindex]:focus {
   top: 0;
   z-index: 2;
   display: grid;
-  grid-template-columns: auto 1fr;
+  /* The wordmark, the sections, then who is watching at the end. */
+  grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: var(--space-4);
   padding: var(--space-2) var(--space-4);
@@ -588,6 +604,65 @@ html[data-input='pointer'] [tabindex]:focus {
   font-size: 12px;
   text-align: center;
   text-decoration: none;
+}
+
+/*
+ * Who is watching, in either bar. It is a real `<button>` in both — it opens
+ * the User Picker (#8) — so the browser's own button look comes off and the
+ * focus ring from `base.css` is the only thing marking it.
+ */
+.bottom-bar__user,
+.top-bar__user {
+  background: none;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+/* On the top bar it is the picture and the name side by side, not stacked. */
+.top-bar__user {
+  display: grid;
+  grid-auto-flow: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1);
+  color: var(--text-muted);
+}
+
+.top-bar__user:hover {
+  color: var(--text-strong);
+}
+
+/* A fixed square rather than `aspect-ratio`, which is Chrome 88. */
+.top-bar__picture,
+.top-bar__initial {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--surface-raised);
+}
+
+.top-bar__picture {
+  object-fit: cover;
+}
+
+.top-bar__initial {
+  display: grid;
+  align-content: center;
+  justify-content: center;
+  border: 1px solid var(--surface-line);
+  font-family: var(--font-display);
+  font-size: 18px;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.top-bar__name {
+  /* A long name must not push the sections off the bar. */
+  max-width: 12ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .bottom-bar__link--current {
@@ -831,6 +906,39 @@ html[data-input='pointer'] [tabindex]:focus {
   .layout-add {
     grid-auto-flow: column;
   }
+}
+
+/*
+ * The User Picker (#8): who of the household is watching.
+ *
+ * Fixed and over everything, because it is asked from anywhere in the app and
+ * has to cover whatever was behind it. `src/navigation/` treats a fixed overlay
+ * as the flow in its own right, so the arrow keys walk the Users inside it and
+ * never reach the bars underneath (#7).
+ *
+ * `inset` is Chrome 87 and ships raw, so the four sides are written out. It
+ * sits above both bars, which are `z-index: 2`.
+ */
+.user-picker {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 3;
+  display: grid;
+  align-content: center;
+  justify-content: center;
+  padding: var(--space-4);
+  /* Opaque rather than `backdrop-filter`, which is Chrome 76. */
+  background-color: var(--surface-base);
+  /* A long list of Users scrolls rather than running off the screen. */
+  overflow-y: auto;
+}
+
+.user-picker__panel {
+  width: 100%;
+  max-width: 720px;
 }
 
 /*

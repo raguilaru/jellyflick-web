@@ -42,6 +42,13 @@ export type JellyfinGateway = {
    */
   getCurrentUser(): Promise<UserDto>;
   /**
+   * `POST /Sessions/Logout` — drops the token this gateway carries, and only
+   * that one. It takes no parameters: the Server revokes the token the request
+   * arrives with, which is what makes it safe when several Users are signed in
+   * on one device, each on their own DeviceId. Answers 204.
+   */
+  signOut(): Promise<void>;
+  /**
    * The URL of a User's picture. Anonymous on the Server, so an `<img src>`
    * needs no token. There are no sizing parameters on this endpoint — size the
    * picture with CSS.
@@ -316,6 +323,7 @@ export function createJellyfinGateway(options: JellyfinGatewayOptions): Jellyfin
         Username: username,
         Pw: password,
       }),
+    signOut: () => requestWithoutAnswer('POST', '/Sessions/Logout'),
     userImageUrl: (userId, tag) =>
       `${serverAddress}/UserImage?userId=${encodeURIComponent(userId)}&tag=${encodeURIComponent(tag)}`,
 

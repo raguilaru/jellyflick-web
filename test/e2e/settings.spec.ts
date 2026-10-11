@@ -44,12 +44,29 @@ async function signInAndLand(page: Page): Promise<void> {
 }
 
 /**
- * Opens the settings screen from whichever navigation bar this viewport has:
- * the top bar's own link on a wide screen, the User's picture in the phone's
- * bottom bar. Both are named for what they do.
+ * Opens the settings screen the way this viewport offers it.
+ *
+ * On a wide screen the top bar carries its own Settings link, after the
+ * sections — `/settings` is not one of them (#11).
+ *
+ * A phone's bottom bar has no room for a fifth item, and its fourth is the
+ * User picture, which switches User (#8). So a phone goes through the User
+ * Picker, which is where a household's own things live and which carries the
+ * link. Only one bar is in the document at a time (#6), so which bar is there
+ * is the signal for which way round this is — and the links are scoped to the
+ * thing that holds them, because on a wide screen both exist once the picker
+ * is open.
  */
 async function openSettings(page: Page, name = 'Settings'): Promise<void> {
-  await page.getByRole('link', { name }).press('Enter');
+  const topBar = page.locator('.top-bar');
+  if ((await topBar.count()) > 0) {
+    await topBar.getByRole('link', { name }).press('Enter');
+  } else {
+    // Named for who is watching rather than for settings, so it is found by
+    // its class and this helper stays language-agnostic.
+    await page.locator('.bottom-bar__user').press('Enter');
+    await page.locator('.user-picker').getByRole('link', { name }).press('Enter');
+  }
   await expect(page.getByRole('heading', { level: 1, name })).toBeVisible();
   // Nothing is offered until the Server has answered, so the controls arriving
   // is the signal that a press will land on the User's real settings.

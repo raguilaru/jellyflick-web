@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'preact/hooks';
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'preact/hooks';
 import { useLocation } from 'preact-iso/router';
 import type { DeviceLayer } from '../device/types';
 import { HOME_PATH } from './sections';
@@ -8,6 +8,47 @@ import { HOME_PATH } from './sections';
  * came from" apart from "whatever the browser was showing before Jellyflick".
  */
 const ROOT_ENTRY = 'jellyflickRoot';
+
+/**
+ * What Back has to do before it is allowed to be a navigation at all: the
+ * overlays over the screen, innermost last.
+ *
+ * An overlay is not a history entry — the User Picker deliberately has no
+ * address — so `history.back()` would navigate the screen behind it and leave
+ * it stranded. Back closes the topmost overlay instead, and only once there
+ * are none left does it mean what it meant before. This is the extension point
+ * the architecture asks a screen needing its own Back to use, rather than
+ * adding a second key listener: the title-page pop-up (#17) and the player
+ * (#26) want the same thing.
+ */
+const overlays: (() => void)[] = [];
+
+/**
+ * Claims Back while an overlay is open. The claim is given up when the overlay
+ * closes or goes away, so nothing has to remember to release it.
+ *
+ * A **layout** effect, deliberately: a plain one is deferred, and an overlay
+ * that is on the screen without having claimed Back yet is an overlay the
+ * first Back press walks straight past, navigating the screen behind it and
+ * leaving it stranded. The claim has to land with the DOM, not after it.
+ */
+export function useBackClaim(open: boolean, close: () => void): void {
+  // The newest value of the callback, so a claim never calls a stale one.
+  const current = useRef(close);
+  current.current = close;
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const claim = (): void => {
+      current.current();
+    };
+    overlays.push(claim);
+    return () => {
+      const at = overlays.lastIndexOf(claim);
+      if (at !== -1) overlays.splice(at, 1);
+    };
+  }, [open]);
+}
 
 /**
  * The one Back handler. The browser's back button and the Back key on a remote
@@ -33,6 +74,12 @@ export function useBackHandler(device: DeviceLayer): void {
   }, []);
 
   const goBack = useCallback(() => {
+    // An overlay over the screen is what Back is about while one is open.
+    const overlay = overlays[overlays.length - 1];
+    if (overlay !== undefined) {
+      overlay();
+      return;
+    }
     if (!isOnRootEntry()) {
       window.history.back();
       return;

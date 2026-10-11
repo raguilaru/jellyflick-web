@@ -164,6 +164,18 @@ export type FakeJellyfinState = {
    */
   failAuthenticationWith: number | null;
   /**
+   * Access tokens the Server has dropped, as `POST /Sessions/Logout` does: a
+   * token in here is no longer one any request can use. The real Server keeps
+   * live sessions; the fake derives a token from the user and the DeviceId, so
+   * the only thing it has to remember is which ones have been revoked.
+   */
+  revokedTokens: string[];
+  /**
+   * A status `POST /Sessions/Logout` answers with, so a test can see a Server
+   * that will not drop a token. Null is the normal Server.
+   */
+  failSessionLogoutWith: number | null;
+  /**
    * A status the library endpoints — `/UserViews` and `/Items/Latest` — answer
    * with whatever was asked, so a test can see what Home looks like when the
    * Server will not say what it holds. Null is the normal Server.
@@ -200,6 +212,8 @@ const SERVER_ID = '0f1e2d3c4b5a69788796a5b4c3d2e1f0';
 export function createSampleData(): FakeJellyfinState {
   return {
     failAuthenticationWith: null,
+    revokedTokens: [],
+    failSessionLogoutWith: null,
     failLibraryQueriesWith: null,
     failFavouriteQueriesWith: null,
     failFavouriteWritesWith: null,

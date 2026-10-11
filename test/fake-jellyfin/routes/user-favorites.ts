@@ -30,7 +30,7 @@ function favouriteWrite(
   params: Readonly<Record<string, string>>,
   isFavorite: boolean,
 ): FakeResponse {
-  const user = userForToken(request.headers.authorization ?? '', state.users);
+  const user = userForToken(request.headers.authorization ?? '', state);
   if (user === undefined) {
     return { status: 401, body: { error: 'No valid token.' } };
   }

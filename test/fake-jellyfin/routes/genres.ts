@@ -15,7 +15,7 @@ export const genreRoutes: readonly FakeRoute[] = [
     path: '/Genres',
     handle: (request, state) => {
       // What genres there are is what one User's libraries hold.
-      if (userForToken(request.headers.authorization ?? '', state.users) === undefined) {
+      if (userForToken(request.headers.authorization ?? '', state) === undefined) {
         return { status: 401, body: { error: 'No valid token.' } };
       }
 

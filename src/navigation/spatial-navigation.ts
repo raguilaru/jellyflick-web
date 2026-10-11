@@ -104,11 +104,25 @@ function moveFocus(direction: Direction): boolean {
 }
 
 /**
- * The candidate to move to. Items in the same flow as the one focus is on are
- * tried first, so the Row below is reached before the bottom bar, which is
- * fixed to the bottom of the screen and would otherwise always be the nearest
- * thing downwards. Fixed chrome is reached only once the flow has run out —
- * and from inside an overlay, which is itself fixed, the overlay is the flow.
+ * The candidate to move to.
+ *
+ * **A Row is a line**, so Left and Right walk the line and never leave it: at
+ * either end of a Row there is simply nowhere further to go, and the way out
+ * of a Row is Up or Down. Without this, anything focusable to the right of a
+ * Row's last card — the User picture at the end of the top bar (#8), a button
+ * on an enlarged card (#21) — is the only candidate rightwards and wins by
+ * default, however far above the Row it sits. Pressing Right at the end of a
+ * Row would then jump to the top corner of the screen.
+ *
+ * Only strips that mark themselves a focus group are lines in this sense. A
+ * grid that wraps down the page — the My List page — is not one, and Right
+ * there goes on to the next Title as the geometry says.
+ *
+ * Then: items in the same flow as the one focus is on are tried first, so the
+ * Row below is reached before the bottom bar, which is fixed to the bottom of
+ * the screen and would otherwise always be the nearest thing downwards. Fixed
+ * chrome is reached only once the flow has run out — and from inside an
+ * overlay, which is itself fixed, the overlay is the flow.
  */
 function chooseCandidate(
   from: HTMLElement | undefined,
@@ -116,6 +130,18 @@ function chooseCandidate(
   candidates: readonly HTMLElement[],
   direction: Direction,
 ): HTMLElement | undefined {
+  const horizontal = direction === 'Left' || direction === 'Right';
+  const line = horizontal && from !== undefined ? groupOf(from) : undefined;
+  if (line !== undefined) {
+    const alongTheLine = candidates.filter((item) => groupOf(item) === line);
+    const index = nearestInDirection(
+      fromBox,
+      alongTheLine.map((item) => boxOf(item)),
+      direction,
+    );
+    return index === undefined ? undefined : alongTheLine[index];
+  }
+
   const fixedHere = from !== undefined && isFixed(from);
   const sameFlow = candidates.filter((item) => isFixed(item) === fixedHere);
   const otherFlow = candidates.filter((item) => isFixed(item) !== fixedHere);
