@@ -493,7 +493,7 @@ about which one a new setting belongs in:
   so what is tested is that the choice reaches the account: `settings.spec.ts`
   reads the Server's own copy back rather than the screen's.
 
-The screen's own section below says how the copy keeps both stores honest.
+The settings screen section above says how the copy keeps both stores honest.
 
 ## My List
 
