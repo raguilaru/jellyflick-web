@@ -3,6 +3,7 @@ import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models/base
 import type { BaseItemDtoQueryResult } from '@jellyfin/sdk/lib/generated-client/models/base-item-dto-query-result';
 import type { DisplayPreferencesDto } from '@jellyfin/sdk/lib/generated-client/models/display-preferences-dto';
 import type { PublicSystemInfo } from '@jellyfin/sdk/lib/generated-client/models/public-system-info';
+import type { UserConfiguration } from '@jellyfin/sdk/lib/generated-client/models/user-configuration';
 import type { UserDto } from '@jellyfin/sdk/lib/generated-client/models/user-dto';
 import type { UserItemDataDto } from '@jellyfin/sdk/lib/generated-client/models/user-item-data-dto';
 import { buildAuthorizationHeader, type ServerIdentity } from './authorization';
@@ -201,6 +202,23 @@ export type JellyfinGateway = {
   saveDisplayPreferences(
     options: DisplayPreferencesOptions & { preferences: DisplayPreferencesDto },
   ): Promise<void>;
+  /**
+   * `POST /Users/Configuration?userId=…` — the User's **Jellyfin** settings,
+   * which every Jellyfin app shares, as against the per-client Client Settings
+   * above. Answers 204.
+   *
+   * There is deliberately no read here: 12.x has **no `GET
+   * /Users/Configuration`**, so a User's configuration is read from
+   * `UserDto.Configuration` through `getCurrentUser`.
+   *
+   * The body is the **whole** `UserConfiguration` and the Server assigns it as
+   * given, so every write is a read-modify-write — see
+   * `src/settings/playback-preferences.ts`.
+   */
+  saveUserConfiguration(options: {
+    userId: string;
+    configuration: UserConfiguration;
+  }): Promise<void>;
 };
 
 /**
@@ -643,6 +661,13 @@ export function createJellyfinGateway(options: JellyfinGatewayOptions): Jellyfin
         'POST',
         `/DisplayPreferences/${displayPreferencesPath(options)}`,
         options.preferences,
+      ),
+
+    saveUserConfiguration: (options) =>
+      requestWithoutAnswer(
+        'POST',
+        `/Users/Configuration${query({ userId: options.userId })}`,
+        options.configuration,
       ),
 
     itemImageUrl: (itemId, imageType, options = {}) =>

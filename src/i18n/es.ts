@@ -133,6 +133,42 @@ export const es: Messages = {
   'settings.language.en': 'English',
   'settings.language.es': 'Español',
 
+  'settings.playbackHeading': 'Qué se reproduce',
+  'settings.playbackExplanation':
+    'Estos ajustes los guarda Jellyfin en tu cuenta, no Jellyflick, así que todas tus aplicaciones de Jellyfin los siguen, y un cambio aquí se aplica la próxima vez que reproduzcas algo.',
+
+  'settings.audioHeading': 'Idioma del audio',
+  'settings.audioExplanation':
+    'El idioma que quieres oír cuando una película o un episodio ofrece más de uno. Esto es el sonido, no el idioma de Jellyflick.',
+
+  'settings.subtitleLanguageHeading': 'Idioma de los subtítulos',
+  'settings.subtitleLanguageExplanation':
+    'El idioma en el que quieres leer los subtítulos cuando hay más de uno.',
+
+  'settings.subtitleModeHeading': 'Cuándo mostrar los subtítulos',
+  'settings.subtitleModeExplanation': 'Con qué frecuencia aparecen los subtítulos por su cuenta.',
+  'settings.subtitleMode.none': 'Nunca',
+  'settings.subtitleMode.onlyForced': 'Solo los forzados, para carteles y otros idiomas',
+  'settings.subtitleMode.default': 'Los que la película o el episodio marque por defecto',
+  'settings.subtitleMode.smart': 'Cuando el sonido no está en mi idioma',
+  'settings.subtitleMode.always': 'Siempre',
+
+  'settings.nextEpisodeHeading': 'El episodio siguiente',
+  'settings.nextEpisodeExplanation':
+    'Qué pasa cuando termina un episodio y hay otro después.',
+  'settings.nextEpisode.autoPlay': 'Reproducir el siguiente',
+  'settings.nextEpisode.ask': 'Preguntarme cada vez',
+
+  'settings.spoken.none': 'Sin preferencia',
+  'settings.spoken.eng': 'Inglés',
+  'settings.spoken.spa': 'Español',
+  'settings.spoken.fra': 'Francés',
+  'settings.spoken.deu': 'Alemán',
+  'settings.spoken.ita': 'Italiano',
+  'settings.spoken.por': 'Portugués',
+  'settings.spoken.jpn': 'Japonés',
+  'settings.spoken.kor': 'Coreano',
+
   'settings.homeHeading': 'Inicio',
   'settings.homeExplanation': 'Elige las filas de tu Inicio y el orden en que aparecen.',
 

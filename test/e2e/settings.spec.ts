@@ -1,4 +1,4 @@
-import type { Browser, Page } from '@playwright/test';
+import type { APIRequestContext, Browser, Page } from '@playwright/test';
 import { expect, FAKE_JELLYFIN_URL, openApp, test } from './fixtures';
 
 /**
@@ -192,6 +192,118 @@ test.describe('driving the language choice with the arrow keys', () => {
     // this device asks for anyway: the two are different settings.
     await expect(
       page.getByRole('button', { name: 'Match my device (English)', pressed: false }),
+    ).toBeVisible();
+  });
+});
+
+/**
+ * The Playback Preferences (#35, story 114). These are the User's **Jellyfin**
+ * settings, so the thing to check in a browser is not only that the screen
+ * remembers them but that they are in the place every other Jellyfin app
+ * reads: `UserConfiguration` on the account, which is what makes "a change
+ * takes effect on the next playback" true wherever the playing happens.
+ */
+test.describe('what plays', () => {
+  /** What the Server holds for a User, as another Jellyfin app would read it. */
+  async function configurationOnTheServer(
+    request: APIRequestContext,
+    userId: string,
+  ): Promise<Record<string, unknown>> {
+    const state = (await (await request.get(`${FAKE_JELLYFIN_URL}/__fake/state`)).json()) as {
+      userConfiguration?: Record<string, Record<string, unknown>>;
+    };
+    return state.userConfiguration?.[userId] ?? {};
+  }
+
+  test('a choice lands on the User’s Jellyfin account, where the next playback reads it', async ({
+    page,
+    request,
+  }) => {
+    await signInAndLand(page);
+    await openSettings(page);
+
+    const audio = page.getByRole('group', { name: 'Audio language' });
+    await audio.getByRole('button', { name: 'Japanese' }).press('Enter');
+    await page.getByRole('button', { name: 'Never' }).press('Enter');
+    await page.getByRole('button', { name: 'Ask me each time' }).press('Enter');
+
+    await expect(audio.getByRole('button', { name: 'Japanese', pressed: true })).toBeVisible();
+    // The Server's own copy, not the screen's: this is the `UserConfiguration`
+    // a player — Jellyflick's or any other Jellyfin app's — reads when it
+    // starts the next Movie or Episode.
+    await expect
+      .poll(async () => await configurationOnTheServer(request, 'user-rafael'))
+      .toMatchObject({
+        AudioLanguagePreference: 'jpn',
+        SubtitleMode: 'None',
+        EnableNextEpisodeAutoPlay: false,
+      });
+  });
+
+  test('the choices follow the User to another device', async ({ page, browser }) => {
+    await signInAndLand(page);
+    await openSettings(page);
+
+    await page.getByRole('group', { name: 'Audio language' }).getByRole('button', { name: 'French' }).press('Enter');
+
+    await onAnotherDevice(browser, async (elsewhere) => {
+      await signInAndLand(elsewhere);
+      await openSettings(elsewhere);
+
+      // Only the Server could have carried it: this browser has never seen the
+      // first one's storage.
+      await expect(
+        elsewhere
+          .getByRole('group', { name: 'Audio language' })
+          .getByRole('button', { name: 'French', pressed: true }),
+      ).toBeVisible();
+    });
+  });
+
+  test.describe('driving a language choice with the arrow keys', () => {
+    // Wide enough for the languages to wrap into five columns, so "the one to
+    // the right" is a direction a User can press. On a phone they wrap into
+    // two and Down reaches them instead — the autoplay test below is the one
+    // that holds both ways round, because it has only two choices and so the
+    // answer is the same whichever way they are laid out.
+    test.use({ viewport: { width: 1024, height: 900 } });
+
+    test('picks a language with nothing but arrows and Enter', async ({ page }) => {
+      await signInAndLand(page);
+      await openSettings(page);
+
+      // This is the check that the choice works with a remote, which happy-dom
+      // cannot answer because it gives every element a zero-sized rectangle.
+      const audio = page.getByRole('group', { name: 'Audio language' });
+      await audio.getByRole('button', { name: 'No preference' }).focus();
+      await page.keyboard.press('ArrowRight');
+      await expect
+        .poll(() => page.evaluate(() => document.activeElement?.textContent))
+        .toBe('English');
+
+      await page.keyboard.press('Enter');
+
+      await expect(audio.getByRole('button', { name: 'English', pressed: true })).toBeVisible();
+      await expect(
+        audio.getByRole('button', { name: 'No preference', pressed: false }),
+      ).toBeVisible();
+    });
+  });
+
+  test('autoplay is turned off with nothing but arrows and Enter', async ({ page }) => {
+    await signInAndLand(page);
+    await openSettings(page);
+
+    await page.getByRole('button', { name: 'Start the next one' }).focus();
+    // Two buttons side by side above 640px and stacked below it, so the way to
+    // the other one is Right on a wide screen and Down on a phone. Either press
+    // has to land on it — that is the whole point of not using a radio group.
+    const wide = await page.evaluate(() => window.innerWidth >= 640);
+    await page.keyboard.press(wide ? 'ArrowRight' : 'ArrowDown');
+    await page.keyboard.press('Enter');
+
+    await expect(
+      page.getByRole('button', { name: 'Ask me each time', pressed: true }),
     ).toBeVisible();
   });
 });

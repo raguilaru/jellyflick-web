@@ -1,4 +1,10 @@
-import { publicViewOf, type FakeJellyfinState, type FakeUser } from '../data.ts';
+import {
+  DEFAULT_USER_CONFIGURATION,
+  publicViewOf,
+  type FakeJellyfinState,
+  type FakeUser,
+  type FakeUserConfiguration,
+} from '../data.ts';
 import type { FakeRoute } from '../routing.ts';
 
 /**
@@ -14,7 +20,9 @@ export const userRoutes: readonly FakeRoute[] = [
     path: '/Users/Public',
     handle: (_request, state) => ({
       status: 200,
-      body: state.users.filter((user) => !user.Policy.IsHidden).map(publicViewOf),
+      body: state.users
+        .filter((user) => !user.Policy.IsHidden)
+        .map((user) => userDtoFor(user, state)),
     }),
   },
 
@@ -48,7 +56,7 @@ export const userRoutes: readonly FakeRoute[] = [
         return { status: 401, body: { error: 'Invalid username or password.' } };
       }
 
-      return { status: 200, body: authenticationResultFor(user, request.headers) };
+      return { status: 200, body: authenticationResultFor(user, request.headers, state) };
     },
   },
 
@@ -58,7 +66,46 @@ export const userRoutes: readonly FakeRoute[] = [
     handle: (request, state) => {
       const user = userForToken(request.headers.authorization ?? '', state);
       if (user === undefined) return { status: 401, body: { error: 'No valid token.' } };
-      return { status: 200, body: publicViewOf(user) };
+      // 12.x has no `GET /Users/Configuration`: a client reads a User's Jellyfin
+      // settings from `UserDto.Configuration` here, so this is the endpoint a
+      // Server that will not say what they are fails on.
+      if (state.failUserConfigurationWith !== null) {
+        return {
+          status: state.failUserConfigurationWith,
+          body: { error: 'The fake Jellyfin was told to fail the User configuration.' },
+        };
+      }
+      return { status: 200, body: userDtoFor(user, state) };
+    },
+  },
+
+  {
+    method: 'POST',
+    path: '/Users/Configuration',
+    handle: (request, state) => {
+      const signedIn = userForToken(request.headers.authorization ?? '', state);
+      if (signedIn === undefined) return { status: 401, body: { error: 'No valid token.' } };
+
+      if (state.failUserConfigurationWith !== null) {
+        return {
+          status: state.failUserConfigurationWith,
+          body: { error: 'The fake Jellyfin was told to fail the User configuration.' },
+        };
+      }
+
+      // The `userId` query parameter overrides the token's User, as it does on
+      // the real Server; without one the Server configures whoever is asking.
+      const userId = request.query.get('userId') ?? signedIn.Id;
+      if (!state.users.some((candidate) => candidate.Id === userId)) {
+        return { status: 404, body: { error: `No user ${userId}.` } };
+      }
+
+      // The body *replaces* the stored configuration — the real controller
+      // assigns the whole `UserConfiguration`, which is what makes a client's
+      // read-modify-write load-bearing rather than merely tidy.
+      state.userConfiguration[userId] = (request.body ?? {}) as FakeUserConfiguration;
+      // 204, as the real endpoint answers: no body.
+      return { status: 204, body: undefined };
     },
   },
 
@@ -78,10 +125,31 @@ export const userRoutes: readonly FakeRoute[] = [
   },
 ];
 
-function authenticationResultFor(user: FakeUser, headers: Record<string, string>) {
+/**
+ * A user as `UserDto`, with the Jellyfin settings the Server carries on it.
+ *
+ * A User who has configured nothing still gets the Server's own defaults —
+ * absent is not how the real Server answers, and a client must not have to
+ * invent them.
+ */
+function userDtoFor(user: FakeUser, state: Pick<FakeJellyfinState, 'userConfiguration'>) {
+  return {
+    ...publicViewOf(user),
+    Configuration: {
+      ...DEFAULT_USER_CONFIGURATION,
+      ...(state.userConfiguration[user.Id] ?? {}),
+    },
+  };
+}
+
+function authenticationResultFor(
+  user: FakeUser,
+  headers: Record<string, string>,
+  state: Pick<FakeJellyfinState, 'userConfiguration'>,
+) {
   const deviceId = valueFromAuthorization(headers.authorization ?? '', 'DeviceId') ?? 'unknown';
   return {
-    User: publicViewOf(user),
+    User: userDtoFor(user, state),
     // The Server allows one token per DeviceId, so the token is derived from
     // both: a second sign-in on the same DeviceId replaces the first.
     AccessToken: `token-${user.Id}-${deviceId}`,
