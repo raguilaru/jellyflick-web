@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import type { FakeRoute } from '../routing.ts';
+import type { FakeRequest, FakeResponse, FakeRoute } from '../routing.ts';
+import type { FakeJellyfinState } from '../data.ts';
 
 /**
  * `VideosController`: the bytes a `<video>` actually plays.
@@ -45,10 +46,10 @@ export const videoRoutes: readonly FakeRoute[] = [
  * playlist pointing at nothing would look like a client bug.
  */
 function serveStreamFile(
-  request: Parameters<FakeRoute['handle']>[0],
-  state: Parameters<FakeRoute['handle']>[1],
+  request: FakeRequest,
+  state: FakeJellyfinState,
   params: Readonly<Record<string, string>>,
-) {
+): FakeResponse {
   const file = params.streamFile ?? '';
   if (file.endsWith('.m3u8')) {
     return {
@@ -71,10 +72,10 @@ function serveStreamFile(
 }
 
 function serveTestVideo(
-  request: Parameters<FakeRoute['handle']>[0],
-  state: Parameters<FakeRoute['handle']>[1],
+  request: FakeRequest,
+  state: FakeJellyfinState,
   params: Readonly<Record<string, string>>,
-) {
+): FakeResponse {
   const itemId = params.itemId ?? '';
   if (!state.items.some((item) => item.Id === itemId)) {
     return { status: 404, body: { error: `No item ${itemId}.` } };

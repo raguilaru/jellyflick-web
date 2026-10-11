@@ -51,7 +51,12 @@ export type PlaybackReporter = {
    * every `timeupdate` — and this decides what is worth telling the Server.
    */
   moved(positionSeconds: number, paused: boolean): Promise<void>;
-  /** Playback has ended or the player has been closed. */
+  /**
+   * Playback has ended or the player has been closed. **Only the first call
+   * counts**: a play session stops once, and the Title ending both reports the
+   * stop and closes the player, which would otherwise report it twice and
+   * leave the Server with two stops for one session.
+   */
   stopped(positionSeconds: number, failed?: boolean): Promise<void>;
   /** Keeps a transcode alive without moving the position. */
   ping(): Promise<void>;
@@ -73,6 +78,8 @@ export function createPlaybackReporter(
   let lastPosition = secondsOfTicks(plan.startTicks);
   let lastPaused = false;
   let refused = false;
+  /** A session stops once: see the note on `stopped`. */
+  let finished = false;
 
   /** Swallows a failure: see the note at the top of this module. */
   async function attempt(report: Promise<void>): Promise<void> {
@@ -129,6 +136,8 @@ export function createPlaybackReporter(
     },
 
     stopped: async (positionSeconds, failed = false) => {
+      if (finished) return;
+      finished = true;
       await attempt(
         gateway.reportPlaybackStopped({
           ItemId: plan.itemId,

@@ -13,5 +13,11 @@ export default defineConfig({
   build: {
     target: 'chrome68',
     cssTarget: 'chrome68',
+    // hls.js is the one chunk over Vite's default 500 kB warning, and it is
+    // over it on purpose: it is `import()`ed only when a transcode has to be
+    // played (#25), so it is never in the bundle a TV downloads to show Home.
+    // The limit is raised just past it rather than switched off, so anything
+    // else growing that large still says so.
+    chunkSizeWarningLimit: 600,
   },
 });

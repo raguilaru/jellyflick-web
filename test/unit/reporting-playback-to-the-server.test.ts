@@ -179,6 +179,20 @@ describe('telling the Server what is playing', () => {
     expect(body).not.toHaveProperty('PlayMethod');
   });
 
+  it('stops a session once, however many things think they stopped it', async () => {
+    const clock = fixedClock();
+    const reporter = createPlaybackReporter(gatewayFor('stops-once'), PLAN, { now: clock.now });
+    await reporter.started(0);
+
+    // A Title running to its end both reports the stop and closes the player,
+    // and closing the player reports the stop. Two stops for one session would
+    // leave the Server's own idea of what happened wrong.
+    await reporter.stopped(360);
+    await reporter.stopped(360);
+
+    expect(await reportsTo('/Sessions/Playing/Stopped')).toHaveLength(1);
+  });
+
   it('pings with the play session in the query, which is where that one goes', async () => {
     const clock = fixedClock();
     const reporter = createPlaybackReporter(gatewayFor('pinged'), PLAN, { now: clock.now });

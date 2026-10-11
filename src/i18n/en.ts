@@ -217,6 +217,21 @@ export const en = {
   'title.language': (p: { code: string }) =>
     LANGUAGE_NAMES_EN[p.code] ?? p.code.toUpperCase(),
 
+  /*
+   * The player (#25). The two controls carry the Title's name, as a card's My
+   * List toggle does: a screen reader hears what is being paused, and the
+   * player's Play is never confused with the title page's underneath it.
+   */
+  'player.label': (p: { name: string }) => `Playing ${p.name}`,
+  'player.play': (p: { name: string }) => `Play ${p.name}`,
+  'player.pause': (p: { name: string }) => `Pause ${p.name}`,
+  'player.close': 'Close',
+  'player.starting': 'Starting…',
+  'player.cannotPlay': 'Jellyflick cannot play that Title on this device.',
+  'player.unavailable': 'Jellyflick could not ask the Server how to play that Title.',
+  'player.failed': 'Something went wrong while playing that Title.',
+  'player.unreported': 'Jellyflick could not tell the Server how far you have watched.',
+
   'nav.sections': 'Sections',
   'nav.home': 'Home',
   'nav.movies': 'Movies',

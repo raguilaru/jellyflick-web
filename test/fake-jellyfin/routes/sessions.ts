@@ -1,4 +1,5 @@
-import type { FakeRoute } from '../routing.ts';
+import type { FakeJellyfinState } from '../data.ts';
+import type { FakeRequest, FakeResponse, FakeRoute } from '../routing.ts';
 import { tokenFromAuthorization, userForToken } from './users.ts';
 
 /**
@@ -97,10 +98,10 @@ export const sessionRoutes: readonly FakeRoute[] = [
  * real one ignores it silently, which would hide a client bug, so this refuses.
  */
 function reportFrom(
-  request: Parameters<FakeRoute['handle']>[0],
-  state: Parameters<FakeRoute['handle']>[1],
+  request: FakeRequest,
+  state: FakeJellyfinState,
   options: { remembersPosition: boolean },
-): { status: number; body?: unknown } {
+): FakeResponse {
   const user = userForToken(request.headers.authorization ?? '', state);
   if (user === undefined) {
     return { status: 401, body: { error: 'No valid token.' } };

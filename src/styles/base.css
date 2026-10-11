@@ -1005,3 +1005,64 @@ html[data-input='pointer'] [tabindex]:focus {
     grid-auto-flow: column;
   }
 }
+
+/*
+ * The player (#25).
+ *
+ * `position: fixed` over everything, and that is load-bearing rather than a
+ * look: `src/navigation/spatial-navigation.ts` tries the page's own flow before
+ * anything fixed, and from inside something fixed the fixed thing *is* the flow,
+ * so the arrow keys stay among the player's own controls with no focus trapping
+ * (#7 wrote that rule, #17's pop-up already leans on it).
+ *
+ * `inset` is Chrome 87 and ships raw, so the four sides are written out. It sits
+ * above the title page's pop-up, which is `z-index: 20`.
+ *
+ * Black rather than `--surface-base`: a film's own letterboxing should not have
+ * a different black beside it. Grid `gap`, which is native on the target — flex
+ * `gap` is Chrome 84 and silently does nothing there (decisions.md §6).
+ */
+.player {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 30;
+  display: grid;
+  /* The picture takes what is left; the controls take what they need. */
+  grid-template-rows: 1fr auto;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: #000;
+}
+
+/*
+ * `object-fit: contain` is Chrome 32 and needs nothing, and it is what keeps a
+ * film's own shape instead of stretching it to the screen's.
+ */
+.player__video {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  background: #000;
+  object-fit: contain;
+}
+
+.player__controls {
+  display: grid;
+  grid-auto-flow: column;
+  justify-content: center;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+/*
+ * A notice over the picture rather than beside it, so saying something went
+ * wrong does not move the video. It is the last row's own space that it sits
+ * above, which is why nothing here changes the grid.
+ */
+.player .notice {
+  margin: 0;
+  text-align: center;
+}

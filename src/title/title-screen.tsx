@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { useLocation, useRoute } from 'preact-iso/router';
 import type { Artwork, TitleDetails } from '../catalogue/catalogue';
+import type { DeviceLayer } from '../device/types';
 import { cardForTitle, Row } from '../home/row';
 import { useTranslate, type Translate } from '../i18n/index';
 import type { JellyfinGateway } from '../jellyfin/gateway';
 import { MyListToggle } from '../my-list/my-list-toggle';
+import { Player } from '../playback/player';
 import type { Session } from '../session/session';
 import { useWidePointer } from '../shell/layout';
 import { loadTitlePage, titlePathFor, type TitlePageResult } from './title-page';
@@ -38,9 +40,11 @@ import { loadTitlePage, titlePathFor, type TitlePageResult } from './title-page'
 export type TitleScreenProps = {
   /** The Server this Title is read from. */
   session: Session;
+  /** Where the player's capabilities, clock and media keys come from (#25). */
+  device: DeviceLayer;
 };
 
-export function TitleScreen({ session }: TitleScreenProps) {
+export function TitleScreen({ session, device }: TitleScreenProps) {
   const t = useTranslate();
   const { params } = useRoute();
   const titleId = params.itemId ?? '';
@@ -59,7 +63,7 @@ export function TitleScreen({ session }: TitleScreenProps) {
       ) : result.outcome === 'not-found' ? (
         <p class="notice">{t('title.notFound')}</p>
       ) : (
-        <TitlePage gateway={gateway} result={result} />
+        <TitlePage gateway={gateway} session={session} device={device} result={result} />
       )}
     </main>
   );
@@ -68,9 +72,13 @@ export function TitleScreen({ session }: TitleScreenProps) {
 /** One Title, once the Server has said what it is. */
 function TitlePage({
   gateway,
+  session,
+  device,
   result,
 }: {
   gateway: JellyfinGateway;
+  session: Session;
+  device: DeviceLayer;
   result: Extract<TitlePageResult, { outcome: 'title' }>;
 }) {
   const t = useTranslate();
@@ -79,6 +87,19 @@ function TitlePage({
   const { title } = details;
   const card = cardForTitle(gateway, title);
   const watched = useWatched(gateway, title.itemId, details.watched);
+  /**
+   * Whether the player is over this page. Screen state rather than an address,
+   * for the reasons in `src/playback/player.tsx`: a player is something over
+   * the Title a User was looking at, not a place they navigated to.
+   */
+  const [playing, setPlaying] = useState(false);
+  // A different Title means a page that is not playing, which is what pressing
+  // a card in More like this does without unmounting this screen.
+  const playingFor = useRef(title.itemId);
+  if (playingFor.current !== title.itemId) {
+    playingFor.current = title.itemId;
+    setPlaying(false);
+  }
 
   return (
     <article class="title__sheet">
@@ -114,9 +135,13 @@ function TitlePage({
       </p>
 
       <p class="title__actions">
-        {/* Present and pressable, and it is the player tickets (#25 → #28)
-            that give it something to do. */}
-        <button type="button" class="button button--primary">
+        <button
+          type="button"
+          class="button button--primary"
+          onClick={() => {
+            setPlaying(true);
+          }}
+        >
           {t('title.play')}
         </button>
         {/* The remote and the keyboard reach My List here, which is what a
@@ -150,6 +175,22 @@ function TitlePage({
         <Detail label={t('title.subtitles')} value={languageNames(details.subtitleLanguages, t)} />
         <Detail label={t('title.collection')} value={page.collections} />
       </dl>
+
+      {playing ? (
+        <Player
+          gateway={gateway}
+          device={device}
+          userId={session.activeUser()?.userId ?? ''}
+          itemId={title.itemId}
+          titleName={title.name}
+          {...(details.resumePositionTicks === undefined
+            ? {}
+            : { resumeTicks: details.resumePositionTicks })}
+          onClose={() => {
+            setPlaying(false);
+          }}
+        />
+      ) : null}
 
       {page.similar.length === 0 ? null : (
         <Row
