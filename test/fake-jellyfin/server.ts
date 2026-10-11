@@ -86,6 +86,15 @@ export function startFakeJellyfin(options: { port?: number } = {}): Promise<Fake
     }
 
     const result = match.route.handle(request, state, match.params);
+    if (result.bytes !== undefined) {
+      response.writeHead(result.status, {
+        'Content-Type': result.contentType ?? 'application/octet-stream',
+        'Content-Length': result.bytes.byteLength,
+        ...(result.headers ?? {}),
+      });
+      response.end(result.bytes);
+      return;
+    }
     send(response, result.status, result.body);
   }
 

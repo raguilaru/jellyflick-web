@@ -4,6 +4,7 @@ import type { BaseItemDtoQueryResult } from '@jellyfin/sdk/lib/generated-client/
 import type { DisplayPreferencesDto } from '@jellyfin/sdk/lib/generated-client/models/display-preferences-dto';
 import type { PublicSystemInfo } from '@jellyfin/sdk/lib/generated-client/models/public-system-info';
 import type { QuickConnectResult } from '@jellyfin/sdk/lib/generated-client/models/quick-connect-result';
+import type { UserConfiguration } from '@jellyfin/sdk/lib/generated-client/models/user-configuration';
 import type { UserDto } from '@jellyfin/sdk/lib/generated-client/models/user-dto';
 import type { UserItemDataDto } from '@jellyfin/sdk/lib/generated-client/models/user-item-data-dto';
 import { buildAuthorizationHeader, type ServerIdentity } from './authorization';
@@ -170,6 +171,54 @@ export type JellyfinGateway = {
    */
   itemImageUrl(itemId: string, imageType: ItemImageType, options?: ItemImageOptions): string;
   /**
+   * `POST /Items/{itemId}/PlaybackInfo` — how to play one Title (#25).
+   *
+   * **`POST`, and everything in the body.** The `GET` form cannot carry a
+   * `DeviceProfile` at all, and the `POST` form's query parameters are the older
+   * way of saying the same things (`jellyfin-playback.md` §9). The body is the
+   * typed, generated shape, so it is the only one used.
+   *
+   * Note what is *not* on the answer: `TranscodingUrl`, `SupportsDirectPlay`
+   * and `SupportsDirectStream` are fields of each `MediaSourceInfo`, never of
+   * the response.
+   */
+  getPlaybackInfo(options: PlaybackInfoOptions): Promise<PlaybackInfoResponse>;
+  /**
+   * The URL of a media source served as it is — `static=true`, which is what
+   * tells the Server not to touch the file.
+   *
+   * The token goes in the query as `ApiKey`, because a `<video src>` cannot
+   * send a header. The Server's own generated URLs do the same.
+   */
+  videoStreamUrl(options: VideoStreamOptions): string;
+  /**
+   * One of the Server's own server-relative URLs — a `TranscodingUrl` — made
+   * absolute. It is already parameterised and already carries its own `ApiKey`,
+   * so this is the *only* thing a client may do to it.
+   */
+  absoluteUrl(serverRelativeUrl: string): string;
+  /**
+   * `POST /Sessions/Playing` — playback has started. 204, no body back.
+   *
+   * The three reports and the ping are how the Server knows anything is
+   * playing: they drive the resume point, Continue Watching, the session list
+   * and keeping a transcode alive.
+   */
+  reportPlaybackStarted(report: PlaybackProgressReport): Promise<void>;
+  /** `POST /Sessions/Playing/Progress` — the same shape, with a new position. */
+  reportPlaybackProgress(report: PlaybackProgressReport): Promise<void>;
+  /**
+   * `POST /Sessions/Playing/Stopped` — a **different, smaller** shape: no
+   * `IsPaused`, no `PlayMethod`, and a `Failed` flag the other two lack.
+   */
+  reportPlaybackStopped(report: PlaybackStopReport): Promise<void>;
+  /**
+   * `POST /Sessions/Playing/Ping` — keeps a transcode alive without moving the
+   * position. The one reporting endpoint whose argument is a **query**
+   * parameter, and it is required.
+   */
+  pingPlayback(playSessionId: string): Promise<void>;
+  /**
    * `GET /DisplayPreferences/{id}` — where a User's Client Settings are kept.
    *
    * `client` is a **required** query parameter, and it partitions storage, so
@@ -187,6 +236,94 @@ export type JellyfinGateway = {
   saveDisplayPreferences(
     options: DisplayPreferencesOptions & { preferences: DisplayPreferencesDto },
   ): Promise<void>;
+  /**
+   * `POST /Users/Configuration?userId=…` — the User's **Jellyfin** settings,
+   * which every Jellyfin app shares, as against the per-client Client Settings
+   * above. Answers 204.
+   *
+   * There is deliberately no read here: 12.x has **no `GET
+   * /Users/Configuration`**, so a User's configuration is read from
+   * `UserDto.Configuration` through `getCurrentUser`.
+   *
+   * The body is the **whole** `UserConfiguration` and the Server assigns it as
+   * given, so every write is a read-modify-write — see
+   * `src/settings/playback-preferences.ts`.
+   */
+  saveUserConfiguration(options: {
+    userId: string;
+    configuration: UserConfiguration;
+  }): Promise<void>;
+};
+
+/**
+ * `PlaybackInfoDto`, as this app fills it in. Everything here goes in the body.
+ */
+export type PlaybackInfoOptions = {
+  itemId: string;
+  userId: string;
+  /** The device's own profile, which is the whole of the negotiation. */
+  deviceProfile: unknown;
+  /** Where to start, in 100-nanosecond ticks: the resume point. */
+  startTimeTicks?: number;
+  maxStreamingBitrate?: number;
+};
+
+/**
+ * `PlaybackInfoResponse`, which has only three fields. The useful ones are all
+ * on the media sources.
+ */
+export type PlaybackInfoResponse = {
+  MediaSources?: MediaSourceInfo[] | null;
+  PlaySessionId?: string | null;
+  /** A `PlaybackErrorCode`: `NotAllowed`, `NoCompatibleStream`, … */
+  ErrorCode?: string | null;
+};
+
+/** The fields of `MediaSourceInfo` this app reads. */
+export type MediaSourceInfo = {
+  Id?: string | null;
+  Container?: string | null;
+  SupportsDirectPlay?: boolean | null;
+  SupportsDirectStream?: boolean | null;
+  SupportsTranscoding?: boolean | null;
+  /** Server-relative, fully parameterised, already carrying `ApiKey`. */
+  TranscodingUrl?: string | null;
+  /** `MediaStreamProtocol`: `hls` decides hls.js or a native playlist. */
+  TranscodingSubProtocol?: string | null;
+  TranscodingContainer?: string | null;
+  RunTimeTicks?: number | null;
+  /** The Server has already applied the User's own language preferences. */
+  DefaultAudioStreamIndex?: number | null;
+  DefaultSubtitleStreamIndex?: number | null;
+  HasSegments?: boolean | null;
+};
+
+/** `PlayMethod`: which branch of the negotiation was taken. */
+export type PlayMethod = 'DirectPlay' | 'DirectStream' | 'Transcode';
+
+/**
+ * `PlaybackStartInfo` and `PlaybackProgressInfo`, which are field-for-field
+ * identical in 12.2.0, as this app fills them in.
+ */
+export type PlaybackProgressReport = {
+  ItemId: string;
+  PlaySessionId: string;
+  MediaSourceId: string;
+  PositionTicks: number;
+  PlayMethod: PlayMethod;
+  IsPaused: boolean;
+  CanSeek: boolean;
+  AudioStreamIndex?: number;
+  SubtitleStreamIndex?: number;
+};
+
+/** `PlaybackStopInfo`: smaller, and with a `Failed` flag of its own. */
+export type PlaybackStopReport = {
+  ItemId: string;
+  PlaySessionId: string;
+  MediaSourceId: string;
+  PositionTicks: number;
+  Failed: boolean;
 };
 
 export type DisplayPreferencesOptions = {
@@ -247,6 +384,14 @@ export type SimilarTitlesOptions = {
   limit?: number;
 };
 
+export type VideoStreamOptions = {
+  itemId: string;
+  mediaSourceId: string;
+  playSessionId: string;
+  /** Put in the path, so the browser sees a sensible extension. */
+  container?: string;
+};
+
 export type JellyfinGatewayOptions = ServerIdentity & {
   serverAddress: string;
   /** Defaults to the global `fetch`. */
@@ -298,6 +443,8 @@ export function createJellyfinGateway(options: JellyfinGatewayOptions): Jellyfin
   const serverAddress = normaliseServerAddress(options.serverAddress);
   const doFetch = options.fetch ?? globalThis.fetch.bind(globalThis);
   const authorization = buildAuthorizationHeader(options);
+  /** This gateway's own token, for the URLs a media element has to carry it in. */
+  const accessToken = options.token;
 
   async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
     let response: Response;
@@ -501,6 +648,59 @@ export function createJellyfinGateway(options: JellyfinGatewayOptions): Jellyfin
         })}`,
       ).then((result) => result.Items ?? []),
 
+    getPlaybackInfo: (options) =>
+      request<PlaybackInfoResponse>(
+        'POST',
+        // No query string at all: the deprecated query form of these arguments
+        // cannot carry a DeviceProfile, so everything goes in the body.
+        `/Items/${encodeURIComponent(options.itemId)}/PlaybackInfo`,
+        {
+          UserId: options.userId,
+          DeviceProfile: options.deviceProfile,
+          StartTimeTicks: options.startTimeTicks ?? 0,
+          ...(options.maxStreamingBitrate === undefined
+            ? {}
+            : { MaxStreamingBitrate: options.maxStreamingBitrate }),
+          // The app can take any of the three, and which one it gets is the
+          // Server's to decide from the profile.
+          EnableDirectPlay: true,
+          EnableDirectStream: true,
+          EnableTranscoding: true,
+          AllowVideoStreamCopy: true,
+          AllowAudioStreamCopy: true,
+          AutoOpenLiveStream: false,
+        },
+      ),
+
+    videoStreamUrl: (options) => {
+      const path = options.container === undefined ? 'stream' : `stream.${options.container}`;
+      return `${serverAddress}/Videos/${encodeURIComponent(options.itemId)}/${path}${query({
+        static: true,
+        mediaSourceId: options.mediaSourceId,
+        playSessionId: options.playSessionId,
+        // A <video src> cannot send an Authorization header, so the token goes
+        // in the query — which is what the Server's own generated URLs do.
+        ...(accessToken === undefined || accessToken === '' ? {} : { ApiKey: accessToken }),
+      })}`;
+    },
+
+    absoluteUrl: (serverRelativeUrl) =>
+      serverRelativeUrl.startsWith('/')
+        ? `${serverAddress}${serverRelativeUrl}`
+        : `${serverAddress}/${serverRelativeUrl}`,
+
+    reportPlaybackStarted: (report) =>
+      requestWithoutAnswer('POST', '/Sessions/Playing', report),
+    reportPlaybackProgress: (report) =>
+      requestWithoutAnswer('POST', '/Sessions/Playing/Progress', report),
+    reportPlaybackStopped: (report) =>
+      requestWithoutAnswer('POST', '/Sessions/Playing/Stopped', report),
+    pingPlayback: (playSessionId) =>
+      requestWithoutAnswer(
+        'POST',
+        `/Sessions/Playing/Ping${query({ playSessionId })}`,
+      ),
+
     getDisplayPreferences: (options) =>
       request<DisplayPreferencesDto>('GET', `/DisplayPreferences/${displayPreferencesPath(options)}`),
 
@@ -509,6 +709,13 @@ export function createJellyfinGateway(options: JellyfinGatewayOptions): Jellyfin
         'POST',
         `/DisplayPreferences/${displayPreferencesPath(options)}`,
         options.preferences,
+      ),
+
+    saveUserConfiguration: (options) =>
+      requestWithoutAnswer(
+        'POST',
+        `/Users/Configuration${query({ userId: options.userId })}`,
+        options.configuration,
       ),
 
     itemImageUrl: (itemId, imageType, options = {}) =>

@@ -10,6 +10,7 @@ import type { Session, SignedInUser } from '../session/session';
 import { UserPicker, type UsersOnThisDevice } from '../session/user-picker';
 import { HOME_LAYOUT_PATH, HomeLayoutScreen } from '../settings/home-layout-screen';
 import { SETTINGS_PATH, SettingsScreen } from '../settings/settings-screen';
+import { PlaybackPreferencesProvider } from '../settings/playback-preferences-provider';
 import { SettingsProvider } from '../settings/settings-provider';
 import { useAccentColour } from '../settings/use-accent-colour';
 import { UiLanguage } from '../settings/ui-language';
@@ -74,16 +75,22 @@ export function AppShell({ user, session, device, users }: AppShellProps) {
       {/* One copy of the User's settings for every screen: Home and the Home
           Layout editor are two views of the same thing (#10). */}
       <SettingsProvider gateway={session.gateway()} userId={user.userId}>
-        {/* The User's language, from their settings, falling back to this
-            device's (#11). Inside the provider, because that is where the
-            choice is, and above everything that draws text. */}
-        <UiLanguage device={device}>
-          {/* And one copy of My List, for the Row on Home, the My List page and
-              every card's toggle (#13). */}
-          <MyListProvider value={useLoadedMyList(session, user)}>
-            <ShellFrame user={user} session={session} device={device} users={users} />
-          </MyListProvider>
-        </UiLanguage>
+        {/* And one copy of the settings the User's *Jellyfin account* carries,
+            which is a different store: audio language, subtitle language, when
+            to show subtitles and next-Episode autoplay (#35). The player reads
+            them when playback starts, so it belongs under this too. */}
+        <PlaybackPreferencesProvider gateway={session.gateway()} userId={user.userId}>
+          {/* The User's language, from their settings, falling back to this
+              device's (#11). Inside the provider, because that is where the
+              choice is, and above everything that draws text. */}
+          <UiLanguage device={device}>
+            {/* And one copy of My List, for the Row on Home, the My List page and
+                every card's toggle (#13). */}
+            <MyListProvider value={useLoadedMyList(session, user)}>
+              <ShellFrame user={user} session={session} device={device} users={users} />
+            </MyListProvider>
+          </UiLanguage>
+        </PlaybackPreferencesProvider>
       </SettingsProvider>
     </LocationProvider>
   );
@@ -159,7 +166,7 @@ function ShellFrame({ user, session, device, users }: AppShellProps) {
         {/* Nor is the title page, for the same reason, and one of its own: it is
             reached from a card, never from a navigation bar, so an entry in
             `SECTIONS` would put it in both bars (#17). */}
-        <Route path={TITLE_PATH} component={TitleScreen} session={session} />
+        <Route path={TITLE_PATH} component={TitleScreen} session={session} device={device} />
         <Route default component={UnknownSection} />
       </Router>
 

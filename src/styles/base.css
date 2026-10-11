@@ -979,6 +979,21 @@ html[data-input='pointer'] [tabindex]:focus {
   margin: var(--space-5) 0 0;
 }
 
+/*
+ * A heading over a run of settings groups, for the settings that belong
+ * together because they are kept in the same place: "What plays" gathers the
+ * four the User's Jellyfin account carries (#35), and its own groups drop to
+ * `h3` under it. A rule above it, because the point of the heading is that what
+ * follows is a different kind of thing from what came before.
+ */
+.screen__subheading {
+  margin: var(--space-5) 0 var(--space-2);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--surface-line);
+  font-size: clamp(19px, 2.4vw, 23px);
+  font-weight: 600;
+}
+
 .settings-group__heading {
   margin: 0 0 var(--space-2);
   font-size: 18px;
@@ -1032,4 +1047,90 @@ html[data-input='pointer'] [tabindex]:focus {
   .settings-choices {
     grid-auto-flow: column;
   }
+}
+
+/*
+ * The player (#25).
+ *
+ * `position: fixed` over everything, and that is load-bearing rather than a
+ * look: `src/navigation/spatial-navigation.ts` tries the page's own flow before
+ * anything fixed, and from inside something fixed the fixed thing *is* the flow,
+ * so the arrow keys stay among the player's own controls with no focus trapping
+ * (#7 wrote that rule, #17's pop-up already leans on it).
+ *
+ * `inset` is Chrome 87 and ships raw, so the four sides are written out. It sits
+ * above the title page's pop-up, which is `z-index: 20`.
+ *
+ * Black rather than `--surface-base`: a film's own letterboxing should not have
+ * a different black beside it. Grid `gap`, which is native on the target — flex
+ * `gap` is Chrome 84 and silently does nothing there (decisions.md §6).
+ */
+.player {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 30;
+  display: grid;
+  /* The picture takes what is left; the controls take what they need. */
+  grid-template-rows: 1fr auto;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: #000;
+}
+
+/*
+ * `object-fit: contain` is Chrome 32 and needs nothing, and it is what keeps a
+ * film's own shape instead of stretching it to the screen's.
+ */
+.player__video {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  background: #000;
+  object-fit: contain;
+}
+
+.player__controls {
+  display: grid;
+  grid-auto-flow: column;
+  justify-content: center;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+/*
+ * A notice over the picture rather than beside it, so saying something went
+ * wrong does not move the video. It is the last row's own space that it sits
+ * above, which is why nothing here changes the grid.
+ */
+.player .notice {
+  margin: 0;
+  text-align: center;
+}
+
+/*
+ * A row of choices with too many to sit on one line: the nine languages for
+ * the sound and for the subtitles (#35). They wrap into even columns at any
+ * width rather than scrolling sideways, as the Accent Colour swatches do, so
+ * the arrow keys reach every one of them by direction alone. Both of these sit
+ * after the rule above, which they override.
+ *
+ * Grid rather than wrapped flex on purpose: `gap` needs a fallback in flex on
+ * the Chromium 68 floor and does not in grid (`decisions.md` §6).
+ */
+.settings-choices--wrap {
+  /* `grid-auto-flow: row` as well, or the rule above lays all nine out in one
+     row and the last of them runs off the side of the screen. */
+  grid-auto-flow: row;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 180px));
+}
+
+/*
+ * A row of choices whose labels are sentences — when to show subtitles — so one
+ * per line at every width.
+ */
+.settings-choices--stacked {
+  grid-auto-flow: row;
 }

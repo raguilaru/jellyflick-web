@@ -148,6 +148,31 @@ describe('a Title’s details', () => {
     });
   });
 
+  it('reads where this User got to, which is what Play resumes from', () => {
+    // Nine minutes in, in Jellyfin's 100-nanosecond ticks (#25).
+    const details = titleDetailsFrom({
+      Id: 'movie-arrival',
+      Name: 'Arrival',
+      Type: 'Movie',
+      UserData: { Key: 'movie-arrival', PlaybackPositionTicks: 5_400_000_000 },
+    });
+
+    expect(details?.resumePositionTicks).toBe(5_400_000_000);
+  });
+
+  it('leaves out a resume point of zero, which is every Title nobody has started', () => {
+    // The Server sends 0 rather than nothing, and "start from zero" is not a
+    // resume point: it is the absence of one, and Play says Play, not Resume.
+    const details = titleDetailsFrom({
+      Id: 'movie-arrival',
+      Name: 'Arrival',
+      Type: 'Movie',
+      UserData: { Key: 'movie-arrival', PlaybackPositionTicks: 0 },
+    });
+
+    expect(details).not.toHaveProperty('resumePositionTicks');
+  });
+
   it('leaves out every rating the Server did not send, rather than showing a zero', () => {
     // `CommunityRating` arrives absent when it is zero — the Server's own guard
     // — but `CriticRating` and `OfficialRating` are unguarded, so an empty age

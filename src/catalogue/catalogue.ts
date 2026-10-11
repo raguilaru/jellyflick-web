@@ -106,6 +106,15 @@ export type TitleDetails = {
   readonly subtitleLanguages: readonly string[];
   /** `UserData.Played`: whether this User has marked the Title watched. */
   readonly watched: boolean;
+  /**
+   * `UserData.PlaybackPositionTicks`: where this User left off, in Jellyfin's
+   * 100-nanosecond ticks, and so what Play resumes from (#25).
+   *
+   * Left out when it is zero, which is every Title nobody has started — the
+   * Server sends a zero rather than nothing, and "start from the beginning" is
+   * the *absence* of a resume point, not a resume point of zero.
+   */
+  readonly resumePositionTicks?: number;
 };
 
 /**
@@ -140,6 +149,7 @@ export function titleDetailsFrom(dto: BaseItemDto): TitleDetails | undefined {
     audioLanguages: languagesOf(streams, 'Audio'),
     subtitleLanguages: languagesOf(streams, 'Subtitle'),
     watched: dto.UserData?.Played === true,
+    ...positiveNumberOf('resumePositionTicks', dto.UserData?.PlaybackPositionTicks),
   };
 }
 
@@ -251,6 +261,15 @@ function seriesOf(dto: BaseItemDto): Title | undefined {
     name: dto.SeriesName ?? seriesId,
     ...artworkOf(seriesId, dto.SeriesPrimaryImageTag),
   };
+}
+
+/** A number field that only means something above zero, as a tick count does. */
+function positiveNumberOf<K extends string>(
+  key: K,
+  value: unknown,
+): { [P in K]?: number } {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return {};
+  return { [key]: value } as { [P in K]?: number };
 }
 
 function numberOf<K extends string>(

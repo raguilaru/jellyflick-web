@@ -3,12 +3,14 @@ import { displayPreferencesRoutes } from './display-preferences.ts';
 import { genreRoutes } from './genres.ts';
 import { itemRoutes } from './items.ts';
 import { quickConnectRoutes } from './quick-connect.ts';
+import { mediaInfoRoutes } from './media-info.ts';
 import { sessionRoutes } from './sessions.ts';
 import { systemRoutes } from './system.ts';
 import { userFavoriteRoutes } from './user-favorites.ts';
 import { userPlayedRoutes } from './user-played.ts';
 import { userRoutes } from './users.ts';
 import { userViewRoutes } from './user-views.ts';
+import { videoRoutes } from './videos.ts';
 
 /**
  * Every Jellyfin endpoint the fake answers.
@@ -25,7 +27,9 @@ export const jellyfinRoutes: readonly FakeRoute[] = [
   ...userViewRoutes,
   ...userFavoriteRoutes,
   ...userPlayedRoutes,
+  ...mediaInfoRoutes,
   ...itemRoutes,
+  ...videoRoutes,
   ...genreRoutes,
   ...displayPreferencesRoutes,
 ];

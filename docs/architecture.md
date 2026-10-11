@@ -15,6 +15,10 @@ public/manifest.webmanifest
 public/icons/           The app icons, written by scripts/make-icons.mjs.
 scripts/build.mjs       vite build, plus the TOLERATED_TRANSFORM guard.
 scripts/make-icons.mjs  Draws public/icons/. Run by hand, output committed.
+scripts/make-test-video.mjs
+                        Draws test/fake-jellyfin/media/test-video.webm the same
+                        way: run by hand, output committed. See "The fake
+                        Jellyfin serves real video" below.
 Dockerfile              The multi-stage image. See "The container" below.
 deploy/                 entrypoint.sh and the example OMV8 compose file.
 server/                 The server inside the container. Not browser code:
@@ -44,6 +48,12 @@ src/
                         the store every screen reads, `use-my-list.ts` the
                         context and hook, `my-list-toggle.tsx` the control on a
                         card, `my-list-screen.tsx` the My List page.
+  playback/             Playing a Title (#25): `device-profile.ts` is what the
+                        Server negotiates against, `planning.ts` asks it how to
+                        play and reads its answer, `video-source.ts` gets that
+                        into a `<video>` (and is the one `import()` in the app),
+                        `reporting.ts` tells the Server what is happening, and
+                        `player.tsx` is the overlay itself.
   navigation/           Arrow keys and focus: `nearest.ts` the geometry,
                         `reveal.ts` how far a scroller must move, `focusable.ts`
                         what the arrows reach, `spatial-navigation.ts` the
@@ -56,13 +66,19 @@ src/
                         `user-picker.tsx`, and Quick Connect —
                         `quick-connect.ts` is the flow and its polling,
                         `quick-connect-panel.tsx` the screen over it.
-  settings/             The Client Settings store, on the Server:
-                        `client-settings.ts` is the store, `settings-provider.tsx`
-                        the one copy the screens read, `settings-screen.tsx` the
-                        settings screen, `home-layout-screen.tsx` the Home Layout
-                        editor, `accent-colours.ts` the Accent Colour presets,
-                        `use-accent-colour.ts` what paints them, `ui-language.tsx`
-                        the language the app is drawn in.
+  settings/             A User's settings, in **two** stores on the Server.
+                        Client Settings, Jellyflick's own: `client-settings.ts`
+                        is the store, `settings-provider.tsx` the one copy the
+                        screens read, `accent-colours.ts` the Accent Colour
+                        presets, `use-accent-colour.ts` what paints them,
+                        `ui-language.tsx` the language the app is drawn in.
+                        The User's Jellyfin account, which every Jellyfin app
+                        shares: `playback-preferences.ts` is the store,
+                        `playback-preferences-provider.tsx` the one copy,
+                        `spoken-languages.ts` the languages and the subtitle
+                        modes it offers. `settings-screen.tsx` is the one screen
+                        over both and `home-layout-screen.tsx` the Home Layout
+                        editor.
   shell/                The app once a User is signed in: `sections.ts` is the
                         one list of sections and their addresses, `app-shell.tsx`
                         the routes and which bar is shown, `back.ts` the single
@@ -70,6 +86,7 @@ src/
   title/                The title page: `title-page.ts` is its address and what
                         it reads from the Server, `title-screen.tsx` the screen
                         — a pop-up on a wide pointer, a full page elsewhere.
+                        Its Play button opens `playback/`'s player.
 test/
   setup.ts              Vitest: unmounts components after each test.
   unit/                 Vitest specs. One file per behaviour, not per source file.
@@ -96,6 +113,10 @@ Where new code belongs:
   see "Client Settings and the Home Layout" below.
 - **A screen or a feature** → its own folder under `src/`, holding its logic and
   its components together (`connect/` is the pattern).
+- **Something loaded only when it is needed** → an `import()` at the point of
+  use, as `src/playback/video-source.ts` does for hls.js, and a line in this
+  file saying why. The spec's lightness constraint is about the bundle a TV
+  downloads, so a dependency only some devices need does not belong in it.
 - **A new focusable thing** → nothing. The arrow keys find anything focusable by
   themselves. A new *strip* that should be entered where focus left it marks
   itself with `FOCUS_GROUP_ATTRIBUTE` and keeps one tab stop, as `Row` does.
@@ -129,6 +150,11 @@ Jellyfin holds mutable sample data for the whole run.
    controller — exporting a `readonly FakeRoute[]`. Path parameters are `:name`,
    e.g. `/Items/:itemId/Similar`.
 3. Spread it into `jellyfinRoutes` in `test/fake-jellyfin/routes/index.ts`.
+
+A route normally answers with JSON. One answers with bytes — the video in
+`routes/videos.ts` — through `bytes` and `contentType` on `FakeResponse`, with
+`headers` for `Content-Range` and friends. See "The fake Jellyfin serves real
+video" below before adding a second.
 
 An unknown path returns 404 with a message naming what to add, so a missing route
 never looks like a product bug.
@@ -194,7 +220,28 @@ makes asks for it.
 `failPlayedWritesWith` and `failRelatedQueriesWith` do the same for the
 `/UserPlayedItems` writes and for `/Items/{id}/Similar` and `/Collections`.
 All four want a token, as the real Server does.
-`failDisplayPreferencesWith` does the same for `/DisplayPreferences`.
+`failDisplayPreferencesWith` does the same for `/DisplayPreferences`, and
+`failUserConfigurationWith` for the User's Jellyfin configuration — which means
+**`/Users/Me` as well as `POST /Users/Configuration`**, because 12.x has no
+`GET /Users/Configuration` and that is where a client reads it. Set it after
+signing in: it is also the endpoint the session reads.
+`failPlaybackInfoWith` and `failPlaybackReportsWith` do it for
+`POST /Items/{id}/PlaybackInfo` and for the three `/Sessions/Playing` reports,
+and `playbackErrorCode` makes `PlaybackInfo` answer with a `PlaybackErrorCode`
+and no playable source — which is a healthy Server refusing, not a failure.
+`state.playbackPositions` is `UserData.PlaybackPositionTicks` per User, written
+by the progress and stop reports, so a test can watch a resume point arrive and
+then be honoured.
+
+Each User's `UserConfiguration` lives in `state.userConfiguration`, keyed by
+user id, per User and seeded empty as `favourites` and `played` are — so a User
+with nothing stored is served `DEFAULT_USER_CONFIGURATION`, the Server's own
+defaults. Seeding one is how a test gets a User who has already chosen:
+`{ 'user-rafael': { AudioLanguagePreference: 'spa' } }`. It is a top-level field
+rather than a member of `FakeUser` because `POST /__fake/state` merges only one
+level deep, so patching one user's field would otherwise mean restating all
+four. The POST **replaces** the stored configuration, as the real controller
+does, which is what makes a client's read-modify-write load-bearing.
 
 Stored `CustomPrefs` live in `state.displayPreferences`, keyed
 `<displayPreferencesId>|<client>|<userId>` — the three things the real Server
@@ -443,8 +490,9 @@ The editor, `src/settings/home-layout-screen.tsx`:
 ## The settings screen, Accent Colour and language
 
 `src/settings/settings-screen.tsx` is the screen a User changes their own things
-on (#11): their Accent Colour, the language the app is in, and the way to their
-Home Layout. Its address `/settings` is **not a section** — `src/shell/sections.ts`
+on: their Accent Colour, the language the app is in, and the way to their Home
+Layout (#11), and under a "What plays" subheading the four their Jellyfin
+account carries (#35). Its address `/settings` is **not a section** — `src/shell/sections.ts`
 is still the one list of sections and this is not in it — but both navigation bars
 reach it: the top bar with a link of its own after the sections, and the phone's
 bottom bar through the User's picture, which is where a phone User looks for
@@ -458,7 +506,24 @@ their own settings. The picture used to be inert; it is now a real link named
   one is chosen, leave the arrows alone, and serve touch, mouse and remote at
   once. #10's Move up / Move down buttons are the same decision.
 - **There is no Save button.** A press applies at once and saves behind the
-  screen, and nothing is offered until the first read has landed (see above).
+  screen, and nothing is offered until the first read has landed (see above) —
+  **both** reads now, since a control drawn from either store's defaults is the
+  same bug. One `settings.loading` notice covers both; they are in flight
+  together, so it costs nothing.
+- **The two stores are said apart in words, and a test holds both sentences.**
+  This is the subtle part. #11's language copy says Jellyfin has no language
+  setting of its own, which is true of the language the app is *drawn* in;
+  #35's four really are `UserConfiguration` fields, so "What plays" says
+  Jellyfin keeps them and every Jellyfin app follows. Both sentences are on the
+  screen at once, so each names what it is about — the audio section says in so
+  many words that it is the sound and not the language Jellyflick is in.
+  **Anyone editing either string has to keep the pair honest.**
+- **Layout**: `.settings-choices--wrap` is a choice row with too many options to
+  sit on a line (the nine languages), wrapping into columns like the Accent
+  Colour swatches so the arrow keys reach every one by direction;
+  `.settings-choices--stacked` is one whose labels are sentences (when to show
+  subtitles), one per line at every width. Both sit *after* the 640px rule they
+  override. `.screen__subheading` is a heading over a run of groups.
 
 **Accent Colour** (story 112) is `accent-colours.ts`: seven presets, each
 carrying both the `--accent` colour *and* the `--accent-text` that reads on it,
@@ -483,11 +548,13 @@ User's; a unit test from #36 fails if those two drift.
 setting, not Jellyfin's**. Jellyfin 12.x has no per-user UI language at all —
 the only one it has is the server-wide `ServerConfiguration.UICulture`
 (`decisions.md` §2). Story 114 says the settings screen "edits my Jellyfin
-settings"; that holds for audio language, subtitle language and next-episode
-autoplay, which really are `UserConfiguration` fields and are #35's, and it
-cannot hold for the UI language. So the screen states the difference in words
+settings"; that holds for audio language, subtitle language, when to show
+subtitles and next-episode autoplay, which really are `UserConfiguration`
+fields and are now on the screen under "What plays" (#35), and it cannot hold
+for the UI language. So the screen states the difference in words
 (`settings.languageExplanation`) rather than letting a User assume their other
-Jellyfin apps will follow.
+Jellyfin apps will follow — and the section above it has to keep saying the
+opposite about its own four, because both claims are on one screen.
 
 - The choice is the User's chosen tag, or **absent**, which means "match my
   device" and is where `device.preferredLanguages()` comes in. Absent is stored
@@ -499,6 +566,63 @@ Jellyfin apps will follow.
   the whole shell — losing a typed search term and every Row's state. The
   dictionary already on the screen stands in meanwhile, so there is no blank
   screen and no flash of message keys.
+
+## Playback Preferences: the User's Jellyfin account, not Client Settings
+
+`src/settings/playback-preferences.ts` is the **second** settings store, and the
+difference between it and Client Settings is the whole of #35. Be deliberate
+about which one a new setting belongs in:
+
+| | Client Settings (`client-settings.ts`) | Playback Preferences (`playback-preferences.ts`) |
+| --- | --- | --- |
+| Where on the Server | `DisplayPreferences.CustomPrefs` | `UserConfiguration`, on the User's account |
+| Partitioned by | `client=jellyflick` — Jellyflick's alone | nothing: it is the Jellyfin account |
+| Who else can see it | no other app | **every** Jellyfin app, and they can change it |
+| What lives there | Home Layout, Accent Colour, UI language | audio language, subtitle language, when to show subtitles, next-Episode autoplay |
+| Keys | prefixed `jf.`, ours to name | the Server's own field names |
+
+- **Pick the store by who the setting belongs to.** Something Jellyfin itself
+  acts on — what it picks to play, what it transcodes, what it remembers about
+  an account — is `UserConfiguration`. Something only Jellyflick acts on is
+  Client Settings under `jf.`, and `CLIENT_SETTINGS_CLIENT = 'jellyflick'` is
+  what keeps it ours. Something that belongs to a screen rather than a person is
+  `device.storage()` and neither of these.
+- **There is no read endpoint.** 12.x has no `GET /Users/Configuration`; a
+  User's configuration rides on `UserDto.Configuration`, so `read` goes through
+  `gateway.getCurrentUser()`. The gateway therefore has `saveUserConfiguration`
+  and no matching getter, which is deliberate rather than an omission.
+- **Every write is a read-modify-write**, as in the other store and for a worse
+  reason: `POST /Users/Configuration` assigns the *whole* `UserConfiguration`,
+  and the fields this app never shows belong to other Jellyfin apps. Sending
+  only the four it knows would reset a User's `CastReceiverId`, their
+  `GroupedFolders` and their `DisplayMissingEpisodes` to defaults. A unit test
+  holds exactly that.
+- **The defaults are the Server's, not ours**: no language preference,
+  `SubtitleMode: 'Default'`, autoplay **on**. A new Jellyfin account has those,
+  so drawing anything else would tell a User their account says something it
+  does not.
+- **A language is a plain `string`**, not a union of the codes the screen
+  offers, and a code it does not recognise presses no button and is written back
+  untouched — a preference set in another Jellyfin app is the User's. Same
+  treatment as `accentColour`. The codes `spoken-languages.ts` offers are ISO
+  639-2/T (`fra`, not the 639-2/B `fre`), which is what the sample library's
+  `MediaStream.Language` carries; `jellyfin-api.md` had left that open.
+  `SubtitleMode` is the exception and *is* typed as the SDK's union, because it
+  is a closed Server enum rather than a name.
+- **`PlaybackPreferencesProvider` is in the shell, above the router**, beside
+  `SettingsProvider` and shaped identically: `loaded`, `saveFailed`, applied at
+  once and saved behind, stale first read dropped, saves one at a time. Two
+  providers rather than more fields on one, because one save must not drag the
+  other store along.
+- **"A change takes effect on the next playback"** is true because the Server
+  holds it: a Jellyfin client reads `UserConfiguration` when it decides which
+  audio and subtitle track to start with, so the player (#28 onwards) reads
+  `usePlaybackPreferences()` — already in its tree — or the Server, and either
+  way nothing changes mid-playback. **The player did not exist on #35's branch**,
+  so what is tested is that the choice reaches the account: `settings.spec.ts`
+  reads the Server's own copy back rather than the screen's.
+
+The settings screen section above says how the copy keeps both stores honest.
 
 ## My List
 
@@ -621,10 +745,124 @@ also what closed #7's and #24's last open box.
   with the BoxSets a Title is in, and the page says their names. Showing the
   *other Titles* in one means a query per Collection and a BoxSet that can be
   opened, which is #15's Collection Rows and their `parameter`, not this.
-- **Play is present and does nothing**, for #25 → #28 to wire up.
+- **Play opens the player** (#25), which is an overlay over this page rather
+  than an address of its own — see "Playing a Title" below. The page passes it
+  the resume point it already read, so Play resumes without asking again.
 - **A language's name is the locale's own.** `title.language` is one message
   whose function holds a small dictionary per locale, falling back to the code
   itself. `Intl.DisplayNames` is Chrome 81 and the floor is 68.
+
+## Playing a Title
+
+`src/playback/` is #25: Play on a title page, through Jellyfin's negotiation,
+to a `<video>` that reports what it is doing. #26 grows the controls, #27 the
+tracks, #28 the Subtitle Offset, #33 Cast and #34 Play On.
+
+- **The DeviceProfile is the whole negotiation**, and it is built from the
+  device layer and nothing else (`device-profile.ts`). The Server reads it and
+  decides between the file untouched, a remux and a transcode, so a profile that
+  claims the wrong container is the one bug that looks like a broken player.
+  The shapes are **written out rather than imported from `@jellyfin/sdk`**: its
+  `DeviceProfile` is typed against generated *enums*, and only its types may be
+  used (`decisions.md` §4). HLS is asked for wherever there is something to play
+  a playlist with, and a progressive mp4 is always offered too, so no device is
+  left with no fallback at all. A transcode is asked for in h264/aac — the
+  narrowest pair every target decodes — rather than the device's best, because
+  spending the Server's CPU on HEVC to reach a device that would have
+  direct-played is the wrong trade.
+- **`POST /Items/{id}/PlaybackInfo`, body only.** The `GET` form cannot carry a
+  profile at all and the `POST` form's query parameters are the older way of
+  saying the same things. **The fake refuses a query parameter outright**, so a
+  client that sends one is caught here rather than on a real Server.
+- **`TranscodingUrl`, `SupportsDirectPlay` and `SupportsDirectStream` are per
+  media source, never on the response.** That is the single most common mistake
+  with this endpoint. The transcoding URL is server-relative, already fully
+  parameterised and already carrying its own `ApiKey`: it is used verbatim, and
+  `gateway.absoluteUrl` is the only thing done to it.
+- **Three outcomes, and two of them are failures that are not the same thing.**
+  `planning.ts` answers `play`, `cannot-play` or `unavailable`: a Server that
+  would not answer is a problem with the Server, and a Server that answered
+  "there is no way to play this" is a healthy Server saying no. #26 shows a
+  different message for each.
+- **The resume point goes into the request, not only into the player.** A
+  transcode is cut from `StartTimeTicks` by the Server, so a client cannot seek
+  into segments that do not exist; a direct-played file is seeked by the player
+  and a transcode deliberately is not. The point itself is
+  `UserData.PlaybackPositionTicks`, read in `src/catalogue/catalogue.ts` with
+  everything else, and **left out when it is zero** — "start from the
+  beginning" is the absence of a resume point, not a resume point of zero.
+- **hls.js is the app's first lazily loaded thing**, and the pattern for the
+  next one. `video-source.ts` holds the one `import()` in the app, so hls.js is
+  a chunk of its own (584 kB raw, 182 kB gz) that is fetched only when a
+  playlist has to be played on a device with no HLS player of its own. An e2e
+  test fails if a direct play fetches it. `vite.config.ts` raises the chunk-size
+  warning just past it rather than switching the warning off.
+- **`Hls.isSupported()` before `canPlayType()`** (`decisions.md` §8) is kept one
+  level down: `src/device/browser.ts` only claims `playsHlsNatively` where there
+  is no Media Source to prefer, because `canPlayType` answers a truthy `"maybe"`
+  for HLS in Chrome. The full build, not `hls.light`, which drops the alternate
+  audio and subtitles #27 needs.
+- **Four reports are the whole of what Jellyfin knows about a session**:
+  `Playing`, `Playing/Progress`, `Playing/Stopped` and `Playing/Ping`. They
+  drive the resume point, Continue Watching, the Server's own session list and
+  keeping a transcode alive. `PlaybackStopInfo` is a **different, smaller**
+  shape — no `IsPaused`, no `PlayMethod`, and a `Failed` flag the others lack —
+  and the ping's argument is the only one that goes in the **query**.
+- **The reporter has no timers.** The player already has the video's own events
+  and one interval, and a second schedule would be a second thing to keep in
+  step with the picture; it would also make every test of the throttle a test of
+  fake timers. The clock is injected instead. A pause or a seek is reported at
+  once; the position creeping along four times a second is not, and goes every
+  ten seconds. **Stopping is idempotent**: a Title running to its end both
+  reports the stop and closes the player, and closing reports the stop.
+- **A Server that will not record progress never stops a User's film.** Every
+  report failure is swallowed, and `unreported()` is how the player says so
+  beside the picture rather than instead of it.
+- **The player is an overlay, not an address** — the same call the User Picker
+  made (#8), and for the same reason: a player is something over the Title a
+  User was looking at, not a place they navigated to, and an address would put a
+  history entry between the two and make Back mean something different inside
+  the player. It claims Back with `useBackClaim`, which is the one Back
+  handler's own extension point.
+- **`position: fixed` is load-bearing.** From inside something fixed the fixed
+  thing is the arrow keys' flow (#7), so the player's controls keep focus with
+  **no focus-trapping code at all**, exactly as #17's pop-up does.
+- **The media keys are a listener of their own**, not something taken off the
+  navigator: Play, Pause, PlayPause and Stop are not keys it owns. A key press
+  on one of the player's own buttons is left alone, for the reason #7 wrote
+  down — the browser presses a focused button itself, and acting on the key as
+  well would toggle twice for one press. **#26's arrow keys are the ones that
+  have to be taken *before* the navigator**, not beside it.
+- **Both controls carry the Title's name** ("Pause Arrival"), as a card's My
+  List toggle does: a screen reader hears what is being paused, and the
+  player's Play is never confused with the title page's underneath it.
+
+## The fake Jellyfin serves real video
+
+`test/fake-jellyfin/routes/videos.ts` is the one place a fake owes a client
+**real data** rather than a shape to assert on — a browser has to decode what it
+is given. `test/fake-jellyfin/media/test-video.webm` is six seconds of VP9 in
+WebM, about 11 kB, drawn by `node scripts/make-test-video.mjs` and committed the
+way the icons are.
+
+- **VP9, not H.264.** Plain Chromium ships no H.264 or AAC decoder, so an MP4
+  would not play in the browser Playwright runs.
+- **It is made from two things already installed**: Playwright's Chromium
+  records a canvas with `MediaRecorder`, and Playwright's own bundled ffmpeg
+  remuxes that recording — a live recording's header carries no duration and no
+  cues, so without that step a browser can neither report its length nor seek.
+  Nothing was added to the project to make it.
+- **Every source serves that one file**, whatever `PlaybackInfo` *claims* the
+  file is. `FakeItem.media` is the claim, and the claim is all the negotiation
+  reads: Arrival is WebM/VP9 so it direct-plays in a browser, Heat is 4K HEVC in
+  Matroska so it cannot, Paddington's only problem is its height, and The
+  Unfinished has no file at all.
+- **Range requests are answered**, because a browser seeks with them, and
+  seeking is how a resume point is honoured on a direct-played file.
+- **There is no transcoder, so there is no real HLS.** A `master.m3u8` answers
+  **501** with a message saying so. The transcode *decision* is asserted from
+  `PlaybackInfo` in `test/unit/planning-playback.test.ts` instead; whoever needs
+  a browser to really play a transcode has to grow a playlist here.
 
 ## Arrow keys, focus and Rows
 

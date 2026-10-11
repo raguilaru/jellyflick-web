@@ -97,8 +97,28 @@ export type FakeItem = {
   /** Keyed by `MetadataProvider` member name: `Imdb`, `Tmdb`, … */
   ProviderIds?: Record<string, string>;
 
+  /**
+   * The fake's own field: the file behind this item, which is what
+   * `POST /Items/{id}/PlaybackInfo` negotiates against (#25). An item without
+   * one has nothing to play, which is a real answer the Server gives and a
+   * client has to show.
+   *
+   * The *bytes* every source serves are the one committed test video; this says
+   * what the Server **claims** the file is, which is all the negotiation reads.
+   */
+  media?: FakeMediaFile;
+
   /** The fake's own field: which library serves this item. */
   libraryId: string;
+};
+
+/** What the Server says a file is, in the terms a DeviceProfile is matched in. */
+export type FakeMediaFile = {
+  Container: string;
+  VideoCodec: string;
+  /** Omitted for a file with no audio track, which the test video really is. */
+  AudioCodec?: string;
+  Height: number;
 };
 
 /**
@@ -183,6 +203,13 @@ export type FakeJellyfinState = {
    * having watched nothing.
    */
   played: Record<string, string[]>;
+  /**
+   * Where each User has got to in each item, by user id then item id, in
+   * Jellyfin's 100-nanosecond ticks — `UserData.PlaybackPositionTicks`, which
+   * is the resume point (#25). The progress reports write it, so a test can
+   * watch a position arrive and then be honoured by the next Play.
+   */
+  playbackPositions: Record<string, Record<string, number>>;
   /** The Collections on the Server, and which Titles are in each (#17). */
   collections: FakeCollection[];
   /**
@@ -203,6 +230,23 @@ export type FakeJellyfinState = {
    * say anything about. Null is the normal Server.
    */
   failRelatedQueriesWith: number | null;
+  /**
+   * A status `POST /Items/{itemId}/PlaybackInfo` answers with, so a test can
+   * see what Play does when the Server will not say how to play something.
+   * Null is the normal Server.
+   */
+  failPlaybackInfoWith: number | null;
+  /**
+   * A `PlaybackErrorCode` the Server answers `PlaybackInfo` with instead of a
+   * playable source — `NotAllowed`, `NoCompatibleStream`, `RateLimitExceeded`.
+   * Null is the normal Server, which sends no error code at all.
+   */
+  playbackErrorCode: string | null;
+  /**
+   * A status the `/Sessions/Playing` reports answer with, so a test can see a
+   * Server that will not record progress. Null is the normal Server.
+   */
+  failPlaybackReportsWith: number | null;
   /**
    * A status `AuthenticateByName` answers with whatever the credentials are, so
    * a test can see what a Server that is having a bad day looks like. Null is
@@ -253,6 +297,65 @@ export type FakeJellyfinState = {
   failDisplayPreferencesWith: number | null;
   /** Quick Connect: whether it is on, and the requests in flight (#9). */
   quickConnect: FakeQuickConnect;
+  /**
+   * Each User's `UserConfiguration`, by user id — their **Jellyfin** settings,
+   * which every Jellyfin app shares, as against the per-client `CustomPrefs`
+   * above. This is where the Playback Preferences store's writes land (#35).
+   *
+   * Per User and seeded empty, as `favourites` and `played` are: a User with
+   * nothing stored gets `DEFAULT_USER_CONFIGURATION`, which is what the real
+   * Server gives a new account. A test seeds this to get a User who has
+   * already chosen, and it is its own top-level field rather than a member of
+   * `FakeUser` because `POST /__fake/state` merges only one level deep —
+   * patching a field on one user would otherwise mean restating all four.
+   */
+  userConfiguration: Record<string, FakeUserConfiguration>;
+  /**
+   * A status `/Users/Me` and `POST /Users/Configuration` answer with, so a test
+   * can see a User whose Jellyfin settings the Server will not hand over or
+   * keep. Null is the normal Server.
+   */
+  failUserConfigurationWith: number | null;
+};
+
+/**
+ * `UserConfiguration` as 12.2.0 has it: the four fields this app shows, and
+ * the rest as a loose bag so a field only another Jellyfin app writes can be
+ * seeded and asserted on. A client POSTs the whole object, so what the fake
+ * owes a test is proof that nothing was dropped on the way.
+ */
+export type FakeUserConfiguration = Record<string, unknown> & {
+  AudioLanguagePreference?: string | null;
+  SubtitleLanguagePreference?: string | null;
+  /** `SubtitlePlaybackMode`: `Default`, `Always`, `OnlyForced`, `None`, `Smart`. */
+  SubtitleMode?: string;
+  EnableNextEpisodeAutoPlay?: boolean;
+};
+
+/**
+ * What the real Server hands a User who has configured nothing. The two
+ * language preferences are empty strings rather than absent, `SubtitleMode` is
+ * `Default` and autoplay is on — the Server's own defaults, which is what
+ * makes "a new User has next-Episode autoplay already" a fact a test can hold
+ * rather than something this app decides.
+ */
+export const DEFAULT_USER_CONFIGURATION: FakeUserConfiguration = {
+  AudioLanguagePreference: '',
+  PlayDefaultAudioTrack: true,
+  SubtitleLanguagePreference: '',
+  DisplayMissingEpisodes: false,
+  GroupedFolders: [],
+  SubtitleMode: 'Default',
+  DisplayCollectionsView: false,
+  EnableLocalPassword: false,
+  OrderedViews: [],
+  LatestItemsExcludes: [],
+  MyMediaExcludes: [],
+  HidePlayedInLatest: true,
+  RememberAudioSelections: true,
+  RememberSubtitleSelections: true,
+  EnableNextEpisodeAutoPlay: true,
+  CastReceiverId: null,
 };
 
 const SERVER_ID = '0f1e2d3c4b5a69788796a5b4c3d2e1f0';
@@ -267,6 +370,10 @@ export function createSampleData(): FakeJellyfinState {
     failFavouriteWritesWith: null,
     favourites: {},
     played: {},
+    playbackPositions: {},
+    failPlaybackInfoWith: null,
+    playbackErrorCode: null,
+    failPlaybackReportsWith: null,
     failPlayedWritesWith: null,
     failRelatedQueriesWith: null,
     failDisplayPreferencesWith: null,
@@ -274,6 +381,8 @@ export function createSampleData(): FakeJellyfinState {
     // Quick Connect is on, as it is on a Server whose admin has enabled it,
     // and nothing is in flight: a request only exists once a device asks.
     quickConnect: { enabled: true, requests: [], codesIssued: 0, failInitiateWith: null },
+    userConfiguration: {},
+    failUserConfigurationWith: null,
     libraries: SAMPLE_LIBRARIES.map((library) => ({ ...library })),
     items: SAMPLE_ITEMS.map((item) => ({ ...item })),
     collections: SAMPLE_COLLECTIONS.map((collection) => ({ ...collection })),
@@ -380,6 +489,9 @@ const SAMPLE_ITEMS: readonly FakeItem[] = [
     DateCreated: '2026-06-12T09:00:00Z',
     ImageTags: { Primary: 'tag-paddington' },
     Genres: ['Comedy', 'Family'],
+    // A file whose only problem is its height, so "too tall to decode" is a
+    // transcode reason a test can reach on its own.
+    media: { Container: 'mp4', VideoCodec: 'h264', AudioCodec: 'aac', Height: 2160 },
     libraryId: 'lib-kids',
   },
   // Older than Arrival, so Severance's place in a Row comes from the Episode
@@ -426,6 +538,9 @@ const SAMPLE_ITEMS: readonly FakeItem[] = [
       { Type: 'Subtitle', Language: 'spa', DisplayTitle: 'Spanish' },
     ],
     ProviderIds: { Imdb: 'tt2543164', Tmdb: '329865' },
+    // VP9 in WebM: what the committed test video really is, so a browser can
+    // direct-play it and an end-to-end test can watch something.
+    media: { Container: 'webm', VideoCodec: 'vp9', Height: 1080 },
     libraryId: 'lib-movies',
   },
   // A stray video file in a Movies library. Jellyfin really does serve these,
@@ -451,6 +566,9 @@ const SAMPLE_ITEMS: readonly FakeItem[] = [
     CommunityRating: 8.3,
     People: [{ Name: 'Al Pacino', Type: 'Actor', Role: 'Vincent Hanna' }],
     MediaStreams: [{ Type: 'Audio', Language: 'eng', DisplayTitle: 'English' }],
+    // 4K HEVC in Matroska with Dolby audio: the file nothing modest plays, so
+    // the Server has to be asked to transcode it.
+    media: { Container: 'mkv', VideoCodec: 'hevc', AudioCodec: 'eac3', Height: 2160 },
     libraryId: 'lib-movies',
   },
   // No images at all, so a card has to cope without artwork — and none of the
@@ -540,11 +658,16 @@ const SAMPLE_SIMILAR: Readonly<Record<string, string[]>> = {
   'movie-heat': ['movie-arrival'],
 };
 
-/** An item as the Server serves it: the fake's own `libraryId` is not a field. */
-export function servedViewOf(item: FakeItem): Omit<FakeItem, 'libraryId'> {
+/**
+ * An item as the Server serves it. The fake's own fields are not fields on a
+ * `BaseItemDto`: the library an item belongs to is answered through `parentId`,
+ * and what its file is comes from `PlaybackInfo` rather than from the item.
+ */
+export function servedViewOf(item: FakeItem): Omit<FakeItem, 'libraryId' | 'media'> {
   const dto: Record<string, unknown> = { ...item };
   delete dto.libraryId;
-  return dto as Omit<FakeItem, 'libraryId'>;
+  delete dto.media;
+  return dto as Omit<FakeItem, 'libraryId' | 'media'>;
 }
 
 /** A Collection as the Server serves it: the membership is not a field on it. */
