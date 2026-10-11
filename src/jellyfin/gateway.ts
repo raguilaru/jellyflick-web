@@ -3,6 +3,7 @@ import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models/base
 import type { BaseItemDtoQueryResult } from '@jellyfin/sdk/lib/generated-client/models/base-item-dto-query-result';
 import type { DisplayPreferencesDto } from '@jellyfin/sdk/lib/generated-client/models/display-preferences-dto';
 import type { PublicSystemInfo } from '@jellyfin/sdk/lib/generated-client/models/public-system-info';
+import type { QuickConnectResult } from '@jellyfin/sdk/lib/generated-client/models/quick-connect-result';
 import type { UserDto } from '@jellyfin/sdk/lib/generated-client/models/user-dto';
 import type { UserItemDataDto } from '@jellyfin/sdk/lib/generated-client/models/user-item-data-dto';
 import { buildAuthorizationHeader, type ServerIdentity } from './authorization';
@@ -36,6 +37,39 @@ export type JellyfinGateway = {
    * new token belongs to, so call it on a gateway built with no token.
    */
   authenticateByName(username: string, password: string): Promise<AuthenticationResult>;
+  /**
+   * `GET /QuickConnect/Enabled` — whether the Server's admin has switched
+   * Quick Connect on. Anonymous, and a bare JSON boolean rather than an object.
+   */
+  isQuickConnectEnabled(): Promise<boolean>;
+  /**
+   * `POST /QuickConnect/Initiate` — asks the Server for a code to show.
+   *
+   * It takes no parameters: the Server reads the client, the device and the
+   * **DeviceId** off this gateway's `Authorization` header and remembers them
+   * against the request, and the token it eventually issues belongs to that
+   * DeviceId. So call it on a gateway built with no token and with the DeviceId
+   * the signed-in User is going to keep.
+   */
+  initiateQuickConnect(): Promise<QuickConnectResult>;
+  /**
+   * `GET /QuickConnect/Connect?secret=` — whether the code has been approved
+   * yet. `secret` is required.
+   *
+   * A **404** means there is no request for that secret any more, and the
+   * Server does not say which of the three reasons it is: it expired, it was
+   * withdrawn, or it has already been exchanged. No client can tell them apart.
+   */
+  getQuickConnectState(secret: string): Promise<QuickConnectResult>;
+  /**
+   * `POST /Users/AuthenticateWithQuickConnect` — the approved secret for a
+   * token. The body is `{ Secret }`, and `Secret` is required.
+   *
+   * A **401** means the request is there but nobody has approved it; a **404**
+   * means it is gone. The `AccessToken` it answers with belongs to the DeviceId
+   * that initiated, so it is the DeviceId this gateway was built with.
+   */
+  authenticateWithQuickConnect(secret: string): Promise<AuthenticationResult>;
   /**
    * `GET /Users/Me` — the signed-in User behind this gateway's token, and so
    * also the check that the token is still one the Server accepts.
@@ -323,6 +357,20 @@ export function createJellyfinGateway(options: JellyfinGatewayOptions): Jellyfin
         Username: username,
         Pw: password,
       }),
+
+    isQuickConnectEnabled: () => request<boolean>('GET', '/QuickConnect/Enabled'),
+    initiateQuickConnect: () => request<QuickConnectResult>('POST', '/QuickConnect/Initiate'),
+    getQuickConnectState: (secret) =>
+      request<QuickConnectResult>(
+        'GET',
+        `/QuickConnect/Connect${query({ secret })}`,
+      ),
+    // The body field is `Secret`, and the Server requires it.
+    authenticateWithQuickConnect: (secret) =>
+      request<AuthenticationResult>('POST', '/Users/AuthenticateWithQuickConnect', {
+        Secret: secret,
+      }),
+
     signOut: () => requestWithoutAnswer('POST', '/Sessions/Logout'),
     userImageUrl: (userId, tag) =>
       `${serverAddress}/UserImage?userId=${encodeURIComponent(userId)}&tag=${encodeURIComponent(tag)}`,

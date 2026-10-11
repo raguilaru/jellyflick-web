@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { buildAuthorizationHeader } from '../../src/jellyfin/authorization';
 import { createJellyfinGateway } from '../../src/jellyfin/gateway';
 import { fakeRequests, resetFakeState, setFakeState } from '../fake-jellyfin/control';
 import { SAMPLE_PASSWORD } from '../fake-jellyfin/data';
@@ -383,6 +384,84 @@ describe('the Jellyfin gateway', () => {
     expect(again?.UserData?.Played).toBe(false);
   });
 
+  /**
+   * The four Quick Connect calls, at the paths 12.2.0 actually has (#9). The
+   * endpoints this replaced are gone from the Server, so the point of asserting
+   * on the recorded requests is that nothing here drifts back to one of them.
+   */
+  it('runs the whole Quick Connect flow on the 12.x endpoints', async () => {
+    const deviceId = 'quick-connects';
+    const gateway = createJellyfinGateway({
+      serverAddress: fakeJellyfinUrl(),
+      deviceId,
+      ...identity,
+    });
+
+    expect(await gateway.isQuickConnectEnabled()).toBe(true);
+
+    const initiated = await gateway.initiateQuickConnect();
+    expect(initiated.Code).toMatch(/^\d{6}$/);
+    expect(initiated.Secret).toBeTruthy();
+    expect(initiated.Authenticated).toBe(false);
+    // The Server records the device that asked, which is the device the token
+    // it eventually issues will belong to.
+    expect(initiated.DeviceId).toBe(deviceId);
+
+    // Nobody has approved it yet, so polling says exactly that.
+    const waiting = await gateway.getQuickConnectState(initiated.Secret as string);
+    expect(waiting.Authenticated).toBe(false);
+
+    await approveQuickConnectCode(initiated.Code as string, 'user-rafael');
+
+    const approved = await gateway.getQuickConnectState(initiated.Secret as string);
+    expect(approved.Authenticated).toBe(true);
+
+    const result = await gateway.authenticateWithQuickConnect(initiated.Secret as string);
+    expect(result.User?.Name).toBe('Rafael');
+    // The token belongs to the DeviceId that initiated, not to the device that
+    // approved: that is the whole point of the flow.
+    expect(result.AccessToken).toBe(`token-user-rafael-${deviceId}`);
+
+    const paths = (await fakeRequests())
+      .filter((request) => request.path.startsWith('/QuickConnect') || request.path.includes('QuickConnect'))
+      .map((request) => `${request.method} ${request.path.split('?')[0] as string}`);
+    expect(paths).toContain('GET /QuickConnect/Enabled');
+    expect(paths).toContain('POST /QuickConnect/Initiate');
+    expect(paths).toContain('GET /QuickConnect/Connect');
+    expect(paths).toContain('POST /Users/AuthenticateWithQuickConnect');
+  });
+
+  it('answers 404 for a secret the Server has already spent', async () => {
+    const gateway = createJellyfinGateway({
+      serverAddress: fakeJellyfinUrl(),
+      deviceId: 'spends-a-secret',
+      ...identity,
+    });
+
+    const initiated = await gateway.initiateQuickConnect();
+    const secret = initiated.Secret as string;
+    await approveQuickConnectCode(initiated.Code as string, 'user-marina');
+    await gateway.authenticateWithQuickConnect(secret);
+
+    // A consumed request is gone, which is the same answer an expired one
+    // gives: there is nothing left to poll.
+    await expect(gateway.getQuickConnectState(secret)).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('refuses to exchange a secret nobody has approved', async () => {
+    const gateway = createJellyfinGateway({
+      serverAddress: fakeJellyfinUrl(),
+      deviceId: 'unapproved-secret',
+      ...identity,
+    });
+
+    const initiated = await gateway.initiateQuickConnect();
+
+    await expect(
+      gateway.authenticateWithQuickConnect(initiated.Secret as string),
+    ).rejects.toMatchObject({ status: 401 });
+  });
+
   it('reports an unreachable Server as a transport failure', async () => {
     const gateway = createJellyfinGateway({
       serverAddress: 'http://127.0.0.1:1/',
@@ -393,6 +472,36 @@ describe('the Jellyfin gateway', () => {
     await expect(gateway.getPublicSystemInfo()).rejects.toThrow();
   });
 });
+
+/**
+ * Approves a Quick Connect code the way the *other* Jellyfin app does: as a
+ * User already signed in there, through `POST /QuickConnect/Authorize`, which
+ * needs a token because on the real Server it does too.
+ *
+ * It goes through `fetch` rather than the gateway on purpose. Jellyflick is
+ * only ever the device being approved, never the one approving, so the gateway
+ * must not grow a method for an endpoint the app does not call — the approving
+ * app is another app, and in a test that is this function.
+ */
+async function approveQuickConnectCode(code: string, userId: string): Promise<void> {
+  const deviceId = `approves-${code}`;
+  const response = await fetch(
+    `${fakeJellyfinUrl()}/QuickConnect/Authorize?code=${encodeURIComponent(code)}&userId=${encodeURIComponent(userId)}`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: buildAuthorizationHeader({
+          ...identity,
+          deviceId,
+          token: `token-${userId}-${deviceId}`,
+        }),
+      },
+    },
+  );
+  if (!response.ok) {
+    throw new Error(`Approving ${code} answered ${String(response.status)}`);
+  }
+}
 
 /**
  * The authorization header of the last request the fake saw from this DeviceId.
