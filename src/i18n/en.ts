@@ -152,6 +152,50 @@ export const en = {
   'settings.language.en': 'English',
   'settings.language.es': 'Español',
 
+  // The three Playback Preferences (#35, story 114). Unlike the language above,
+  // these really are the User's own Jellyfin settings — `UserConfiguration`
+  // fields — so this copy has the opposite job: it says that every Jellyfin app
+  // follows them, and that a change is picked up the next time something plays
+  // rather than in the middle of what is playing now.
+  'settings.playbackHeading': 'What plays',
+  'settings.playbackExplanation':
+    'These three are kept by Jellyfin on your account, not by Jellyflick, so every Jellyfin app you use follows them — and a change here shows up the next time you play something.',
+
+  'settings.audioHeading': 'Audio language',
+  // Said plainly, because the setting above this one is the language the app is
+  // *drawn* in and the two are easy to confuse.
+  'settings.audioExplanation':
+    'The language to hear when a Movie or Episode offers more than one. This is the sound, not the language Jellyflick itself is in.',
+
+  'settings.subtitleLanguageHeading': 'Subtitle language',
+  'settings.subtitleLanguageExplanation': 'The language to read subtitles in when there is a choice.',
+
+  'settings.subtitleModeHeading': 'When to show subtitles',
+  'settings.subtitleModeExplanation': 'How often subtitles come on by themselves.',
+  'settings.subtitleMode.none': 'Never',
+  'settings.subtitleMode.onlyForced': 'Only forced ones, for signs and other languages',
+  'settings.subtitleMode.default': 'Whatever the Movie or Episode marks as default',
+  'settings.subtitleMode.smart': 'When the sound is not in my language',
+  'settings.subtitleMode.always': 'Always',
+
+  'settings.nextEpisodeHeading': 'The next Episode',
+  'settings.nextEpisodeExplanation':
+    'What happens when an Episode ends and there is another one after it.',
+  'settings.nextEpisode.autoPlay': 'Start the next one',
+  'settings.nextEpisode.ask': 'Ask me each time',
+
+  // No preference at all, which is not the same as choosing a language: the
+  // Server stores it as nothing and picks whatever a Movie or Episode offers.
+  'settings.spoken.none': 'No preference',
+  'settings.spoken.eng': 'English',
+  'settings.spoken.spa': 'Spanish',
+  'settings.spoken.fra': 'French',
+  'settings.spoken.deu': 'German',
+  'settings.spoken.ita': 'Italian',
+  'settings.spoken.por': 'Portuguese',
+  'settings.spoken.jpn': 'Japanese',
+  'settings.spoken.kor': 'Korean',
+
   'settings.homeHeading': 'Home',
   'settings.homeExplanation': 'Choose the Rows on your Home and the order they come in.',
 
