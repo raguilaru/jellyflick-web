@@ -301,6 +301,9 @@ function asAskedFor(
       Played: (state.played[userId] ?? []).includes(item.Id),
       IsFavorite: (state.favourites[userId] ?? []).includes(item.Id),
       PlayCount: 0,
+      // Where this User got to, which is the resume point (#25). The real
+      // Server sends 0 for an item nobody has started, never nothing.
+      PlaybackPositionTicks: state.playbackPositions[userId]?.[item.Id] ?? 0,
     };
   }
 

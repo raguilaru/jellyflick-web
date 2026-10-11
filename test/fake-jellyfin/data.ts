@@ -97,8 +97,28 @@ export type FakeItem = {
   /** Keyed by `MetadataProvider` member name: `Imdb`, `Tmdb`, … */
   ProviderIds?: Record<string, string>;
 
+  /**
+   * The fake's own field: the file behind this item, which is what
+   * `POST /Items/{id}/PlaybackInfo` negotiates against (#25). An item without
+   * one has nothing to play, which is a real answer the Server gives and a
+   * client has to show.
+   *
+   * The *bytes* every source serves are the one committed test video; this says
+   * what the Server **claims** the file is, which is all the negotiation reads.
+   */
+  media?: FakeMediaFile;
+
   /** The fake's own field: which library serves this item. */
   libraryId: string;
+};
+
+/** What the Server says a file is, in the terms a DeviceProfile is matched in. */
+export type FakeMediaFile = {
+  Container: string;
+  VideoCodec: string;
+  /** Omitted for a file with no audio track, which the test video really is. */
+  AudioCodec?: string;
+  Height: number;
 };
 
 /**
@@ -137,6 +157,13 @@ export type FakeJellyfinState = {
    * having watched nothing.
    */
   played: Record<string, string[]>;
+  /**
+   * Where each User has got to in each item, by user id then item id, in
+   * Jellyfin's 100-nanosecond ticks — `UserData.PlaybackPositionTicks`, which
+   * is the resume point (#25). The progress reports write it, so a test can
+   * watch a position arrive and then be honoured by the next Play.
+   */
+  playbackPositions: Record<string, Record<string, number>>;
   /** The Collections on the Server, and which Titles are in each (#17). */
   collections: FakeCollection[];
   /**
@@ -157,6 +184,23 @@ export type FakeJellyfinState = {
    * say anything about. Null is the normal Server.
    */
   failRelatedQueriesWith: number | null;
+  /**
+   * A status `POST /Items/{itemId}/PlaybackInfo` answers with, so a test can
+   * see what Play does when the Server will not say how to play something.
+   * Null is the normal Server.
+   */
+  failPlaybackInfoWith: number | null;
+  /**
+   * A `PlaybackErrorCode` the Server answers `PlaybackInfo` with instead of a
+   * playable source — `NotAllowed`, `NoCompatibleStream`, `RateLimitExceeded`.
+   * Null is the normal Server, which sends no error code at all.
+   */
+  playbackErrorCode: string | null;
+  /**
+   * A status the `/Sessions/Playing` reports answer with, so a test can see a
+   * Server that will not record progress. Null is the normal Server.
+   */
+  failPlaybackReportsWith: number | null;
   /**
    * A status `AuthenticateByName` answers with whatever the credentials are, so
    * a test can see what a Server that is having a bad day looks like. Null is
@@ -219,6 +263,10 @@ export function createSampleData(): FakeJellyfinState {
     failFavouriteWritesWith: null,
     favourites: {},
     played: {},
+    playbackPositions: {},
+    failPlaybackInfoWith: null,
+    playbackErrorCode: null,
+    failPlaybackReportsWith: null,
     failPlayedWritesWith: null,
     failRelatedQueriesWith: null,
     failDisplayPreferencesWith: null,
@@ -329,6 +377,9 @@ const SAMPLE_ITEMS: readonly FakeItem[] = [
     DateCreated: '2026-06-12T09:00:00Z',
     ImageTags: { Primary: 'tag-paddington' },
     Genres: ['Comedy', 'Family'],
+    // A file whose only problem is its height, so "too tall to decode" is a
+    // transcode reason a test can reach on its own.
+    media: { Container: 'mp4', VideoCodec: 'h264', AudioCodec: 'aac', Height: 2160 },
     libraryId: 'lib-kids',
   },
   // Older than Arrival, so Severance's place in a Row comes from the Episode
@@ -375,6 +426,9 @@ const SAMPLE_ITEMS: readonly FakeItem[] = [
       { Type: 'Subtitle', Language: 'spa', DisplayTitle: 'Spanish' },
     ],
     ProviderIds: { Imdb: 'tt2543164', Tmdb: '329865' },
+    // VP9 in WebM: what the committed test video really is, so a browser can
+    // direct-play it and an end-to-end test can watch something.
+    media: { Container: 'webm', VideoCodec: 'vp9', Height: 1080 },
     libraryId: 'lib-movies',
   },
   // A stray video file in a Movies library. Jellyfin really does serve these,
@@ -400,6 +454,9 @@ const SAMPLE_ITEMS: readonly FakeItem[] = [
     CommunityRating: 8.3,
     People: [{ Name: 'Al Pacino', Type: 'Actor', Role: 'Vincent Hanna' }],
     MediaStreams: [{ Type: 'Audio', Language: 'eng', DisplayTitle: 'English' }],
+    // 4K HEVC in Matroska with Dolby audio: the file nothing modest plays, so
+    // the Server has to be asked to transcode it.
+    media: { Container: 'mkv', VideoCodec: 'hevc', AudioCodec: 'eac3', Height: 2160 },
     libraryId: 'lib-movies',
   },
   // No images at all, so a card has to cope without artwork — and none of the
@@ -489,11 +546,16 @@ const SAMPLE_SIMILAR: Readonly<Record<string, string[]>> = {
   'movie-heat': ['movie-arrival'],
 };
 
-/** An item as the Server serves it: the fake's own `libraryId` is not a field. */
-export function servedViewOf(item: FakeItem): Omit<FakeItem, 'libraryId'> {
+/**
+ * An item as the Server serves it. The fake's own fields are not fields on a
+ * `BaseItemDto`: the library an item belongs to is answered through `parentId`,
+ * and what its file is comes from `PlaybackInfo` rather than from the item.
+ */
+export function servedViewOf(item: FakeItem): Omit<FakeItem, 'libraryId' | 'media'> {
   const dto: Record<string, unknown> = { ...item };
   delete dto.libraryId;
-  return dto as Omit<FakeItem, 'libraryId'>;
+  delete dto.media;
+  return dto as Omit<FakeItem, 'libraryId' | 'media'>;
 }
 
 /** A Collection as the Server serves it: the membership is not a field on it. */
