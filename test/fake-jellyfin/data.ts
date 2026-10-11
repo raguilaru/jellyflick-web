@@ -205,6 +205,65 @@ export type FakeJellyfinState = {
    * over or keep. Null is the normal Server.
    */
   failDisplayPreferencesWith: number | null;
+  /**
+   * Each User's `UserConfiguration`, by user id — their **Jellyfin** settings,
+   * which every Jellyfin app shares, as against the per-client `CustomPrefs`
+   * above. This is where the Playback Preferences store's writes land (#35).
+   *
+   * Per User and seeded empty, as `favourites` and `played` are: a User with
+   * nothing stored gets `DEFAULT_USER_CONFIGURATION`, which is what the real
+   * Server gives a new account. A test seeds this to get a User who has
+   * already chosen, and it is its own top-level field rather than a member of
+   * `FakeUser` because `POST /__fake/state` merges only one level deep —
+   * patching a field on one user would otherwise mean restating all four.
+   */
+  userConfiguration: Record<string, FakeUserConfiguration>;
+  /**
+   * A status `/Users/Me` and `POST /Users/Configuration` answer with, so a test
+   * can see a User whose Jellyfin settings the Server will not hand over or
+   * keep. Null is the normal Server.
+   */
+  failUserConfigurationWith: number | null;
+};
+
+/**
+ * `UserConfiguration` as 12.2.0 has it: the four fields this app shows, and
+ * the rest as a loose bag so a field only another Jellyfin app writes can be
+ * seeded and asserted on. A client POSTs the whole object, so what the fake
+ * owes a test is proof that nothing was dropped on the way.
+ */
+export type FakeUserConfiguration = Record<string, unknown> & {
+  AudioLanguagePreference?: string | null;
+  SubtitleLanguagePreference?: string | null;
+  /** `SubtitlePlaybackMode`: `Default`, `Always`, `OnlyForced`, `None`, `Smart`. */
+  SubtitleMode?: string;
+  EnableNextEpisodeAutoPlay?: boolean;
+};
+
+/**
+ * What the real Server hands a User who has configured nothing. The two
+ * language preferences are empty strings rather than absent, `SubtitleMode` is
+ * `Default` and autoplay is on — the Server's own defaults, which is what
+ * makes "a new User has next-Episode autoplay already" a fact a test can hold
+ * rather than something this app decides.
+ */
+export const DEFAULT_USER_CONFIGURATION: FakeUserConfiguration = {
+  AudioLanguagePreference: '',
+  PlayDefaultAudioTrack: true,
+  SubtitleLanguagePreference: '',
+  DisplayMissingEpisodes: false,
+  GroupedFolders: [],
+  SubtitleMode: 'Default',
+  DisplayCollectionsView: false,
+  EnableLocalPassword: false,
+  OrderedViews: [],
+  LatestItemsExcludes: [],
+  MyMediaExcludes: [],
+  HidePlayedInLatest: true,
+  RememberAudioSelections: true,
+  RememberSubtitleSelections: true,
+  EnableNextEpisodeAutoPlay: true,
+  CastReceiverId: null,
 };
 
 const SERVER_ID = '0f1e2d3c4b5a69788796a5b4c3d2e1f0';
@@ -223,6 +282,8 @@ export function createSampleData(): FakeJellyfinState {
     failRelatedQueriesWith: null,
     failDisplayPreferencesWith: null,
     displayPreferences: {},
+    userConfiguration: {},
+    failUserConfigurationWith: null,
     libraries: SAMPLE_LIBRARIES.map((library) => ({ ...library })),
     items: SAMPLE_ITEMS.map((item) => ({ ...item })),
     collections: SAMPLE_COLLECTIONS.map((collection) => ({ ...collection })),
