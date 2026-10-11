@@ -153,6 +153,12 @@ export type FakeQuickConnect = {
    * `requests`, which shrinks as requests are spent.
    */
   codesIssued: number;
+  /**
+   * A status `POST /QuickConnect/Initiate` answers with, so a test can see a
+   * Server that will not hand out a code at all. Null is the normal Server,
+   * and is also what a patch that leaves the field out means.
+   */
+  failInitiateWith?: number | null;
 };
 
 export type FakeJellyfinState = {
@@ -267,7 +273,7 @@ export function createSampleData(): FakeJellyfinState {
     displayPreferences: {},
     // Quick Connect is on, as it is on a Server whose admin has enabled it,
     // and nothing is in flight: a request only exists once a device asks.
-    quickConnect: { enabled: true, requests: [], codesIssued: 0 },
+    quickConnect: { enabled: true, requests: [], codesIssued: 0, failInitiateWith: null },
     libraries: SAMPLE_LIBRARIES.map((library) => ({ ...library })),
     items: SAMPLE_ITEMS.map((item) => ({ ...item })),
     collections: SAMPLE_COLLECTIONS.map((collection) => ({ ...collection })),

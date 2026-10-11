@@ -84,6 +84,28 @@ export const en = {
   'signIn.error.usersUnavailable':
     'Jellyflick could not read the list of Users from the Server. Type your username to sign in.',
 
+  // Quick Connect (#9): signing in by approving a code in another Jellyfin app.
+  // Nothing here claims more than the Server says — see `quickConnect.refused`.
+  'quickConnect.offer': 'Sign in with a code instead',
+  'quickConnect.heading': 'Sign in with a code',
+  'quickConnect.explanation':
+    'In a Jellyfin app you are already signed in to, choose Quick Connect and enter this code.',
+  'quickConnect.starting': 'Asking the Server for a code…',
+  'quickConnect.codeLabel': 'Your code',
+  'quickConnect.waiting': 'Waiting for the code to be approved…',
+  'quickConnect.signingIn': 'Signing you in…',
+  'quickConnect.usePassword': 'Use a password instead',
+  'quickConnect.retry': 'Get a new code',
+
+  'quickConnect.error.expired': 'Nobody approved that code in time. Get a new one and try again.',
+  // The Server answers the same way for a code that ran out of time, one that
+  // was turned down and one already used, so this says both rather than
+  // picking one and being wrong half the time.
+  'quickConnect.error.refused':
+    'That code no longer works. It may have run out of time, or been turned down in the other app. Get a new one and try again.',
+  'quickConnect.error.unavailable':
+    'This Server does not have Quick Connect switched on, so you cannot sign in with a code here.',
+
   'home.signedInAs': (p: { name: string }) => `Signed in as ${p.name}.`,
   'home.rowLoading': 'Looking for Titles…',
 

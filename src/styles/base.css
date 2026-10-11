@@ -358,6 +358,34 @@ body {
  * centre is across the direction pressed, so a full-width field would lose Up
  * from a result to whichever link in the bar above happens to sit over it.
  */
+/*
+ * The Quick Connect code (#9). It has to be readable from across a room, and
+ * that is a question about type: Bebas Neue has **one weight**, so a browser
+ * asked for a bold synthesises one and the digits come out smeared. The
+ * emphasis is size and letter spacing, and the weight is pinned to 400 so
+ * nothing further up the document can ask for a bold by accident.
+ *
+ * `clamp()` is downleveled by the CSS minifier, so it is safe on the target;
+ * `font-variant-numeric` is Chrome 52, and it keeps the digits the same width
+ * so a code does not shift as it is read out.
+ */
+.quick-connect__code {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(56px, 16vw, 140px);
+  font-weight: 400;
+  line-height: 1.1;
+  letter-spacing: 0.14em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-strong);
+  /*
+   * The letter spacing is added after the last digit as well, so without this
+   * the code sits visibly left of centre in its panel.
+   */
+  text-indent: 0.14em;
+  text-align: center;
+}
+
 .search__field {
   width: 100%;
   max-width: 420px;

@@ -47,6 +47,14 @@ export const quickConnectRoutes: readonly FakeRoute[] = [
         return { status: 401, body: { error: 'Quick Connect is not enabled on this Server.' } };
       }
 
+      const failWith = state.quickConnect.failInitiateWith ?? null;
+      if (failWith !== null) {
+        return {
+          status: failWith,
+          body: { error: 'The fake Jellyfin was told to fail starting Quick Connect.' },
+        };
+      }
+
       const authorization = request.headers.authorization ?? '';
       if (!/^MediaBrowser /i.test(authorization)) {
         return { status: 401, body: { error: 'No MediaBrowser authorization header.' } };

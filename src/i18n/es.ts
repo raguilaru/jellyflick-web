@@ -75,6 +75,24 @@ export const es: Messages = {
   'signIn.error.usersUnavailable':
     'Jellyflick no pudo leer la lista de usuarios del servidor. Escribe tu nombre de usuario para iniciar sesión.',
 
+  'quickConnect.offer': 'Iniciar sesión con un código',
+  'quickConnect.heading': 'Inicia sesión con un código',
+  'quickConnect.explanation':
+    'En una aplicación de Jellyfin en la que ya tengas la sesión iniciada, elige Quick Connect e introduce este código.',
+  'quickConnect.starting': 'Pidiendo un código al servidor…',
+  'quickConnect.codeLabel': 'Tu código',
+  'quickConnect.waiting': 'Esperando a que se apruebe el código…',
+  'quickConnect.signingIn': 'Iniciando tu sesión…',
+  'quickConnect.usePassword': 'Usar una contraseña',
+  'quickConnect.retry': 'Pedir un código nuevo',
+
+  'quickConnect.error.expired':
+    'Nadie aprobó ese código a tiempo. Pide uno nuevo e inténtalo otra vez.',
+  'quickConnect.error.refused':
+    'Ese código ya no funciona. Puede que se haya agotado el tiempo o que se haya rechazado en la otra aplicación. Pide uno nuevo e inténtalo otra vez.',
+  'quickConnect.error.unavailable':
+    'Este servidor no tiene Quick Connect activado, así que no puedes iniciar sesión con un código aquí.',
+
   'home.signedInAs': (p) => `Sesión iniciada como ${p.name}.`,
   'home.rowLoading': 'Buscando títulos…',
 

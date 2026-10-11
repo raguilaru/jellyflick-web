@@ -223,6 +223,7 @@ export function App({ config, device, messages }: AppProps) {
       ) : who.state === 'resuming' ? null : (
         <SignInScreen
           session={session}
+          device={device}
           serverAddress={serverAddress}
           onSignedIn={() => {
             const user = session.activeUser();
