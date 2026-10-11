@@ -9,6 +9,7 @@ import {
   type CapabilityProfileName,
 } from '../device/profiles';
 import { fakeRequests, resetFakeState, setFakeState } from '../fake-jellyfin/control';
+import { SAMPLE_PASSWORD } from '../fake-jellyfin/data';
 import { fakeJellyfinUrl } from '../fake-jellyfin/url';
 
 /**
@@ -125,6 +126,36 @@ describe('signing in with a code', () => {
     const before = await pollsFor(code);
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(await pollsFor(code)).toBe(before);
+  });
+
+  /**
+   * The sign-in screen is reached two ways: as the first sign-in, and from the
+   * picker's "Add another User" once somebody is already watching (#8). Quick
+   * Connect has to be the way in on both, and the second attempt has to get a
+   * code of its own — the first one's secret was spent signing the first User
+   * in.
+   */
+  it('is offered again when another household member is added', async () => {
+    renderApp({ profile: 'webos-5-like' });
+
+    // The first User would rather type, which a TV still allows.
+    const firstCode = (await screen.findByText(/^\d{6}$/)).textContent ?? '';
+    fireEvent.click(screen.getByRole('button', { name: 'Use a password instead' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Rafael' }));
+    fireEvent.input(await screen.findByLabelText('Password'), {
+      target: { value: SAMPLE_PASSWORD },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    expect(await screen.findByText('Signed in as Rafael.')).toBeTruthy();
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Switch User, currently Rafael' }),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Add another User' }));
+
+    const secondCode = (await screen.findByText(/^\d{6}$/)).textContent ?? '';
+    expect(secondCode).toMatch(/^\d{6}$/);
+    expect(secondCode).not.toBe(firstCode);
   });
 
   it('says everything through translation, so Spanish needs no code change', async () => {
