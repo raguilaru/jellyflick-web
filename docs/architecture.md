@@ -53,13 +53,19 @@ src/
                         what the Server is asked.
   session/              Session & Users: the Server address and the signed-in
                         Users in device storage, plus the sign-in screen.
-  settings/             The Client Settings store, on the Server:
-                        `client-settings.ts` is the store, `settings-provider.tsx`
-                        the one copy the screens read, `settings-screen.tsx` the
-                        settings screen, `home-layout-screen.tsx` the Home Layout
-                        editor, `accent-colours.ts` the Accent Colour presets,
-                        `use-accent-colour.ts` what paints them, `ui-language.tsx`
-                        the language the app is drawn in.
+  settings/             A User's settings, in **two** stores on the Server.
+                        Client Settings, Jellyflick's own: `client-settings.ts`
+                        is the store, `settings-provider.tsx` the one copy the
+                        screens read, `accent-colours.ts` the Accent Colour
+                        presets, `use-accent-colour.ts` what paints them,
+                        `ui-language.tsx` the language the app is drawn in.
+                        The User's Jellyfin account, which every Jellyfin app
+                        shares: `playback-preferences.ts` is the store,
+                        `playback-preferences-provider.tsx` the one copy,
+                        `spoken-languages.ts` the languages and the subtitle
+                        modes it offers. `settings-screen.tsx` is the one screen
+                        over both and `home-layout-screen.tsx` the Home Layout
+                        editor.
   shell/                The app once a User is signed in: `sections.ts` is the
                         one list of sections and their addresses, `app-shell.tsx`
                         the routes and which bar is shown, `back.ts` the single
@@ -176,7 +182,21 @@ makes asks for it.
 `failPlayedWritesWith` and `failRelatedQueriesWith` do the same for the
 `/UserPlayedItems` writes and for `/Items/{id}/Similar` and `/Collections`.
 All four want a token, as the real Server does.
-`failDisplayPreferencesWith` does the same for `/DisplayPreferences`.
+`failDisplayPreferencesWith` does the same for `/DisplayPreferences`, and
+`failUserConfigurationWith` for the User's Jellyfin configuration — which means
+**`/Users/Me` as well as `POST /Users/Configuration`**, because 12.x has no
+`GET /Users/Configuration` and that is where a client reads it. Set it after
+signing in: it is also the endpoint the session reads.
+
+Each User's `UserConfiguration` lives in `state.userConfiguration`, keyed by
+user id, per User and seeded empty as `favourites` and `played` are — so a User
+with nothing stored is served `DEFAULT_USER_CONFIGURATION`, the Server's own
+defaults. Seeding one is how a test gets a User who has already chosen:
+`{ 'user-rafael': { AudioLanguagePreference: 'spa' } }`. It is a top-level field
+rather than a member of `FakeUser` because `POST /__fake/state` merges only one
+level deep, so patching one user's field would otherwise mean restating all
+four. The POST **replaces** the stored configuration, as the real controller
+does, which is what makes a client's read-modify-write load-bearing.
 
 Stored `CustomPrefs` live in `state.displayPreferences`, keyed
 `<displayPreferencesId>|<client>|<userId>` — the three things the real Server
@@ -341,8 +361,9 @@ The editor, `src/settings/home-layout-screen.tsx`:
 ## The settings screen, Accent Colour and language
 
 `src/settings/settings-screen.tsx` is the screen a User changes their own things
-on (#11): their Accent Colour, the language the app is in, and the way to their
-Home Layout. Its address `/settings` is **not a section** — `src/shell/sections.ts`
+on: their Accent Colour, the language the app is in, and the way to their Home
+Layout (#11), and under a "What plays" subheading the four their Jellyfin
+account carries (#35). Its address `/settings` is **not a section** — `src/shell/sections.ts`
 is still the one list of sections and this is not in it — but both navigation bars
 reach it: the top bar with a link of its own after the sections, and the phone's
 bottom bar through the User's picture, which is where a phone User looks for
@@ -356,7 +377,24 @@ their own settings. The picture used to be inert; it is now a real link named
   one is chosen, leave the arrows alone, and serve touch, mouse and remote at
   once. #10's Move up / Move down buttons are the same decision.
 - **There is no Save button.** A press applies at once and saves behind the
-  screen, and nothing is offered until the first read has landed (see above).
+  screen, and nothing is offered until the first read has landed (see above) —
+  **both** reads now, since a control drawn from either store's defaults is the
+  same bug. One `settings.loading` notice covers both; they are in flight
+  together, so it costs nothing.
+- **The two stores are said apart in words, and a test holds both sentences.**
+  This is the subtle part. #11's language copy says Jellyfin has no language
+  setting of its own, which is true of the language the app is *drawn* in;
+  #35's four really are `UserConfiguration` fields, so "What plays" says
+  Jellyfin keeps them and every Jellyfin app follows. Both sentences are on the
+  screen at once, so each names what it is about — the audio section says in so
+  many words that it is the sound and not the language Jellyflick is in.
+  **Anyone editing either string has to keep the pair honest.**
+- **Layout**: `.settings-choices--wrap` is a choice row with too many options to
+  sit on a line (the nine languages), wrapping into columns like the Accent
+  Colour swatches so the arrow keys reach every one by direction;
+  `.settings-choices--stacked` is one whose labels are sentences (when to show
+  subtitles), one per line at every width. Both sit *after* the 640px rule they
+  override. `.screen__subheading` is a heading over a run of groups.
 
 **Accent Colour** (story 112) is `accent-colours.ts`: seven presets, each
 carrying both the `--accent` colour *and* the `--accent-text` that reads on it,
@@ -381,11 +419,13 @@ User's; a unit test from #36 fails if those two drift.
 setting, not Jellyfin's**. Jellyfin 12.x has no per-user UI language at all —
 the only one it has is the server-wide `ServerConfiguration.UICulture`
 (`decisions.md` §2). Story 114 says the settings screen "edits my Jellyfin
-settings"; that holds for audio language, subtitle language and next-episode
-autoplay, which really are `UserConfiguration` fields and are #35's, and it
-cannot hold for the UI language. So the screen states the difference in words
+settings"; that holds for audio language, subtitle language, when to show
+subtitles and next-episode autoplay, which really are `UserConfiguration`
+fields and are now on the screen under "What plays" (#35), and it cannot hold
+for the UI language. So the screen states the difference in words
 (`settings.languageExplanation`) rather than letting a User assume their other
-Jellyfin apps will follow.
+Jellyfin apps will follow — and the section above it has to keep saying the
+opposite about its own four, because both claims are on one screen.
 
 - The choice is the User's chosen tag, or **absent**, which means "match my
   device" and is where `device.preferredLanguages()` comes in. Absent is stored
@@ -397,6 +437,63 @@ Jellyfin apps will follow.
   the whole shell — losing a typed search term and every Row's state. The
   dictionary already on the screen stands in meanwhile, so there is no blank
   screen and no flash of message keys.
+
+## Playback Preferences: the User's Jellyfin account, not Client Settings
+
+`src/settings/playback-preferences.ts` is the **second** settings store, and the
+difference between it and Client Settings is the whole of #35. Be deliberate
+about which one a new setting belongs in:
+
+| | Client Settings (`client-settings.ts`) | Playback Preferences (`playback-preferences.ts`) |
+| --- | --- | --- |
+| Where on the Server | `DisplayPreferences.CustomPrefs` | `UserConfiguration`, on the User's account |
+| Partitioned by | `client=jellyflick` — Jellyflick's alone | nothing: it is the Jellyfin account |
+| Who else can see it | no other app | **every** Jellyfin app, and they can change it |
+| What lives there | Home Layout, Accent Colour, UI language | audio language, subtitle language, when to show subtitles, next-Episode autoplay |
+| Keys | prefixed `jf.`, ours to name | the Server's own field names |
+
+- **Pick the store by who the setting belongs to.** Something Jellyfin itself
+  acts on — what it picks to play, what it transcodes, what it remembers about
+  an account — is `UserConfiguration`. Something only Jellyflick acts on is
+  Client Settings under `jf.`, and `CLIENT_SETTINGS_CLIENT = 'jellyflick'` is
+  what keeps it ours. Something that belongs to a screen rather than a person is
+  `device.storage()` and neither of these.
+- **There is no read endpoint.** 12.x has no `GET /Users/Configuration`; a
+  User's configuration rides on `UserDto.Configuration`, so `read` goes through
+  `gateway.getCurrentUser()`. The gateway therefore has `saveUserConfiguration`
+  and no matching getter, which is deliberate rather than an omission.
+- **Every write is a read-modify-write**, as in the other store and for a worse
+  reason: `POST /Users/Configuration` assigns the *whole* `UserConfiguration`,
+  and the fields this app never shows belong to other Jellyfin apps. Sending
+  only the four it knows would reset a User's `CastReceiverId`, their
+  `GroupedFolders` and their `DisplayMissingEpisodes` to defaults. A unit test
+  holds exactly that.
+- **The defaults are the Server's, not ours**: no language preference,
+  `SubtitleMode: 'Default'`, autoplay **on**. A new Jellyfin account has those,
+  so drawing anything else would tell a User their account says something it
+  does not.
+- **A language is a plain `string`**, not a union of the codes the screen
+  offers, and a code it does not recognise presses no button and is written back
+  untouched — a preference set in another Jellyfin app is the User's. Same
+  treatment as `accentColour`. The codes `spoken-languages.ts` offers are ISO
+  639-2/T (`fra`, not the 639-2/B `fre`), which is what the sample library's
+  `MediaStream.Language` carries; `jellyfin-api.md` had left that open.
+  `SubtitleMode` is the exception and *is* typed as the SDK's union, because it
+  is a closed Server enum rather than a name.
+- **`PlaybackPreferencesProvider` is in the shell, above the router**, beside
+  `SettingsProvider` and shaped identically: `loaded`, `saveFailed`, applied at
+  once and saved behind, stale first read dropped, saves one at a time. Two
+  providers rather than more fields on one, because one save must not drag the
+  other store along.
+- **"A change takes effect on the next playback"** is true because the Server
+  holds it: a Jellyfin client reads `UserConfiguration` when it decides which
+  audio and subtitle track to start with, so the player (#28 onwards) reads
+  `usePlaybackPreferences()` — already in its tree — or the Server, and either
+  way nothing changes mid-playback. **The player did not exist on #35's branch**,
+  so what is tested is that the choice reaches the account: `settings.spec.ts`
+  reads the Server's own copy back rather than the screen's.
+
+The settings screen section above says how the copy keeps both stores honest.
 
 ## My List
 

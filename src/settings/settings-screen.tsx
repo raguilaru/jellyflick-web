@@ -2,7 +2,9 @@ import type { DeviceLayer } from '../device/types';
 import { useTranslate, type MessageKey } from '../i18n/index';
 import { ACCENT_COLOURS, accentColourFor } from './accent-colours';
 import { HOME_LAYOUT_PATH } from './home-layout-screen';
+import { usePlaybackPreferences } from './playback-preferences-provider';
 import { useSettings } from './settings-provider';
+import { SPOKEN_LANGUAGES, SUBTITLE_MODES } from './spoken-languages';
 import { deviceLocaleFor, uiLocaleFor } from './ui-language';
 
 /**
@@ -30,9 +32,15 @@ import { deviceLocaleFor, uiLocaleFor } from './ui-language';
  * "Match my device" to a User who has chosen neither — and a press then would
  * save those defaults over their real settings.
  *
- * Story 114's other three settings — audio language, subtitle language and
- * next-episode autoplay, which really are Jellyfin `UserConfiguration` fields
- * — are #35's, and nothing is drawn for them here yet.
+ * **Two stores, said apart in words.** The Accent Colour, the UI language and
+ * the Home Layout are Jellyflick's own (Client Settings, under the client
+ * `jellyflick`); the audio language, the subtitle language, when to show
+ * subtitles and next-Episode autoplay are the User's **Jellyfin account**
+ * (`UserConfiguration`), so every Jellyfin app they use follows those four. The
+ * screen says which is which rather than letting a User guess — the language
+ * section says Jellyfin has no language setting of its own, because it has
+ * none (`decisions.md` §2), and the "What plays" section says Jellyfin keeps
+ * those settings, because it does (#35, story 114).
  */
 
 /** The screen's own address. Not in `SECTIONS`; see the note above. */
@@ -52,6 +60,16 @@ const LANGUAGE_NAME_KEYS: Readonly<Record<'en' | 'es', MessageKey>> = {
 export function SettingsScreen({ device }: SettingsScreenProps) {
   const t = useTranslate();
   const { settings, loaded, saveFailed, change } = useSettings();
+  const playback = usePlaybackPreferences();
+
+  /**
+   * Both stores have to have answered before anything is drawn, not just the
+   * one a given control belongs to: a control drawn from defaults and pressed
+   * in that gap saves the defaults over what the User really has, which is the
+   * bug #13 found in #10's editor. One notice covers both reads, and they are
+   * in flight together, so this costs nothing in practice.
+   */
+  const ready = loaded && playback.loaded;
 
   const accent = accentColourFor(settings.accentColour);
   const deviceLocale = deviceLocaleFor(device);
@@ -65,15 +83,15 @@ export function SettingsScreen({ device }: SettingsScreenProps) {
     <main class="screen">
       <h1 class="screen__heading">{t('settings.heading')}</h1>
 
-      {saveFailed ? (
+      {saveFailed || playback.saveFailed ? (
         <p class="notice notice--problem" role="alert">
           {t('settings.notSaved')}
         </p>
       ) : null}
 
-      {loaded ? null : <p class="notice">{t('settings.loading')}</p>}
+      {ready ? null : <p class="notice">{t('settings.loading')}</p>}
 
-      {loaded ? (
+      {ready ? (
         <>
           <section class="settings-group">
             <h2 class="settings-group__heading">{t('settings.accentHeading')}</h2>
@@ -128,6 +146,80 @@ export function SettingsScreen({ device }: SettingsScreenProps) {
             </p>
           </section>
 
+          {/* The settings the User's Jellyfin account carries, not
+              Jellyflick's own. The heading and the sentence under it are what
+              keep the language section above honest: that one says Jellyfin has
+              no language setting, and this one says Jellyfin keeps these. */}
+          <h2 class="screen__subheading">{t('settings.playbackHeading')}</h2>
+          <p class="notice">{t('settings.playbackExplanation')}</p>
+
+          <section class="settings-group">
+            <h3 class="settings-group__heading">{t('settings.audioHeading')}</h3>
+            <p class="notice">{t('settings.audioExplanation')}</p>
+            <LanguageChoice
+              label={t('settings.audioHeading')}
+              chosen={playback.preferences.audioLanguage}
+              onChoose={(audioLanguage) => playback.change({ audioLanguage })}
+            />
+          </section>
+
+          <section class="settings-group">
+            <h3 class="settings-group__heading">{t('settings.subtitleLanguageHeading')}</h3>
+            <p class="notice">{t('settings.subtitleLanguageExplanation')}</p>
+            <LanguageChoice
+              label={t('settings.subtitleLanguageHeading')}
+              chosen={playback.preferences.subtitleLanguage}
+              onChoose={(subtitleLanguage) => playback.change({ subtitleLanguage })}
+            />
+          </section>
+
+          <section class="settings-group">
+            <h3 class="settings-group__heading">{t('settings.subtitleModeHeading')}</h3>
+            <p class="notice">{t('settings.subtitleModeExplanation')}</p>
+            <p
+              class="settings-choices settings-choices--stacked"
+              role="group"
+              aria-label={t('settings.subtitleModeHeading')}
+            >
+              {SUBTITLE_MODES.map((option) => (
+                <button
+                  key={option.mode}
+                  type="button"
+                  class="button button--quiet"
+                  aria-pressed={playback.preferences.subtitleMode === option.mode}
+                  onClick={() => playback.change({ subtitleMode: option.mode })}
+                >
+                  {t(option.nameKey)}
+                </button>
+              ))}
+            </p>
+          </section>
+
+          <section class="settings-group">
+            <h3 class="settings-group__heading">{t('settings.nextEpisodeHeading')}</h3>
+            <p class="notice">{t('settings.nextEpisodeExplanation')}</p>
+            {/* Two buttons rather than a checkbox, so it is the same shape as
+                every other choice on the screen and says which one is chosen
+                instead of leaving a User to read a tick. */}
+            <p
+              class="settings-choices"
+              role="group"
+              aria-label={t('settings.nextEpisodeHeading')}
+            >
+              {([true, false] as const).map((autoPlay) => (
+                <button
+                  key={String(autoPlay)}
+                  type="button"
+                  class="button button--quiet"
+                  aria-pressed={playback.preferences.nextEpisodeAutoPlay === autoPlay}
+                  onClick={() => playback.change({ nextEpisodeAutoPlay: autoPlay })}
+                >
+                  {t(autoPlay ? 'settings.nextEpisode.autoPlay' : 'settings.nextEpisode.ask')}
+                </button>
+              ))}
+            </p>
+          </section>
+
           <section class="settings-group">
             <h2 class="settings-group__heading">{t('settings.homeHeading')}</h2>
             <p class="notice">{t('settings.homeExplanation')}</p>
@@ -141,5 +233,50 @@ export function SettingsScreen({ device }: SettingsScreenProps) {
         </>
       ) : null}
     </main>
+  );
+}
+
+type LanguageChoiceProps = {
+  /** Names the group, so a screen reader says which language is being chosen. */
+  label: string;
+  /** The stored code, which may be one no preset here offers. */
+  chosen: string | undefined;
+  /** `undefined` is "no preference", which is a choice of its own. */
+  onChoose(code: string | undefined): void;
+};
+
+/**
+ * One row of languages for the sound or the subtitles, with "No preference"
+ * first.
+ *
+ * A code the Server holds that is not one of the presets presses **nothing**,
+ * and is left alone until the User chooses something else: a preference set in
+ * another Jellyfin app is theirs, not this screen's to overwrite. That is the
+ * same treatment `accentColourFor` gives a preset it does not know.
+ */
+function LanguageChoice({ label, chosen, onChoose }: LanguageChoiceProps) {
+  const t = useTranslate();
+  return (
+    <p class="settings-choices settings-choices--wrap" role="group" aria-label={label}>
+      <button
+        type="button"
+        class="button button--quiet"
+        aria-pressed={chosen === undefined}
+        onClick={() => onChoose(undefined)}
+      >
+        {t('settings.spoken.none')}
+      </button>
+      {SPOKEN_LANGUAGES.map((language) => (
+        <button
+          key={language.code}
+          type="button"
+          class="button button--quiet"
+          aria-pressed={chosen === language.code}
+          onClick={() => onChoose(language.code)}
+        >
+          {t(language.nameKey)}
+        </button>
+      ))}
+    </p>
   );
 }
