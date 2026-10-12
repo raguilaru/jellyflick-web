@@ -146,13 +146,39 @@ Playwright passed, 20 skipped, 0 failed**, 106.62 kB / 33.39 kB gz.
   video. Arrival direct-plays; Heat is 4K HEVC so it cannot; Paddington's only problem is its
   height; The Unfinished has no file at all.
 
-### A process fix owed before the next implementer is launched
+### main's skills regression, reconciled — read this before trusting `.agents/skills/`
+
+**`main`'s `71d2937` is a regression, not a migration**, and it was merged into this branch
+at `dfc8ba9` **without its content**. Both copies of `docs/agents/skills.md` say the same
+thing: skills live in `.agents/skills/` and are *symlinked* into `.claude/skills/`, managed
+by the `skills` CLI through `skills-lock.json`. That commit:
+
+- **deleted all 84 files under `.agents/skills/`**, leaving every one of its 38 symlinks
+  dangling — `tdd` and `implement-spec` included, which are the two every brief in this run
+  names;
+- **added symlinks for the nine skills that same doc lists as "left out on purpose"**
+  (`chief-of-staff`, `claude-handoff`, `loop-me`, `setup-ts-deep-modules`, `writing-beats`,
+  `writing-fragments`, `writing-shape`, `migrate-to-shoehorn`, `scaffold-exercises`);
+- committed two `.DS_Store` files.
+
+`dfc8ba9` takes main's history and keeps this branch's content: 84 real files restored, the
+nine excluded symlinks gone, `skills-lock.json` back to the 29 installed skills, `.DS_Store`
+dropped. **All 29 symlinks resolve and every installed skill has a lock entry.** The
+resulting tree is byte-identical to `54fb06b`, so the gate carried without a re-run.
+
+**Recording that merge is what stops the regression landing again when #38 merges.** If
+`.agents/skills/` ever looks empty, this is why; restore with
+`npx skills@latest experimental_install` (Node 22 — it crashes on Node 20.12).
+
+### A process fix still owed before the next implementer is launched
 
 **The `tdd` skill is not reachable from a subagent's Skill tool** — #9 got
 `Unknown skill: tdd` and read `.agents/skills/tdd/SKILL.md` directly instead, which worked.
-Every brief in this run has told implementers to "drive the `tdd` skill", so either fix the
-exposure or **tell them to read the file directly**. Worth checking whether earlier
-implementers silently did neither.
+This is **not** the dangling-symlink problem above: on this branch
+`.claude/skills/tdd/SKILL.md` resolves fine on disk and the Skill tool still did not offer
+it, and `implement-spec` behaved the same way for the integrator. So **tell implementers to
+read `.agents/skills/<name>/SKILL.md` directly** rather than to "drive the skill". Worth
+checking whether earlier implementers silently did neither.
 
 ### Five merges' worth of lessons — read before merging anything
 
@@ -188,10 +214,17 @@ are fixed in `57c27c2`, each with a regression test checked to fail without its 
 **The name has been redacted from `main`'s tip** (`09ad60a`), which was the live half of
 `decisions.md` §10: `main` had carried it all along, because the redaction was made on this
 branch and never merged down. §10's other three claims were wrong too and are corrected
-there. **The history rewrite itself is not due until the last ticket merges**, and two
-redundant remote branches (`origin/chore/agent-skills`, `origin/feat/v1-web-client`, both
-0 commits ahead of `origin/main`) still carry the name at their tips — **deleting them
-would end the remaining public exposure without touching history**, and is the host's call.
+there.
+
+**`origin/chore/agent-skills` and `origin/feat/v1-web-client` have been deleted**, both
+0 commits ahead of `origin/main`, so **every branch on GitHub is now clean at its tip**.
+That did **not** end the public exposure, only the branch-tip part: merged **PR #37** used
+`chore/agent-skills` as its head, so its diff and those commits are still reachable by
+direct `/commit/<sha>` URL. **That residue is the part only GitHub Support can purge** —
+the force-push in §10 would leave the same residue, which is why §10 has always had a
+"tell the host to ask Support" step.
+
+**The history rewrite itself is still not due until the last ticket merges.**
 
 **A trap worth knowing before you touch `main` again:** this branch moved
 `docs/initial-brief.md`, so anything `main` does to that file at its old path collides

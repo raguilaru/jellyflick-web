@@ -190,20 +190,26 @@ ever in that one file's contents.
 
 **The branch list is much longer than this section used to say.** It named four branches;
 35 refs contain the affected commits, including the 16 `ticket/*` branches that did not
-exist when it was written. As of 2026-10-12 these tips still carry the name:
+exist when it was written.
+
+**Every branch on GitHub is now clean at its tip.** `origin/chore/agent-skills`
+(`7c45e73`) and `origin/feat/v1-web-client` (`453667c`) were deleted on 2026-10-12; both
+were 0 commits ahead of `origin/main`, so nothing was lost. **This did not end the public
+exposure, only the branch-tip part of it:** merged PR #37 used `chore/agent-skills` as its
+head, so its diff and those commits are still reachable by direct `/commit/<sha>` URL.
+**That residue is exactly what only GitHub Support can purge**, and it is why step 4 below
+exists.
+
+What still carries the name at a tip, all of it local to this machine:
 
 | Ref | Where |
 |---|---|
-| `origin/chore/agent-skills` | **on GitHub** — but **0 commits ahead of `origin/main`**, so it is redundant and deleting it is simpler than rewriting it |
-| `origin/feat/v1-web-client` | **on GitHub** — likewise **0 commits ahead of `origin/main`** |
-| `main` (local only, if not pulled since `e5d5808`) | a `git pull` fixes it |
 | `ticket/2-connect-to-a-server` | local only |
 | `worktree-agent-a68c2e12a4fad9974`, `…a8735c0112317d3f1`, `…a879f2826d937352e`, `…adad6b44306b59a81` | local only, all stale |
 | `claude/implement-spec-88c250`, `claude/implement-spec-c273ce`, `claude/remote-setup-2e9b22` | local only; two belong to other Claude sessions |
 
-**Deleting the two redundant remote branches would end the remaining public exposure
-without touching history at all**, and is worth doing before the rewrite rather than as
-part of it. Neither has anything `origin/main` does not.
+`main` itself is clean from `09ad60a`; a local clone that has not pulled since will still
+show it until it does.
 
 ### When the last ticket has merged, and before PR #38 is marked ready
 
