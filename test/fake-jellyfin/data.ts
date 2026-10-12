@@ -233,6 +233,21 @@ export type FakeJellyfinState = {
   /** The Collections on the Server, and which Titles are in each (#17). */
   collections: FakeCollection[];
   /**
+   * The local trailer files beside each Title, by the Title's item id, as
+   * `GET /Items/{itemId}/LocalTrailers` answers (#16, story 24).
+   *
+   * The trailers themselves are ordinary items in `items`, of Type `Trailer`
+   * and with a `media` file, so the Billboard's trailer negotiates playback
+   * exactly as a Title does. The *membership* is here rather than on the item,
+   * the way a Collection's is: a trailer belongs to a Title, and neither the
+   * real Server nor this one puts that on the item.
+   *
+   * Seeded for Arrival and Severance alone, so "this Title has a trailer" and
+   * "this one has none" are both reachable without patching anything — story 25
+   * is the Billboard falling back to the backdrop.
+   */
+  localTrailers: Record<string, string[]>;
+  /**
    * What `/Items/{itemId}/Similar` answers for each item, by item id. The real
    * Server works this out from genres and people; a fake owes a client only a
    * fixed relation it can assert on.
@@ -427,6 +442,7 @@ export function createSampleData(): FakeJellyfinState {
     libraries: SAMPLE_LIBRARIES.map((library) => ({ ...library })),
     items: SAMPLE_ITEMS.map((item) => ({ ...item })),
     collections: SAMPLE_COLLECTIONS.map((collection) => ({ ...collection })),
+    localTrailers: { ...SAMPLE_LOCAL_TRAILERS },
     similar: { ...SAMPLE_SIMILAR },
     movieRecommendations: { ...SAMPLE_MOVIE_RECOMMENDATIONS },
     users: [
@@ -539,6 +555,11 @@ const SAMPLE_ITEMS: readonly FakeItem[] = [
     Type: 'Movie',
     DateCreated: '2026-06-12T09:00:00Z',
     ImageTags: { Primary: 'tag-paddington' },
+    // A backdrop and **no** logo, and no community rating either: the Title the
+    // Billboard can feature but has to head with its own name in the logo font
+    // (#16, story 32's preference being only a preference). Arrival and
+    // Severance are the other way round — a backdrop and a logo both.
+    BackdropImageTags: ['tag-paddington-backdrop'],
     Genres: ['Comedy', 'Family'],
     // A file whose only problem is its height, so "too tall to decode" is a
     // transcode reason a test can reach on its own.
@@ -673,6 +694,43 @@ const SAMPLE_ITEMS: readonly FakeItem[] = [
     ProviderIds: { Imdb: 'tt11280740' },
     libraryId: 'lib-series',
   },
+  // The local trailer files, which sit beside a Title rather than among the
+  // Titles (#16, story 24). They are items like any other — `PlaybackInfo`
+  // negotiates one exactly as it does a Movie — but no query for
+  // `Movie,Series` reaches them, and `/Items/Latest` leaves them out the way
+  // the real endpoint leaves out an extra. Which Title each belongs to is
+  // `state.localTrailers`.
+  //
+  // Both are the committed WebM, so a browser really plays what the Billboard
+  // attaches.
+  {
+    Id: 'trailer-arrival',
+    Name: 'Arrival (Trailer)',
+    Type: 'Trailer',
+    DateCreated: '2026-06-10T09:00:00Z',
+    media: { Container: 'webm', VideoCodec: 'vp9', Height: 1080 },
+    libraryId: 'lib-movies',
+  },
+  {
+    Id: 'trailer-severance',
+    Name: 'Severance (Trailer)',
+    Type: 'Trailer',
+    DateCreated: '2026-02-01T09:00:00Z',
+    media: { Container: 'webm', VideoCodec: 'vp9', Height: 1080 },
+    libraryId: 'lib-series',
+  },
+  // A second trailer for one Title, so "the Server holds several and the
+  // Billboard shows the first" is a thing a test can reach. It is not seeded
+  // against any Title: a test that wants two patches `localTrailers`.
+  {
+    Id: 'trailer-heat',
+    Name: 'Heat (Trailer)',
+    Type: 'Trailer',
+    DateCreated: '2026-06-01T09:00:00Z',
+    media: { Container: 'webm', VideoCodec: 'vp9', Height: 1080 },
+    libraryId: 'lib-movies',
+  },
+
   {
     Id: 'season-severance-s2',
     Name: 'Season 2',
@@ -700,6 +758,18 @@ const SAMPLE_COLLECTIONS: readonly FakeCollection[] = [
     itemIds: ['movie-heat', 'movie-arrival'],
   },
 ];
+
+/**
+ * Which local trailers sit beside which Title (#16).
+ *
+ * Two of the three Titles the Billboard can feature have one, and Paddington
+ * deliberately has none: that is story 25, the Billboard showing its backdrop
+ * because there is no trailer to play.
+ */
+const SAMPLE_LOCAL_TRAILERS: Readonly<Record<string, string[]>> = {
+  'movie-arrival': ['trailer-arrival'],
+  'series-severance': ['trailer-severance'],
+};
 
 /**
  * What `/Items/{itemId}/Similar` answers, by item id. Fixed rather than worked

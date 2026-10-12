@@ -153,6 +153,36 @@ export type JellyfinGateway = {
    */
   getRecentAdditions(options?: RecentAdditionsOptions): Promise<BaseItemDto[]>;
   /**
+   * `GET /Items` once more, for the Titles the **Billboard** can feature (#16).
+   *
+   * Deliberately neither `getTitles` nor `getTitles({ detail: true })`: the
+   * Billboard needs the backdrop, the logo and the overview, which no Row asks
+   * for, and needs none of the cast, the streams or the provider ids, which a
+   * title page does. Asking with `detail` would pull a cast list for every
+   * Title in the library to draw one of them.
+   *
+   * It asks for the whole catalogue rather than a page of it, because the pick
+   * is **ours** and not the Server's: `sortBy=Random` would take the choice
+   * away from the device layer and make a pick unreproducible, and a limit on a
+   * name-ordered query would quietly confine the Billboard to the first Titles
+   * in the alphabet. `limit` is there for a caller that knows its library is
+   * enormous.
+   */
+  getBillboardCandidates(options?: BillboardCandidatesOptions): Promise<BaseItemDto[]>;
+  /**
+   * `GET /Items/{itemId}/LocalTrailers` — the trailer files that sit beside a
+   * Title on the Server, which is what the Billboard autoplays (#16, story 24).
+   *
+   * **Local only, and that is the point.** Jellyfin also serves
+   * `RemoteTrailers` through `fields=RemoteTrailers`, which are YouTube links;
+   * the Billboard never shows one, so there is no method here that would hand
+   * it one. Story 75's Watch trailer button is where a remote trailer belongs,
+   * behind a press.
+   *
+   * Answers a **bare array**, not a `BaseItemDtoQueryResult`.
+   */
+  getLocalTrailers(itemId: string): Promise<BaseItemDto[]>;
+  /**
    * `GET /UserItems/Resume` — what this User has started and not finished, most
    * recently played first, which is half of Continue Watching (#12).
    *
@@ -508,6 +538,14 @@ export type RecentAdditionsOptions = {
   limit?: number;
 };
 
+export type BillboardCandidatesOptions = {
+  /**
+   * How many Titles to consider. Absent means every one of them, which is the
+   * default on purpose — see the note on the method.
+   */
+  limit?: number;
+};
+
 export type SimilarTitlesOptions = {
   itemId: string;
   limit?: number;
@@ -572,6 +610,20 @@ const TITLE_DETAIL_FIELDS = 'Overview,People,MediaStreams,ProviderIds';
 
 /** Posters, and the artwork only a title page shows: a backdrop and a logo. */
 const TITLE_DETAIL_IMAGE_TYPES = 'Primary,Backdrop,Logo,Thumb';
+
+/**
+ * What the Billboard reads and a Row does not (#16): the short description.
+ * The age rating and the community rating are **not** here, because the Server
+ * sends `OfficialRating` and `CommunityRating` unasked — see the note above.
+ */
+const BILLBOARD_FIELDS = 'Overview';
+
+/**
+ * The Billboard's artwork: its backdrop, the logo over it, and the poster,
+ * which is what a card for the same Title shows if one is drawn beside it. No
+ * `Thumb`: nothing on the Billboard draws one.
+ */
+const BILLBOARD_IMAGE_TYPES = 'Primary,Backdrop,Logo';
 
 /** A request that reached the Server but came back with a non-2xx status. */
 export class JellyfinHttpError extends Error {
@@ -776,6 +828,35 @@ export function createJellyfinGateway(options: JellyfinGatewayOptions): Jellyfin
           ...(options.limit === undefined ? {} : { limit: options.limit }),
         })}`,
       ).then((result) => result.Items ?? []),
+
+    getBillboardCandidates: (options = {}) =>
+      request<BaseItemDtoQueryResult>(
+        'GET',
+        `/Items${query({
+          // Only the two kinds the app shows: the Billboard features a Title.
+          includeItemTypes: TITLE_ITEM_TYPES,
+          recursive: true,
+          // A fixed order, so the same draw picks the same Title twice. The
+          // randomness is the device layer's, never the Server's.
+          sortBy: 'SortName',
+          sortOrder: 'Ascending',
+          enableImageTypes: BILLBOARD_IMAGE_TYPES,
+          imageTypeLimit: 1,
+          fields: BILLBOARD_FIELDS,
+          // Whether this User has finished a Title decides whether Spotlight
+          // may feature it, and where they left off is what Play resumes from.
+          enableUserData: true,
+          enableTotalRecordCount: false,
+          ...(options.limit === undefined ? {} : { limit: options.limit }),
+        })}`,
+      ).then((result) => result.Items ?? []),
+
+    // A bare array, like `/Items/Latest` and unlike everything around it.
+    getLocalTrailers: (itemId) =>
+      request<BaseItemDto[]>(
+        'GET',
+        `/Items/${encodeURIComponent(itemId)}/LocalTrailers`,
+      ),
 
     getResumeItems: (options = {}) =>
       request<BaseItemDtoQueryResult>(

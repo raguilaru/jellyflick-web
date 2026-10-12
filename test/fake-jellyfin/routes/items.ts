@@ -58,10 +58,15 @@ export const itemRoutes: readonly FakeRoute[] = [
       }
 
       // The real endpoint answers with the newest playable additions, so a
-      // Series and its Seasons are not among them — their Episodes are.
+      // Series and its Seasons are not among them — their Episodes are. A
+      // local trailer is an *extra* beside a Title rather than an addition of
+      // its own, and the real endpoint leaves those out too (#16).
       const latest = state.items
         .filter((item) => item.libraryId === parentId)
-        .filter((item) => item.Type !== 'Series' && item.Type !== 'Season')
+        .filter(
+          (item) =>
+            item.Type !== 'Series' && item.Type !== 'Season' && item.Type !== 'Trailer',
+        )
         .sort((left, right) => Date.parse(right.DateCreated) - Date.parse(left.DateCreated))
         .slice(0, limitOf(request.query.get('limit')))
         .map(servedViewOf);
@@ -238,6 +243,48 @@ export const itemRoutes: readonly FakeRoute[] = [
         .map((item) => asAskedFor(item, request, state, user.Id));
 
       return { status: 200, body: { Items: like, TotalRecordCount: like.length, StartIndex: 0 } };
+    },
+  },
+
+  /**
+   * `/Items/{itemId}/LocalTrailers` — the trailer files beside a Title, which
+   * is what the Billboard autoplays (#16, story 24).
+   *
+   * Two habits of the real endpoint are kept: it answers a **bare array**,
+   * like `/Items/Latest` and unlike the queries around it, and a Title with no
+   * trailer gets an **empty array** rather than a 404 — "there is no trailer"
+   * is an answer, and the Billboard shows its backdrop instead.
+   *
+   * It goes quiet with `failRelatedQueriesWith`, beside `/Similar` and
+   * `/Collections`: it is the same kind of question about one item.
+   */
+  {
+    method: 'GET',
+    path: '/Items/:itemId/LocalTrailers',
+    handle: (request, state, params) => {
+      const user = userForToken(request.headers.authorization ?? '', state);
+      if (user === undefined) {
+        return { status: 401, body: { error: 'No valid token.' } };
+      }
+      if (state.failRelatedQueriesWith !== null) {
+        return {
+          status: state.failRelatedQueriesWith,
+          body: { error: 'The fake Jellyfin was told to fail related queries.' },
+        };
+      }
+
+      const itemId = params.itemId ?? '';
+      if (!state.items.some((item) => item.Id === itemId)) {
+        return { status: 404, body: { error: `No item ${itemId}.` } };
+      }
+
+      // The Server's own order is the answer, so it is kept rather than sorted.
+      const trailers = (state.localTrailers[itemId] ?? [])
+        .map((id) => state.items.find((item) => item.Id === id))
+        .filter((item): item is FakeItem => item !== undefined)
+        .map((item) => asAskedFor(item, request, state, user.Id));
+
+      return { status: 200, body: trailers };
     },
   },
 
