@@ -315,6 +315,30 @@ export const en = {
   'title.subtitles': 'Subtitles',
   'title.collection': 'Collection',
   'title.moreLikeThis': 'More like this',
+  /*
+   * A Series' Seasons and Episodes (#18). The picker is a group of buttons
+   * rather than a `<select>`, so every Season is one press on a remote.
+   */
+  'title.seasons': 'Seasons',
+  'title.episodes': 'Episodes',
+  /** A Season the Server holds no item for, so it has only its number. */
+  'title.seasonNumber': (p: { number: number }) => `Season ${String(p.number)}`,
+  /** The Episodes the Server placed in no Season at all. */
+  'title.otherEpisodes': 'Other Episodes',
+  /**
+   * One Episode in the list. The number leads, because a list of Episodes is
+   * read in order, and an Episode the Server did not number is its name alone.
+   */
+  'title.episodeName': (p: { number?: number; name: string }) =>
+    p.number === undefined ? p.name : `${String(p.number)}. ${p.name}`,
+  /**
+   * What the player is told it is playing: the Series and then the Episode.
+   * A player headed only "Sleepytime" says nothing about which show it is.
+   */
+  'title.episodePlaying': (p: { series: string; episode: string }) =>
+    `${p.series}: ${p.episode}`,
+  /** A Series the Server lists no Episodes of, which is nothing to play. */
+  'title.noEpisodes': 'The Server did not list any Episodes of this Series.',
   /**
    * One audio or subtitle language, by the three-letter code the Server sends.
    * The dictionary is the locale's own, because a language's name is as

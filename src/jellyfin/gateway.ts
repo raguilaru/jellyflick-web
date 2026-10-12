@@ -171,6 +171,30 @@ export type JellyfinGateway = {
    */
   getNextUpItems(options?: ContinueWatchingOptions): Promise<BaseItemDto[]>;
   /**
+   * `GET /Shows/{seriesId}/Seasons` — the Seasons of one Series, in the order
+   * the Server airs them, which is what the title page's picker offers (#18).
+   *
+   * It is the Seasons' own endpoint rather than `/Items?parentId=`, because a
+   * Season is not a Title and every `/Items` query here narrows to
+   * `Movie,Series`. What it is read for is each Season's name and number: a
+   * Season carries no Episodes of its own in the answer.
+   */
+  getSeasons(seriesId: string): Promise<BaseItemDto[]>;
+  /**
+   * `GET /Shows/{seriesId}/Episodes` — **every** Episode of one Series, across
+   * its Seasons, in the Server's aired order (#18).
+   *
+   * Deliberately the whole Series rather than one Season at a time: the one
+   * question that spans Seasons is which Episode Play starts, and asking per
+   * Season would make that a merge of several answers whose order is only
+   * within each. Switching Season in the picker is then not a question for the
+   * Server at all.
+   *
+   * It asks for the three fields the list draws and no more — the description,
+   * the still and this User's own progress.
+   */
+  getEpisodes(seriesId: string): Promise<BaseItemDto[]>;
+  /**
    * `POST /UserItems/{itemId}/UserData` — the general user-data write, and the
    * only one that can move a resume point (#12, stories 37 and 38).
    *
@@ -914,6 +938,38 @@ export function createJellyfinGateway(options: JellyfinGatewayOptions): Jellyfin
           imageTypeLimit: 1,
           enableTotalRecordCount: false,
           ...(options.limit === undefined ? {} : { limit: options.limit }),
+        })}`,
+      ).then((result) => result.Items ?? []),
+
+    getSeasons: (seriesId) =>
+      request<BaseItemDtoQueryResult>(
+        'GET',
+        `/Shows/${encodeURIComponent(seriesId)}/Seasons${query({
+          // The picker draws a name, so no artwork and no user data: whether a
+          // Season has been watched is the sum of its Episodes', which the
+          // Episodes themselves carry.
+          enableImages: false,
+          enableUserData: false,
+          enableTotalRecordCount: false,
+        })}`,
+      ).then((result) => result.Items ?? []),
+
+    getEpisodes: (seriesId) =>
+      request<BaseItemDtoQueryResult>(
+        'GET',
+        `/Shows/${encodeURIComponent(seriesId)}/Episodes${query({
+          // The description is the only one of the three that is a `fields`
+          // value: `RunTimeTicks` is always sent and the still is an image
+          // type (`jellyfin-api.md` §4).
+          fields: 'Overview',
+          // An Episode's own `Primary` image is the still from the programme,
+          // which is what a list of them shows.
+          enableImageTypes: 'Primary',
+          imageTypeLimit: 1,
+          // How far through each Episode this User is, and which they have
+          // finished: the progress bar and the choice Play makes both need it.
+          enableUserData: true,
+          enableTotalRecordCount: false,
         })}`,
       ).then((result) => result.Items ?? []),
 

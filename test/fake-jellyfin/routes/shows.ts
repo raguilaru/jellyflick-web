@@ -1,6 +1,6 @@
 import { servedViewOf, type FakeItem, type FakeJellyfinState } from '../data.ts';
 import type { FakeRoute } from '../routing.ts';
-import { lastPlayedAtOf, userDataFor } from './items.ts';
+import { asAskedFor, lastPlayedAtOf, userDataFor } from './items.ts';
 import { userForToken } from './users.ts';
 
 /**
@@ -67,7 +67,114 @@ export const showRoutes: readonly FakeRoute[] = [
       };
     },
   },
+
+  /**
+   * `GET /Shows/{seriesId}/Seasons` — the Seasons of one Series, which is what
+   * the title page's picker is built from (#18).
+   *
+   * **Aired order**, which is the Season number: it is the order the real
+   * endpoint answers in, and a client that re-sorted the answer would be
+   * working around a property it already has. A Series whose Seasons the Server
+   * does not hold as items of their own answers with nothing, which is a real
+   * answer rather than a failure — Jellyfin serves Episodes whose Season is not
+   * an item, and the client's fallback is the number on the Episodes.
+   */
+  {
+    method: 'GET',
+    path: '/Shows/:seriesId/Seasons',
+    handle: (request, state, params) => {
+      const user = userForToken(request.headers.authorization ?? '', state);
+      if (user === undefined) {
+        return { status: 401, body: { error: 'No valid token.' } };
+      }
+      if (state.failLibraryQueriesWith !== null) {
+        return {
+          status: state.failLibraryQueriesWith,
+          body: { error: 'The fake Jellyfin was told to fail library queries.' },
+        };
+      }
+
+      const seriesId = params.seriesId ?? '';
+      if (!state.items.some((item) => item.Id === seriesId && item.Type === 'Series')) {
+        return { status: 404, body: { error: `No Series ${seriesId}.` } };
+      }
+
+      const seasons = state.items
+        .filter((item) => item.Type === 'Season' && item.SeriesId === seriesId)
+        .sort((left, right) => numberOf(left.IndexNumber) - numberOf(right.IndexNumber))
+        .map((item) => asAskedFor(item, request, state, user.Id));
+
+      return {
+        status: 200,
+        body: { Items: seasons, TotalRecordCount: seasons.length, StartIndex: 0 },
+      };
+    },
+  },
+
+  /**
+   * `GET /Shows/{seriesId}/Episodes` — every Episode of one Series, across its
+   * Seasons, in **aired order** (#18).
+   *
+   * That order is the point of the endpoint, and it is the Server's own answer:
+   * the Season number then the Episode number, with an Episode the Server has
+   * not numbered last, because there is nowhere else to put it. A client that
+   * sorted this itself would be re-deriving something it was told.
+   *
+   * It goes through `asAskedFor` like `/Items` does, so a query that forgot to
+   * ask for `Overview` sees none here either.
+   */
+  {
+    method: 'GET',
+    path: '/Shows/:seriesId/Episodes',
+    handle: (request, state, params) => {
+      const user = userForToken(request.headers.authorization ?? '', state);
+      if (user === undefined) {
+        return { status: 401, body: { error: 'No valid token.' } };
+      }
+      if (state.failLibraryQueriesWith !== null) {
+        return {
+          status: state.failLibraryQueriesWith,
+          body: { error: 'The fake Jellyfin was told to fail library queries.' },
+        };
+      }
+
+      const seriesId = params.seriesId ?? '';
+      if (!state.items.some((item) => item.Id === seriesId && item.Type === 'Series')) {
+        return { status: 404, body: { error: `No Series ${seriesId}.` } };
+      }
+
+      // The real endpoint narrows to one Season when asked. Nothing in this app
+      // does — the title page reads the whole Series at once and switches
+      // Season without asking again — so an unimplemented parameter is refused
+      // rather than quietly ignored.
+      const seasonId = request.query.get('seasonId') ?? request.query.get('season');
+      if (seasonId !== null) {
+        return {
+          status: 400,
+          body: {
+            error:
+              'The fake Jellyfin only implements the whole Series. Implement seasonId/season in test/fake-jellyfin/routes/shows.ts if a ticket needs one Season at a time.',
+          },
+        };
+      }
+
+      const episodes = state.items
+        .filter((item) => item.Type === 'Episode' && item.SeriesId === seriesId)
+        .sort((left, right) => orderOf(left) - orderOf(right))
+        .map((item) => asAskedFor(item, request, state, user.Id));
+
+      return {
+        status: 200,
+        body: { Items: episodes, TotalRecordCount: episodes.length, StartIndex: 0 },
+      };
+    },
+  },
 ];
+
+/** A Season's number, with an unnumbered one sorted last. */
+function numberOf(value: number | undefined): number {
+  return value ?? Number.MAX_SAFE_INTEGER;
+}
 
 /** Every Series this User has played or started an Episode of, once each. */
 function seriesWatchedBy(state: FakeJellyfinState, userId: string): string[] {
