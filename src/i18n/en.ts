@@ -294,6 +294,15 @@ export const en = {
   'player.play': (p: { name: string }) => `Play ${p.name}`,
   'player.pause': (p: { name: string }) => `Pause ${p.name}`,
   'player.close': 'Close',
+  /*
+   * The controls (#26). The seek bar is named with the Title for the same
+   * reason the buttons are, and `player.position` is what a screen reader
+   * reads instead of the raw number of seconds the slider holds.
+   */
+  'player.seek': (p: { name: string }) => `Seek through ${p.name}`,
+  'player.position': (p: { elapsed: string; total: string }) => `${p.elapsed} of ${p.total}`,
+  'player.remaining': (p: { clock: string }) => `-${p.clock}`,
+  'player.retry': 'Retry',
   'player.starting': 'Starting…',
   'player.cannotPlay': 'Jellyflick cannot play that Title on this device.',
   'player.unavailable': 'Jellyflick could not ask the Server how to play that Title.',

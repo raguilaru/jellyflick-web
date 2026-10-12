@@ -177,3 +177,68 @@ test('covers the screen, over the title page rather than beside it', async ({ pa
   expect(box?.height).toBeCloseTo(viewport?.height ?? 0, 0);
   expect(await player.evaluate((node) => getComputedStyle(node).position)).toBe('fixed');
 });
+
+/**
+ * The controls (#26), driven by nothing but keys. This test earns its place in
+ * a browser three times over: focus really moving between the controls, the
+ * length coming from the file the element decoded rather than from the
+ * Server's library, and the controls really taking themselves off the picture
+ * after a while — none of which happens in happy-dom.
+ *
+ * The test video is six seconds long, which is the clock this test runs
+ * against: it seeks back to the start before waiting for the controls to hide,
+ * so the wait finishes before the Title does.
+ */
+test('is driven from the keyboard alone: the bar, the length and the controls coming back', async ({
+  page,
+}) => {
+  await signIn(page);
+  await playArrival(page);
+
+  const player = page.getByRole('region', { name: 'Playing Arrival' });
+  const bar = page.getByRole('slider', { name: 'Seek through Arrival' });
+  await expect(bar).toBeVisible();
+
+  // The Server's library says Arrival is 116 minutes; the file the fake really
+  // serves is six seconds, and the element's own answer is the one in front of
+  // the User, so it wins as soon as the metadata is read.
+  await expect(bar).toHaveAttribute('aria-valuemax', '6');
+
+  // The player takes focus as soon as there is something to control. Until
+  // then focus is still on the title page's Play button, *behind* the picture,
+  // and an arrow key there would walk the page nobody can see.
+  await expect(page.getByRole('button', { name: 'Pause Arrival' })).toBeFocused();
+
+  // Up from the buttons is the bar, and Right on the bar is a seek — the
+  // navigator moves focus between the controls, and the bar's own arrow keys
+  // are taken from it before it can.
+  await page.keyboard.press('ArrowUp');
+  await expect(bar).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+
+  // Ten seconds into a six-second file lands a second short of the end:
+  // seeking to the very end fires `ended`, and a User pressing Right has not
+  // asked to leave the player.
+  await expect(bar).toHaveAttribute('aria-valuenow', '5');
+  await expect(player).toBeVisible();
+  await expect(page.getByText('-0:01')).toBeVisible();
+
+  await page.keyboard.press('ArrowLeft');
+  await expect(bar).toHaveAttribute('aria-valuenow', '0');
+
+  // Now nothing is pressed, and the controls get out of the way. The press
+  // above put the Title back at the beginning, so there are six seconds of it
+  // left to play out while this waits.
+  await expect(bar).toBeHidden({ timeout: 5_000 });
+  await expect(player).toBeVisible();
+
+  // Any key brings them back, and focus comes back with them: a control the
+  // User has just asked for is where the next press should land.
+  await page.keyboard.press('ArrowUp');
+  await expect(bar).toBeVisible();
+  await expect(page.getByRole('button', { name: /^(Pause|Play) Arrival$/ })).toBeFocused();
+
+  // And it really is still playing, rather than a still frame with chrome on.
+  await page.getByRole('button', { name: 'Pause Arrival' }).press('Enter');
+  await expect(page.getByRole('button', { name: 'Play Arrival' })).toBeVisible();
+});

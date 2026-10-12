@@ -39,6 +39,15 @@ export function useSpatialNavigation(device: DeviceLayer): void {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
+      // A key a screen has already dealt with is not this module's. The player
+      // (#26) listens in the capture phase and calls `preventDefault` on the
+      // keys it takes — Left and Right on its seek bar, and the first press of
+      // anything while its controls are hidden — so that an arrow key there is
+      // a seek, or a "show me the controls", rather than a move of focus. This
+      // is the one way a screen can take an arrow key, and it is deliberately
+      // not a stack of claims: a key is either handled where it happened or it
+      // is the navigator's.
+      if (event.defaultPrevented) return;
       const key = latest.current.keyFor(event);
 
       if (key === 'Enter') {
@@ -122,7 +131,16 @@ function moveFocus(direction: Direction): boolean {
  * Row below is reached before the bottom bar, which is fixed to the bottom of
  * the screen and would otherwise always be the nearest thing downwards. Fixed
  * chrome is reached only once the flow has run out — and from inside an
- * overlay, which is itself fixed, the overlay is the flow.
+ * overlay, which is itself fixed, **that overlay** is the flow.
+ *
+ * "That overlay" rather than "anything fixed" is what keeps a phone's bottom
+ * bar out of the player (#26). The bar is fixed and the player is fixed, so
+ * grouping everything fixed together put a bar the player is drawn on top of —
+ * and that a User cannot see — between the seek bar and the buttons under it,
+ * where Up reached it. There is no `inert` to lean on at the Chromium 68 floor
+ * (it is Chrome 102), so the flow a thing belongs to is which fixed thing it is
+ * inside, and only once an overlay has nothing further that way does anything
+ * outside it come into play.
  */
 function chooseCandidate(
   from: HTMLElement | undefined,
@@ -142,9 +160,9 @@ function chooseCandidate(
     return index === undefined ? undefined : alongTheLine[index];
   }
 
-  const fixedHere = from !== undefined && isFixed(from);
-  const sameFlow = candidates.filter((item) => isFixed(item) === fixedHere);
-  const otherFlow = candidates.filter((item) => isFixed(item) !== fixedHere);
+  const flowHere = from === undefined ? undefined : fixedRootOf(from);
+  const sameFlow = candidates.filter((item) => fixedRootOf(item) === flowHere);
+  const otherFlow = candidates.filter((item) => fixedRootOf(item) !== flowHere);
 
   for (const group of [sameFlow, otherFlow]) {
     const index = nearestInDirection(
@@ -223,14 +241,21 @@ function viewportEdge(direction: Direction): Box {
   }
 }
 
-/** Whether this element, or anything it sits inside, is fixed to the screen. */
-function isFixed(element: Element | null): boolean {
+/**
+ * The fixed thing this element is inside, which is the flow it belongs to, or
+ * nothing when it is in the page's own flow. Two elements are in the same flow
+ * when this answers the same element for both.
+ */
+function fixedRootOf(element: Element | null): Element | undefined {
   let current: Element | null = element;
+  let root: Element | undefined;
   while (current !== null && current !== document.body) {
-    if (window.getComputedStyle(current).position === 'fixed') return true;
+    // The outermost fixed ancestor, so a fixed thing inside a fixed overlay is
+    // part of that overlay rather than a flow of its own.
+    if (window.getComputedStyle(current).position === 'fixed') root = current;
     current = current.parentElement;
   }
-  return false;
+  return root;
 }
 
 /**
