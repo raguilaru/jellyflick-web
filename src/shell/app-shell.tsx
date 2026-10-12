@@ -169,7 +169,9 @@ function ShellFrame({ user, session, device, users }: AppShellProps) {
             no place in `SECTIONS`. The Home Layout editor is reached from Home
             and from the settings screen; the settings screen is reached from
             whichever navigation bar is on the screen. */}
-        <Route path={HOME_LAYOUT_PATH} component={HomeLayoutScreen} />
+        {/* The editor reads the genres and the Collections to offer them, so
+            it needs the Server as much as Home does (#15). */}
+        <Route path={HOME_LAYOUT_PATH} component={HomeLayoutScreen} session={session} />
         <Route path={SETTINGS_PATH} component={SettingsScreen} device={device} />
         {/* Nor is the title page, for the same reason, and one of its own: it is
             reached from a card, never from a navigation bar, so an entry in

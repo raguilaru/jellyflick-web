@@ -4,6 +4,7 @@ import { genreRoutes } from './genres.ts';
 import { itemRoutes } from './items.ts';
 import { quickConnectRoutes } from './quick-connect.ts';
 import { mediaInfoRoutes } from './media-info.ts';
+import { movieRoutes } from './movies.ts';
 import { sessionRoutes } from './sessions.ts';
 import { showRoutes } from './shows.ts';
 import { subtitleRoutes } from './subtitles.ts';
@@ -32,6 +33,7 @@ export const jellyfinRoutes: readonly FakeRoute[] = [
   ...userPlayedRoutes,
   ...userItemRoutes,
   ...showRoutes,
+  ...movieRoutes,
   ...mediaInfoRoutes,
   ...itemRoutes,
   // Before the video routes: both live under `/Videos`, and keeping the more

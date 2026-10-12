@@ -876,6 +876,40 @@ html[data-input='pointer'] [tabindex]:focus {
   margin: 0;
 }
 
+/*
+ * Picking the genre or the Collection for a Row that needs one (#15).
+ *
+ * Laid out like the genre chips in Search, and for the same reason: `gap` on a
+ * flex container is Chrome 84 and silently does nothing on the target (ADR
+ * 0002), so the space between the choices is margins on the items and a
+ * negative margin on the list to pull the outer ones back into line.
+ */
+.layout-choices {
+  margin: var(--space-3) 0 0;
+}
+
+.layout-choices__heading {
+  margin: 0 0 var(--space-2);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.layout-choices__list {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0 calc(var(--space-2) * -1);
+  padding: 0;
+  list-style: none;
+}
+
+.layout-choices__list > li {
+  margin: var(--space-1) var(--space-2);
+}
+
+.layout-choices__list .button {
+  margin-top: 0;
+}
+
 .layout-done {
   margin: var(--space-5) 0 0;
 }

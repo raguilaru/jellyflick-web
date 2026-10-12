@@ -90,10 +90,13 @@ test('hiding a Row takes it off Home', async ({ page }) => {
 
   await openTheEditor(page);
   await page.getByRole('button', { name: 'Hide New on Jellyflick' }).press('Enter');
-  // Every Row whose feature is built, or Home would still be drawing one of
-  // them. The rest are in the layout but are not on Home yet.
+  // Every Row in the layout: since #15 each of them has a feature, so the
+  // notice is about a Home with nothing on it rather than about the Rows that
+  // had not been built yet.
   await page.getByRole('button', { name: 'Hide Continue Watching' }).press('Enter');
   await page.getByRole('button', { name: 'Hide My List' }).press('Enter');
+  await page.getByRole('button', { name: 'Hide Watch Again' }).press('Enter');
+  await page.getByRole('button', { name: 'Hide Because You Watched' }).press('Enter');
   await backToHome(page);
 
   await expect(page.getByRole('list', { name: 'New on Jellyflick' })).toHaveCount(0);
@@ -171,6 +174,68 @@ test('another User’s Home is their own', async ({ page, browser }) => {
     await elsewhere.getByLabel('Password').press('Enter');
 
     await expect(elsewhere.getByRole('list', { name: 'New on Jellyflick' })).toBeVisible();
+  });
+});
+
+/**
+ * Adding a genre Row, in a browser, on a production build (#15, story 44).
+ *
+ * The genres are read from the Server when the editor opens, so this is also
+ * the one journey that proves the picker is offering what the libraries really
+ * hold rather than anything of the app's own.
+ */
+test('adding a genre Row puts that genre on Home', async ({ page, request }) => {
+  // A User with one Row, so Home is easy to read once the genre arrives.
+  await request.post(`${FAKE_JELLYFIN_URL}/__fake/state`, {
+    data: {
+      displayPreferences: {
+        'jellyflick|jellyflick|user-rafael': {
+          'jf.homeLayout': JSON.stringify([{ kind: 'new-on-jellyflick' }]),
+        },
+      },
+    },
+  });
+
+  await signInAndLand(page);
+  await openTheEditor(page);
+  await expect(listedRows(page)).toHaveText(['New on Jellyflick']);
+
+  // Adding this Row is two presses, because it means nothing without a genre.
+  await page.getByRole('button', { name: 'Add a genre Row' }).press('Enter');
+  await expect(page.getByRole('heading', { name: 'Which genre?' })).toBeVisible();
+  await page.getByRole('button', { name: 'Add Comedy' }).press('Enter');
+
+  // The Row is named by the genre, and the genre is no longer on offer.
+  await expect(listedRows(page)).toHaveText(['New on Jellyflick', 'Comedy']);
+  await page.getByRole('button', { name: 'Add a genre Row' }).press('Enter');
+  await expect(page.getByRole('button', { name: 'Add Comedy' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Add Drama' })).toBeVisible();
+  await page.getByRole('button', { name: 'Never mind' }).press('Enter');
+
+  await backToHome(page);
+
+  // The Comedy Titles the sample library really holds, under the genre's name.
+  const comedy = page.getByRole('list', { name: 'Comedy' });
+  await expect(comedy).toBeVisible();
+  await expect(comedy.locator('.card')).toHaveText([/Bluey/, /Paddington/]);
+});
+
+test('a genre Row follows the User to another device', async ({ page, browser }) => {
+  await signInAndLand(page);
+  await openTheEditor(page);
+
+  await page.getByRole('button', { name: 'Add a genre Row' }).press('Enter');
+  await page.getByRole('button', { name: 'Add Thriller' }).press('Enter');
+  await expect(page.getByRole('button', { name: 'Hide Thriller' })).toBeVisible();
+
+  await onAnotherDevice(browser, async (elsewhere) => {
+    await signInAndLand(elsewhere);
+
+    // The genre came from the Server: this browser has never seen the other's
+    // storage, and only Severance is in Thriller.
+    const thriller = elsewhere.getByRole('list', { name: 'Thriller' });
+    await expect(thriller).toBeVisible();
+    await expect(thriller.locator('.card')).toHaveText([/Severance/]);
   });
 });
 
