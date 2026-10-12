@@ -98,6 +98,12 @@ export function PlayerControls({
    * among the controls rather than only on the bar itself.
    */
   const onBarPress = (event: MouseEvent): void => {
+    // A click with no pointer behind it — `element.click()`, or a browser
+    // pressing a focused control — reports (0, 0), which here would read as a
+    // press on the very start of the bar and throw the User back to the
+    // beginning. `detail` is how many times the pointer was clicked, and it is
+    // zero for every click that was not one.
+    if (event.detail === 0) return;
     const bar = event.currentTarget;
     if (!(bar instanceof HTMLElement)) return;
     const box = bar.getBoundingClientRect();

@@ -489,7 +489,18 @@ function usePlayerKeys(options: {
             take();
             return;
           }
-          if (!onSeekBar(event.target) || (key !== 'Left' && key !== 'Right')) return;
+          if (!onSeekBar(event.target)) return;
+          // The bar is a focus stop rather than a button, so Enter on it is
+          // the navigator's `pressFocusedItem` — which would click it, and a
+          // click that came from a key is at (0, 0): the very start of the
+          // bar. Enter here is play/pause, which is what OK on a scrubber is
+          // everywhere, and taking it is what stops it being that click.
+          if (key === 'Enter') {
+            take();
+            toggle();
+            return;
+          }
+          if (key !== 'Left' && key !== 'Right') return;
           take();
           seekBy(key === 'Right' ? SEEK_STEP_SECONDS : -SEEK_STEP_SECONDS);
           return;

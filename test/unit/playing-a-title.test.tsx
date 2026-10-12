@@ -361,6 +361,25 @@ describe('the player’s controls', () => {
     });
   });
 
+  it('plays and pauses on Enter from the bar, rather than jumping to the start', async () => {
+    await pressPlay();
+    await startReport();
+    await waitFor(() => seekBar());
+    await watchUpTo(300);
+
+    // The bar is a focus stop rather than a button, so the navigator presses
+    // it on Enter — and a press it did not get from a pointer is at (0, 0),
+    // which read as a press on the very start of the bar would throw the User
+    // back to the beginning of the Title.
+    seekBar().focus();
+    fireEvent.keyDown(seekBar(), { key: 'Enter', bubbles: true });
+
+    await waitFor(() => {
+      expect(video().paused).toBe(true);
+    });
+    expect(video().currentTime).toBe(300);
+  });
+
   it('seeks from the remote’s own Rewind and Fast Forward, wherever focus is', async () => {
     await pressPlay();
     await startReport();
