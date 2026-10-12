@@ -122,7 +122,9 @@ export function HomeRowFor({ row, gateway, readKey }: HomeRowProps) {
         <SuggestionRow
           name="home.row.becauseYouWatched"
           readKey={readKey}
-          load={() => loadBecauseYouWatched(gateway)}
+          // The one loader that asks twice in sequence, so it is told when the
+          // Row has gone rather than going on talking to the Server for it.
+          load={(stillWanted) => loadBecauseYouWatched(gateway, undefined, stillWanted)}
           // The Server says which Title it suggested from; the heading is the
           // sentence that makes of it.
           headingFrom={(title) => t('home.row.becauseYouWatchedTitle', { title })}
@@ -180,7 +182,12 @@ function SuggestionRow({
 }: {
   name: MessageKey;
   readKey: string;
-  load: () => Promise<SuggestionRowResult>;
+  /**
+   * Asks the Server. It is handed a `stillWanted` predicate for the loader
+   * that asks more than once: false once this Row has gone, so no follow-up
+   * question is asked for a Row nobody is looking at.
+   */
+  load: (stillWanted: () => boolean) => Promise<SuggestionRowResult>;
   /**
    * What to make of the name the Server gave the Row. Without one the Server's
    * name *is* the heading, which is what a genre and a Collection want: the
@@ -195,7 +202,7 @@ function SuggestionRow({
   useEffect(() => {
     let abandoned = false;
     setResult(undefined);
-    void load().then((loaded) => {
+    void load(() => !abandoned).then((loaded) => {
       if (abandoned) return;
       setResult(loaded);
     });

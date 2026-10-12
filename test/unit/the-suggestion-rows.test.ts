@@ -6,7 +6,12 @@ import {
   loadGenreRow,
   loadWatchAgain,
 } from '../../src/home/suggestion-rows';
-import { resetFakeState, setFakeState } from '../fake-jellyfin/control';
+import {
+  fakeRequests,
+  forgetFakeRequests,
+  resetFakeState,
+  setFakeState,
+} from '../fake-jellyfin/control';
 import { fakeJellyfinUrl } from '../fake-jellyfin/url';
 
 /**
@@ -199,6 +204,28 @@ describe('the Because You Watched Row', () => {
     // heading saying Paddington would be a lie about why Arrival is there.
     expect(row.outcome === 'row' && row.heading).toBe('Heat');
     expect(names(row)).toEqual(['Arrival']);
+  });
+
+  it('stops asking once the Row it was for has gone', async () => {
+    await setFakeState({
+      played: { 'user-rafael': ['series-severance'] },
+      lastPlayedDates: { 'user-rafael': { 'series-severance': '2026-10-09T21:00:00Z' } },
+    });
+    await forgetFakeRequests();
+
+    // A User who leaves Home while the first answer is still in flight: the
+    // second question must not be asked on their behalf.
+    const row = await loadBecauseYouWatched(
+      gatewayForRafael('byw-abandoned'),
+      undefined,
+      () => false,
+    );
+
+    expect(row).toEqual({ outcome: 'row', titles: [] });
+    const asked = (await fakeRequests()).map((request) => request.path);
+    // The first question was asked, and the second never was.
+    expect(asked.some((path) => path.startsWith('/Items?'))).toBe(true);
+    expect(asked.some((path) => path.includes('Similar'))).toBe(false);
   });
 
   it('is empty for a User with no viewing history to go on', async () => {

@@ -119,17 +119,30 @@ export function loadCollectionRow(
 export function loadBecauseYouWatched(
   gateway: JellyfinGateway,
   limit: number = SUGGESTION_ROW_LIMIT,
+  /**
+   * Whether the answer is still wanted, asked before each follow-up request.
+   *
+   * This is the one loader that asks the Server **twice in sequence**, so it is
+   * the one that can still be talking to a Server after the Row it was for has
+   * gone — a User who leaves Home while the first answer is in flight would
+   * otherwise have a second question asked on their behalf for a screen nobody
+   * is looking at. The same property is what made the test suite flaky: a
+   * second request issued after a spec had finished landed in the next one.
+   */
+  stillWanted: () => boolean = () => true,
 ): Promise<SuggestionRowResult> {
   return gateway
     .getPlayedTitles({ limit: RECENTLY_WATCHED_READ })
     .then((played) => {
+      if (!stillWanted()) return { outcome: 'row' as const, titles: [] };
+
       const watched = played
         .map((dto) => catalogueItemFrom(dto))
         .filter((item): item is NonNullable<typeof item> => item !== undefined)
         .map((item) => titleOf(item))
         .slice(0, SUGGESTION_ATTEMPTS);
 
-      return suggestFrom(gateway, watched, limit);
+      return suggestFrom(gateway, watched, limit, stillWanted);
     })
     .catch(unavailable);
 }
@@ -152,16 +165,19 @@ function suggestFrom(
   gateway: JellyfinGateway,
   watched: readonly Title[],
   limit: number,
+  stillWanted: () => boolean,
 ): Promise<SuggestionRowResult> {
   const [next, ...rest] = watched;
-  if (next === undefined) return Promise.resolve({ outcome: 'row', titles: [] });
+  if (next === undefined || !stillWanted()) {
+    return Promise.resolve({ outcome: 'row', titles: [] });
+  }
 
   return suggestionsFrom(gateway, next, limit).then((suggestion) => {
     // The Title that was watched never stands among its own suggestions:
     // `/Movies/Recommendations` can include it, and a Row offering a User the
     // very thing they just finished is not a suggestion.
     const items = suggestion.items.filter((dto) => dto.Id !== next.itemId);
-    if (items.length === 0) return suggestFrom(gateway, rest, limit);
+    if (items.length === 0) return suggestFrom(gateway, rest, limit, stillWanted);
     return rowOf(gateway, items, suggestion.from);
   });
 }
