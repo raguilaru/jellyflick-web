@@ -155,13 +155,26 @@ What follows is the corrected version; the live half of the job has since been d
 
 ### What has been done
 
-**`main`'s own tip carried the name until `e5d5808`.** The earlier claim that "every
+**`main`'s own tip carried the name until `09ad60a`.** The earlier claim that "every
 branch tip is already clean" was false: the redaction was made on `feat/jellyflick-v1`
 and never reached `main`, so the name sat in `initial brief.md` on the default branch —
-which is what anyone browsing the repository saw. `e5d5808` redacts it there, using the
-branch's own wording ("the best-known streaming service" once, then "that service"), with
-three sentences worded exactly as the branch words them because a mechanical substitution
-read badly. Nothing else in that file changed.
+which is what anyone browsing the repository saw.
+
+**The shape of that fix matters, and two attempts got it wrong.** This branch *moved* the
+file to `docs/initial-brief.md` in `9e059f1`, so anything `main` does to it at the old
+path collides with that rename:
+
+- Modifying it there (`e5d5808`) is a **modify/delete** conflict *without* rename
+  detection — which is what GitHub computes. **PR #38 went from mergeable to conflicting
+  the moment that was pushed**, even though the same merge was clean locally.
+- Deleting it instead is a **rename/delete** conflict *with* rename detection on.
+- What works (`09ad60a`): `main` makes the **same move, to the same path, with
+  byte-identical content**. Both sides then delete one path and add an identical other
+  one, and the merge has nothing to resolve under either strategy.
+
+So **verify a base-branch push with `git -c merge.renames=false merge-tree --write-tree
+<branch> <main>` as well as the default**. A merge that is clean locally can still
+conflict on GitHub, and the first attempt here proved it.
 
 ### What is still owed
 
