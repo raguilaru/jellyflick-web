@@ -100,6 +100,39 @@ rather than by a ticket.
   constraint is about what reaches a TV, and the thing protecting it is a **negative e2e test
   that fails if a direct play fetches hls.js**. Do not let that rot.
 
+### What the code review found — the first look at this branch end to end
+
+Run over `main...HEAD` at high effort: 183 files, 125 commits, 10.9k lines of `src/`. **Four
+real bugs, all fixed in `57c27c2`**, each with a regression test that was **checked to fail
+without its fix** rather than merely added.
+
+- **The remote's media keys almost never worked.** The player skipped Play/Pause/Stop
+  whenever the key's target was a button, on #7's reasoning that the browser presses a
+  focused button itself. That holds for Enter and Space and nothing else — a media key is
+  never a button activation — and focus is on a button essentially always, since the title
+  page's Play button keeps it when the player opens. **The existing test passed because it
+  dispatches on `window`**, where the target is not an element at all.
+- **A stale "could not be saved" notice outlived its cause.** My List cleared `unsaved`
+  after the only publish of that change, and clearing it published nothing.
+- **A Server hiccup signed a User out.** `resume()` treated anything that was not
+  "unreachable" as proof the token was dead and deleted the User from the device, so a 503
+  cost them their password and made one User vanish from the picker. Only 401 and 403 are a
+  refusal now — the line `signIn` already drew.
+- **Pressing Play twice replayed the film.** `resumeTicks` was captured when the page was
+  read, and closing the player is not a navigation, so a second Play started from the
+  beginning. The page now re-reads when the player closes, without blanking the screen.
+
+**One of those exposed a test that could not have caught it.** The resume e2e watched the
+element's `currentTime` against the position it stopped at — but the sample video is six
+seconds long, so a playback that restarted at zero reaches any earlier position within the
+poll window too. **It passed with the fix reverted.** It now asserts the second start
+report's own `PositionTicks`, which a restart cannot fake, and the `page.reload()` that hid
+the bug is gone. Worth remembering: an assertion that a six-second video will *eventually*
+reach a position is not an assertion about where it started.
+
+Gate after the fixes, fresh ports 4283/8883: **418 unit tests** in 38 files, **286
+Playwright passed, 20 skipped, 0 failed**, 106.62 kB / 33.39 kB gz.
+
 ### The fake's two deliberate gaps
 
 - **No transcoder.** `master.m3u8` answers **501 with a message saying why**, and the
@@ -148,9 +181,19 @@ implementers silently did neither.
 
 ### Still owed at the end of the run
 
-`code-review` over the whole branch (**never run**), the git history rewrite in
-`decisions.md` §10 (**unblocked right now**), and marking PR #38 ready. Worktree cleanup is **done** —
-nothing is owed there. The full list is at the bottom of this file.
+**The `code-review` has been run** — the first over this branch — and its four findings
+are fixed in `57c27c2`, each with a regression test checked to fail without its fix. See
+"What the code review found" above.
+
+**The name has been redacted from `main`'s tip** (`e5d5808`), which was the live half of
+`decisions.md` §10: `main` had carried it all along, because the redaction was made on this
+branch and never merged down. §10's other three claims were wrong too and are corrected
+there. **The history rewrite itself is not due until the last ticket merges**, and two
+redundant remote branches (`origin/chore/agent-skills`, `origin/feat/v1-web-client`, both
+0 commits ahead of `origin/main`) still carry the name at their tips — **deleting them
+would end the remaining public exposure without touching history**, and is the host's call.
+
+Still owed: marking PR #38 ready, and the rewrite. Worktree cleanup is **done**.
 
 Two things a human may want to decide, neither of which any ticket owns:
 **the app icon is a plain generated "J"** an agent produced because no design asset existed
@@ -696,9 +739,12 @@ branch is correct — check its tests pass before building on it.
    and #21 are unblocked and unstarted; #26 → #27 → #28 and #31, #32, #33, #34 wait on #25;
    #22 and #23 are still blocked by two and three tickets.
 2. `code-review` over the whole integration branch, with findings fixed in one implementer.
-3. **The git history rewrite** described in `decisions.md` §10 — removing the inspiration
-   product's name from the root commit. Must happen with no implementers in flight, and
-   the host must then ask GitHub Support to purge the stale objects.
+3. **The git history rewrite** described in `decisions.md` §10. **The live half is done**:
+   `main`'s tip carried the name until `e5d5808`. The rewrite over the 28 affected commits
+   is **not due until the last ticket has merged**, needs no implementer in flight, and the
+   host must then ask GitHub Support to purge the stale objects. §10's facts were corrected
+   on 2026-10-12 — three were wrong. Two redundant remote branches still carry the name at
+   their tips and could simply be deleted.
 4. Mark PR #38 ready for review.
 5. Remove the implementer worktrees (`git worktree list`, then `git worktree remove`).
    **Done for every merged worktree — nothing is owed here right now.** The third session

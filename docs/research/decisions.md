@@ -150,23 +150,70 @@ spec is about the client bundle shipped to a TV, not the server image. Owned by 
 
 Decided with the host. **Do not do this while implementers are in flight.**
 
-The inspiration product's name was redacted from `docs/initial-brief.md` at the branch
-tip (commit `d03dd2e`), so every branch tip is already clean. It survives only in the
-repository's **root commit** `29d1bf0`, in that one file. Nothing else — no commit
-message, issue, PR or comment — has ever contained it (verified across all 21 commits
-and every issue, PR and comment).
+**This section's facts were re-verified on 2026-10-12 and three of them were wrong.**
+What follows is the corrected version; the live half of the job has since been done.
 
-When the last ticket has merged and before PR #38 is marked ready:
+### What has been done
 
-1. Install `git-filter-repo` (not `filter-branch`, which is deprecated).
-2. Replace the word across history with the wording now used in the brief
-   ("the best-known streaming service" / "that service").
-3. Force-push `main`, `feat/jellyflick-v1`, `chore/agent-skills` and `feat/v1-web-client`.
-4. Tell the host to ask GitHub Support to purge the stale objects: after a force-push
-   the old SHAs stay reachable by direct `/commit/<sha>` URL, and merged PR #37 still
-   references them. Only the repo owner can make that request.
+**`main`'s own tip carried the name until `e5d5808`.** The earlier claim that "every
+branch tip is already clean" was false: the redaction was made on `feat/jellyflick-v1`
+and never reached `main`, so the name sat in `initial brief.md` on the default branch —
+which is what anyone browsing the repository saw. `e5d5808` redacts it there, using the
+branch's own wording ("the best-known streaming service" once, then "that service"), with
+three sentences worded exactly as the branch words them because a mechanical substitution
+read badly. Nothing else in that file changed.
+
+### What is still owed
+
+**The name remains in the 28 commits between the root commit and the redaction**, in that
+one file. The earlier claim that it survived "only in the repository's root commit" was
+loose: it is every commit from the root until `d03dd2e` redacted it on the feature branch.
+The root commit is `29d1bf0`, and there the file is `initial brief.md` at the repository
+root — **not** `docs/initial-brief.md`, which only exists from `9e059f1`, where the file
+was moved. A rewrite has to match both paths.
+
+Confirmed still true: the name is in **no commit message, issue, PR or comment** — only
+ever in that one file's contents.
+
+**The branch list is much longer than this section used to say.** It named four branches;
+35 refs contain the affected commits, including the 16 `ticket/*` branches that did not
+exist when it was written. As of 2026-10-12 these tips still carry the name:
+
+| Ref | Where |
+|---|---|
+| `origin/chore/agent-skills` | **on GitHub** — but **0 commits ahead of `origin/main`**, so it is redundant and deleting it is simpler than rewriting it |
+| `origin/feat/v1-web-client` | **on GitHub** — likewise **0 commits ahead of `origin/main`** |
+| `main` (local only, if not pulled since `e5d5808`) | a `git pull` fixes it |
+| `ticket/2-connect-to-a-server` | local only |
+| `worktree-agent-a68c2e12a4fad9974`, `…a8735c0112317d3f1`, `…a879f2826d937352e`, `…adad6b44306b59a81` | local only, all stale |
+| `claude/implement-spec-88c250`, `claude/implement-spec-c273ce`, `claude/remote-setup-2e9b22` | local only; two belong to other Claude sessions |
+
+**Deleting the two redundant remote branches would end the remaining public exposure
+without touching history at all**, and is worth doing before the rewrite rather than as
+part of it. Neither has anything `origin/main` does not.
+
+### When the last ticket has merged, and before PR #38 is marked ready
+
+Eleven tickets were still open on 2026-10-12, so this is **not** due yet. Doing it early
+would orphan all 16 `ticket/*` branches and force both other Claude sessions to re-clone;
+doing it at the end means those branches can simply be deleted instead.
+
+1. Install `git-filter-repo` (not `filter-branch`, which is deprecated). It was not
+   installed as of 2026-10-12; Homebrew is available.
+2. Replace the word across history with the wording the brief now uses
+   ("the best-known streaming service" / "that service"), covering **both** paths the file
+   has had.
+3. Force-push every ref that still contains an affected commit — not the four this section
+   used to list. Check with `git for-each-ref` rather than from a list in a document, which
+   is how this one went stale.
+4. Tell the host to ask GitHub Support to purge the stale objects: after a force-push the
+   old SHAs stay reachable by direct `/commit/<sha>` URL, and merged PR #37 still
+   references them. Only the repository owner can make that request.
 5. Warn that every clone and worktree must be re-cloned or reset, including the other
    Claude session branches `claude/implement-spec-88c250` and `claude/remote-setup-2e9b22`.
+
+**Verify by re-auditing, not by trusting this section.** Three of its claims were wrong
+within weeks of being written, because the repository moved and the document did not.
 
 ## 11. Quick Connect: the interval and the expiry are ours, and 404 is ambiguous
 
