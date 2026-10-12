@@ -110,6 +110,33 @@ describe('My List', () => {
     expect(myList.unsaved()).toBe(true);
   });
 
+  it('takes the warning back, and tells whoever is drawing it, once a change saves', async () => {
+    await setFakeState({
+      favourites: { 'user-rafael': ['movie-heat', 'movie-arrival'] },
+      failFavouriteWritesWith: 500,
+    });
+    const myList = myListFor('my-list-warning-clears');
+    await myList.load();
+
+    await myList.remove('movie-heat');
+    expect(myList.unsaved()).toBe(true);
+
+    // The Server recovers, and the next change saves perfectly well.
+    await setFakeState({ failFavouriteWritesWith: null });
+    let drawn = 0;
+    myList.subscribe(() => {
+      drawn += 1;
+    });
+    await myList.remove('movie-arrival');
+
+    expect(myList.unsaved()).toBe(false);
+    // And a subscriber heard about it. Clearing the flag without publishing
+    // left "could not be saved" on the My List page over a list that had
+    // saved, because the only publish of that change went out while the flag
+    // was still set.
+    expect(drawn).toBeGreaterThanOrEqual(2);
+  });
+
   it('is not undone by a read that was already on its way', async () => {
     await setFakeState({ favourites: { 'user-rafael': ['movie-heat'] } });
     const myList = myListFor('my-list-overtakes');

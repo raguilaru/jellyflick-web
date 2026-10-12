@@ -50,7 +50,7 @@ export function TitleScreen({ session, device }: TitleScreenProps) {
   const titleId = params.itemId ?? '';
   const gateway = session.gateway();
   const wide = useWidePointer();
-  const result = useTitlePage(gateway, titleId);
+  const { result, refresh } = useTitlePage(gateway, titleId);
 
   return (
     <main class={wide ? 'screen title title--popup' : 'screen title'}>
@@ -63,7 +63,13 @@ export function TitleScreen({ session, device }: TitleScreenProps) {
       ) : result.outcome === 'not-found' ? (
         <p class="notice">{t('title.notFound')}</p>
       ) : (
-        <TitlePage gateway={gateway} session={session} device={device} result={result} />
+        <TitlePage
+          gateway={gateway}
+          session={session}
+          device={device}
+          result={result}
+          onPlaybackEnded={refresh}
+        />
       )}
     </main>
   );
@@ -75,11 +81,14 @@ function TitlePage({
   session,
   device,
   result,
+  onPlaybackEnded,
 }: {
   gateway: JellyfinGateway;
   session: Session;
   device: DeviceLayer;
   result: Extract<TitlePageResult, { outcome: 'title' }>;
+  /** Asks for the page again, because playback has moved the resume point. */
+  onPlaybackEnded: () => void;
 }) {
   const t = useTranslate();
   const { route } = useLocation();
@@ -188,6 +197,10 @@ function TitlePage({
             : { resumeTicks: details.resumePositionTicks })}
           onClose={() => {
             setPlaying(false);
+            // The Server now holds a newer resume point than the one this
+            // page was read with, and pressing Play again has to honour it
+            // rather than start the film over.
+            onPlaybackEnded();
           }}
         />
       ) : null}
@@ -278,12 +291,27 @@ function artworkUrl(
 function useTitlePage(
   gateway: JellyfinGateway,
   titleId: string,
-): TitlePageResult | undefined {
+): { result: TitlePageResult | undefined; refresh: () => void } {
   const [result, setResult] = useState<TitlePageResult | undefined>(undefined);
+  /**
+   * Bumped to ask the Server again without clearing the page. Playback moves
+   * the resume point this page was read with, and closing the player is not a
+   * navigation, so nothing else here would ever re-read it.
+   */
+  const [refreshes, setRefreshes] = useState(0);
+
+  // Arriving at a *different* Title is the only thing that empties the screen.
+  // A refresh keeps what is drawn and swaps it when the answer lands, so
+  // closing the player does not blink the page back to "Looking for that
+  // Title…" over a page the User is still looking at.
+  useEffect(() => {
+    setResult(undefined);
+    // The gateway is rebuilt on every render, so the address it talks to is the
+    // dependency rather than the object itself.
+  }, [gateway.serverAddress, titleId]);
 
   useEffect(() => {
     let abandoned = false;
-    setResult(undefined);
     void loadTitlePage(gateway, titleId).then((loaded) => {
       if (abandoned) return;
       setResult(loaded);
@@ -291,11 +319,14 @@ function useTitlePage(
     return () => {
       abandoned = true;
     };
-    // The gateway is rebuilt on every render, so the address it talks to is the
-    // dependency rather than the object itself.
-  }, [gateway.serverAddress, titleId]);
+  }, [gateway.serverAddress, titleId, refreshes]);
 
-  return result;
+  return {
+    result,
+    refresh: () => {
+      setRefreshes((asked) => asked + 1);
+    },
+  };
 }
 
 /**

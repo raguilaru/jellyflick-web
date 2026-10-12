@@ -299,9 +299,14 @@ function usePlayback(options: {
  * moving around the player changes. The arrow keys are #26's, and that ticket
  * takes them *before* the navigator, as `architecture.md` says.
  *
- * A key press on one of the player's own buttons is left alone, for the reason
- * #7 wrote down: the browser presses a focused button itself, and acting on the
- * key here as well would toggle twice for one press.
+ * #7's rule about leaving a focused control's own keys alone does **not** apply
+ * here, and an earlier version of this that applied it anyway was broken: the
+ * browser activates a focused button on Enter and Space, and on nothing else.
+ * A remote's Play key is never a button activation, so skipping these keys
+ * whenever focus happened to be on a control meant skipping them almost always
+ * — focus is still on the title page's Play button when the player opens, and
+ * every control the player offers is a button too. There is no double-press to
+ * avoid, so there is nothing to guard against.
  */
 function usePlaybackKeys(
   device: DeviceLayer,
@@ -315,7 +320,6 @@ function usePlaybackKeys(
   useEffect(() => {
     if (!listening) return;
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (isAControl(event.target)) return;
       switch (device.keyFor(event)) {
         case 'Play':
         case 'Pause':
@@ -336,12 +340,6 @@ function usePlaybackKeys(
       window.removeEventListener('keydown', onKeyDown);
     };
   }, [device, listening]);
-}
-
-function isAControl(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  const name = target.tagName;
-  return name === 'BUTTON' || name === 'A' || name === 'INPUT' || name === 'SELECT';
 }
 
 function ticksIf(resumeTicks: number | undefined): { resumeTicks?: number } {

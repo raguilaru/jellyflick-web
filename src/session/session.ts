@@ -82,7 +82,11 @@ export type ResumeResult =
   | { outcome: 'signed-in'; user: SignedInUser }
   /** Nobody was stored, or the Server no longer accepts the stored token. */
   | { outcome: 'signed-out' }
-  /** The Server could not be reached, so the stored User is kept as it is. */
+  /**
+   * The stored token could not be *confirmed*, so the stored User is kept
+   * exactly as it is: the Server could not be reached, or it answered with a
+   * fault of its own rather than a refusal. Only a refusal signs a User out.
+   */
   | { outcome: 'unreachable' };
 
 export type Session = {
@@ -294,8 +298,17 @@ export function createSession(options: SessionOptions): Session {
         return { outcome: 'signed-in', user: refreshed };
       } catch (error) {
         if (error instanceof JellyfinUnreachableError) return { outcome: 'unreachable' };
-        // Anything else means the Server will not act on this token any more,
-        // so the only honest thing is to ask for the password again.
+        // **Only a refusal means the token is dead.** A 500 or a 503 from a
+        // Server that is restarting says nothing about it, and throwing the
+        // User away on one would make a brief Server hiccup cost them their
+        // password — and, with several Users signed in, make one of them
+        // vanish from the User Picker while the others stayed. So anything
+        // that is not a refusal keeps the stored User exactly as it is, the
+        // same answer an unreachable Server gets. `signIn` draws this line
+        // too.
+        if (error instanceof JellyfinHttpError && error.status !== 401 && error.status !== 403) {
+          return { outcome: 'unreachable' };
+        }
         forget(user.userId);
         return { outcome: 'signed-out' };
       }

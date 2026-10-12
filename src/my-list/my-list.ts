@@ -124,7 +124,16 @@ export function createMyList(gateway: JellyfinGateway): MyList {
 
     try {
       await write();
-      unsaved = false;
+      if (unsaved) {
+        unsaved = false;
+        // Clearing the warning changes what the screen shows, so it has to be
+        // published like any other change. The optimistic publish above went
+        // out while the flag was still set, and without this one nothing
+        // re-renders — so a failed change followed by a successful one left
+        // "could not be saved" on the My List page over a list that had saved
+        // perfectly well.
+        publish(state);
+      }
     } catch {
       unsaved = true;
       if (held === undefined) return;

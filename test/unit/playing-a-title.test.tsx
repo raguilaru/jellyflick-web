@@ -217,6 +217,26 @@ describe('a User pressing Play', () => {
     });
   });
 
+  it('takes the media keys while focus is on a button, which is where it is', async () => {
+    await pressPlay();
+    await startReport();
+
+    // The press that opened the player left focus on the title page's Play
+    // button, and every control the player offers is a button too — so a
+    // remote's Play key almost always arrives with a button as its target.
+    // The browser activates a focused button on Enter and Space and on nothing
+    // else, so there is no double-press to avoid here and the key must land.
+    const control = screen.getByRole('button', { name: 'Pause Arrival' });
+    control.focus();
+    expect(document.activeElement).toBe(control);
+
+    fireEvent.keyDown(control, { key: 'MediaPlayPause', bubbles: true });
+
+    await waitFor(() => {
+      expect(video().paused).toBe(true);
+    });
+  });
+
   it('closes itself and reports the stop when the Title ends', async () => {
     await pressPlay();
     await startReport();

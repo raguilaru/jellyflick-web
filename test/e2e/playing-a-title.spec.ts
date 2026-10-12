@@ -49,6 +49,11 @@ async function reportsTo(request: APIRequestContext, path: string): Promise<Repo
   return writes.filter((write) => write.path === path);
 }
 
+/** A reported `PositionTicks` as seconds, for comparing against the element. */
+function secondsOf(ticks: unknown): number {
+  return typeof ticks === 'number' ? ticks / 10_000_000 : -1;
+}
+
 /** Where the `<video>` has got to, which is the proof it really decoded. */
 function positionIn(page: Page): Promise<number> {
   return page.evaluate(() => {
@@ -124,15 +129,27 @@ test('reports where it stopped, and resumes there next time', async ({ page, req
   await expect(page.getByRole('region', { name: 'Playing Arrival' })).toBeHidden();
   await expect(page.getByRole('heading', { name: 'Arrival', level: 1 })).toBeVisible();
 
-  // Now the Server holds a resume point, and Play honours it. The page is
-  // re-read from the Server, as every navigation in this app is.
-  await page.reload();
+  // Now the Server holds a resume point, and Play honours it **without
+  // leaving the page or reloading it**. Closing the player is not a
+  // navigation, so the page has to ask the Server again itself — an earlier
+  // version of this test reloaded here, which hid the fact that a second Play
+  // on the page the User was already on replayed the film from the beginning.
   await page.getByRole('button', { name: 'Play', exact: true }).press('Enter');
   await expect(page.getByRole('region', { name: 'Playing Arrival' })).toBeVisible();
 
+  // The *start report* is what pins this, not the element's position. The test
+  // video is six seconds long, so a playback that restarted at zero reaches
+  // any later position within the poll window too — which is why watching
+  // `currentTime` cannot tell "resumed at four seconds" from "started again
+  // and got there". What the player told the Server it was starting from can.
   await expect
-    .poll(() => positionIn(page), { timeout: 10_000 })
-    .toBeGreaterThanOrEqual(stoppedAt - 0.5);
+    .poll(async () => (await reportsTo(request, '/Sessions/Playing')).length)
+    .toBe(2);
+  const restarted = (await reportsTo(request, '/Sessions/Playing'))[1]?.body;
+  expect(secondsOf(restarted?.PositionTicks)).toBeGreaterThanOrEqual(stoppedAt - 0.5);
+
+  // And the picture really moved on from there.
+  await expect.poll(() => positionIn(page), { timeout: 10_000 }).toBeGreaterThan(stoppedAt);
 });
 
 test('closes on the Back key and leaves the title page where it was', async ({ page }) => {

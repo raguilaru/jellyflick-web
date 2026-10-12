@@ -158,6 +158,27 @@ describe('a signed-in User on this device', () => {
     expect(newSession().activeUser()).toBeUndefined();
   });
 
+  it('keeps the stored User when the Server answers with a fault of its own', async () => {
+    const first = newSession();
+    first.useServer(fakeJellyfinUrl());
+    await first.signIn(CREDENTIALS);
+    const user = first.activeUser();
+
+    // A Server restarting, or a proxy in front of it: nothing at all is being
+    // said about the token, so throwing the User away would cost them their
+    // password for a hiccup — and, with several signed in, make one of them
+    // vanish from the User Picker while the others stayed.
+    await setFakeState({ failUserConfigurationWith: 503 });
+
+    const afterReload = newSession();
+    afterReload.useServer(fakeJellyfinUrl());
+
+    expect(await afterReload.resume()).toEqual({ outcome: 'unreachable' });
+    expect(afterReload.activeUser()?.userId).toBe(user?.userId);
+    // And it survived a reload, so nothing was quietly dropped from storage.
+    expect(newSession().activeUser()?.userId).toBe(user?.userId);
+  });
+
   it('signs out of one User without forgetting the Server', async () => {
     const session = newSession();
     session.useServer(fakeJellyfinUrl());
