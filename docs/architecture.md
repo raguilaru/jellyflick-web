@@ -99,7 +99,10 @@ src/
   title/                The title page: `title-page.ts` is its address and what
                         it reads from the Server, `title-screen.tsx` the screen
                         — a pop-up on a wide pointer, a full page elsewhere.
-                        Its Play button opens `playback/`'s player.
+                        Its Play button opens `playback/`'s player. A Series
+                        (#18): `series.ts` is the Seasons, the Episodes and
+                        which one Play means, and `series-episodes.tsx` the
+                        picker and the list.
   title-labels/         What is new about a Title, on its card art (#14):
                         `title-labels.ts` is the rules and the one read,
                         `use-title-labels.ts` the context the shell holds and
@@ -295,6 +298,20 @@ Row's two branches can be told apart. It is seeded **empty**: a Server has no
 recommendations until a household has watched something, and seeding a relation
 would make "nothing to go on yet" unreachable. It goes quiet with
 `failRelatedQueriesWith`, alongside `/Items/{id}/Similar`.
+
+**Bluey is the Series the Seasons and Episodes on a title page (#18) are tested
+against**: two Seasons the Server holds as items, two Episodes in each, and
+`episode-bluey-s1e2` ("Hotel") deliberately carrying no still, no description
+and no runtime — The Unfinished's part played by an Episode. Its Season 1 is
+dated older than anything else in the library on purpose: the newest addition
+in Bluey's library is still `episode-bluey-s2e3`, so the merged newest-first
+order is untouched, and nothing of it is recent enough to earn a Title Label.
+`/Shows/{seriesId}/Seasons` and `/Shows/{seriesId}/Episodes` are in
+`routes/shows.ts` beside NextUp, both in **aired order** — the Season number
+then the Episode number, with anything the Server did not number last — because
+that order is the endpoint's own answer. The Episodes route refuses `seasonId`
+and `season` outright: nothing in this app asks for one Season at a time, and a
+parameter the fake ignored would look honoured.
 
 `/UserItems/Resume` and `/Shows/NextUp` are the Row's own two endpoints
 (`routes/user-items.ts` and `routes/shows.ts`). The fake models the two
@@ -1018,6 +1035,73 @@ also what closed #7's and #24's last open box.
 - **A language's name is the locale's own.** `title.language` is one message
   whose function holds a small dictionary per locale, falling back to the code
   itself. `Intl.DisplayNames` is Chrome 81 and the floor is 68.
+
+### A Series on it (#18)
+
+`src/title/series.ts` is story 71 and the Series half of story 69: the Seasons
+there are to pick from, the Episodes under each, and which one Episode a single
+press of Play means. `series-episodes.tsx` draws it; every rule is in the first
+file, as a pure function of what the Server said.
+
+- **Two reads, and the whole Series at once.**
+  `GET /Shows/{seriesId}/Seasons` is read for the Seasons' names and numbers,
+  and `GET /Shows/{seriesId}/Episodes` for **every** Episode across them.
+  Deliberately not one Season at a time: the one question that spans Seasons is
+  which Episode Play starts, and asking per Season would make that a merge of
+  answers each ordered only within itself. Switching Season in the picker is
+  then not a question for the Server at all, which is also what makes the
+  picker instant on a remote.
+- **They are read after the Title, not beside it**, unlike More like this and
+  the Collection. Only the Title says whether this is a Series: asking a Server
+  for the Seasons of a Movie is a question about a shape it is not, and it
+  would answer every Movie's page with a 404 to swallow. One extra round trip
+  on a Series' page is the price, and a Movie's page makes no request it has no
+  use for.
+- **The Server's own order is kept, and nothing sorts the Episodes.**
+  `/Shows/{id}/Episodes` answers in aired order, which is the order a Series is
+  watched in, and re-deriving it would also be exactly the kind of thing that
+  behaves differently on the target: `Array.prototype.sort` is only stable from
+  Chromium 70, one above the floor. The Seasons are grouped out of that one
+  list, so the list and the picker cannot disagree about what comes next.
+- **A Season the Server does not hold as an item still gets a tab.** Jellyfin
+  serves Episodes whose Season is not an item of its own, so the number on the
+  Episodes is the fallback and the name is `title.seasonNumber`. A Season the
+  Server lists but holds **no** Episodes of is left out — a tab showing nothing
+  is worse than one Season fewer — and Episodes the Server placed nowhere at
+  all are gathered into one last group rather than hidden.
+- **Which Episode Play means is one answer, computed once.** `episodeToPlay` is
+  it, and `loadSeries` puts it on the page as `upTo`: the Play button and the
+  Season the list opens on both read that one value, so the page can never
+  offer Season 1 of a show somebody is half way through. The rule is an
+  in-progress Episode first — the most recently played of them, because an
+  Episode abandoned last night is where the User is and one given up on last
+  month is not — then the first unwatched, then the first of all, so Play never
+  does nothing on a Series somebody has finished.
+- **A finished Episode is never resumed.** The Server keeps the position
+  playback ended at, so `played` beats a stored position both in the choice and
+  in what the player is handed.
+- **The player is told what is playing, not what page it is over.** The title
+  page's `PlayTarget` carries the item, the name and the resume point, so for a
+  Series it is an *Episode* that plays and `title.episodePlaying` heads the
+  player with the Series and the Episode — a player headed only "Sleepytime"
+  says nothing about which show it is.
+- **Marking an Episode watched is local to the list**, the bargain the Title's
+  own mark makes (#17): the press shows before the Server has agreed and is
+  **forgotten** rather than inverted when the Server refuses, so the Episode
+  falls back to what the Server said. The list holds only the Episodes a User
+  has pressed, which means a page re-read picks the Server's answer up by
+  itself.
+- **The arrow keys need nothing of their own.** The picker is a group of
+  buttons with `aria-pressed`, reached geometrically the way Search's genre
+  chips are and deliberately not a `data-focus-group`: a Season is picked once
+  and there is nothing to come back to. The Episodes are a *vertical* list,
+  which is what lets each one carry two focus stops where a card in a
+  horizontal Row cannot — Down steps through the Episode and then its watched
+  toggle instead of reading a line of cards.
+- **#31 reads `SeriesPage.episodes`.** Skip Intro/Credits and the next Episode
+  needs to know what follows the Episode now playing, and that is a position in
+  this one aired-order list. It is kept beside the Seasons for exactly that,
+  and nothing of #31 is built here.
 
 ## Playing a Title
 

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { useLocation, useRoute } from 'preact-iso/router';
-import type { Artwork, TitleDetails } from '../catalogue/catalogue';
+import type { Artwork, EpisodeDetails, TitleDetails } from '../catalogue/catalogue';
 import type { DeviceLayer } from '../device/types';
 import { cardForTitle, Row } from '../home/row';
 import { useTranslate, type Translate } from '../i18n/index';
@@ -9,6 +9,7 @@ import { MyListToggle } from '../my-list/my-list-toggle';
 import { Player } from '../playback/player';
 import type { Session } from '../session/session';
 import { useWidePointer } from '../shell/layout';
+import { playingNameOf, SeriesEpisodes } from './series-episodes';
 import { loadTitlePage, titlePathFor, type TitlePageResult } from './title-page';
 
 /**
@@ -75,6 +76,20 @@ export function TitleScreen({ session, device }: TitleScreenProps) {
   );
 }
 
+/**
+ * What the player over this page is playing: a Movie, or one Episode of a
+ * Series (#18). It is a value rather than a flag because for a Series the page
+ * and the Episode list both mean an Episode, and which one is the whole
+ * question — see `series.ts`.
+ */
+type PlayTarget = {
+  readonly itemId: string;
+  /** What the player is headed with, which for an Episode names its Series. */
+  readonly name: string;
+  /** Where to start, left out for anything nobody has part-watched. */
+  readonly resumeTicks?: number;
+};
+
 /** One Title, once the Server has said what it is. */
 function TitlePage({
   gateway,
@@ -97,18 +112,53 @@ function TitlePage({
   const card = cardForTitle(gateway, title);
   const watched = useWatched(gateway, title.itemId, details.watched);
   /**
-   * Whether the player is over this page. Screen state rather than an address,
-   * for the reasons in `src/playback/player.tsx`: a player is something over
-   * the Title a User was looking at, not a place they navigated to.
+   * What the player is over this page playing, and nothing when there is no
+   * player. Screen state rather than an address, for the reasons in
+   * `src/playback/player.tsx`: a player is something over the Title a User was
+   * looking at, not a place they navigated to.
+   *
+   * It is *what* is playing rather than a flag, because for a Series that is an
+   * Episode and not the Title itself (#18): the page's Play means the Episode
+   * the User is up to, and a press in the Episode list means that Episode.
    */
-  const [playing, setPlaying] = useState(false);
+  const [playing, setPlaying] = useState<PlayTarget | undefined>(undefined);
   // A different Title means a page that is not playing, which is what pressing
   // a card in More like this does without unmounting this screen.
   const playingFor = useRef(title.itemId);
   if (playingFor.current !== title.itemId) {
     playingFor.current = title.itemId;
-    setPlaying(false);
+    setPlaying(undefined);
   }
+
+  /** One Episode as something to play, resuming only where there is a point to. */
+  const episodeTarget = (detail: EpisodeDetails): PlayTarget => ({
+    itemId: detail.episode.itemId,
+    name: playingNameOf(title.name, detail, t),
+    // A finished Episode keeps the position playback ended at, which is not a
+    // place to start it from: that is the Title's rule too (#25).
+    ...(detail.playback.played || detail.playback.positionTicks === undefined
+      ? {}
+      : { resumeTicks: detail.playback.positionTicks }),
+  });
+
+  /**
+   * What the page's own Play button means: the Movie itself, or the Episode of
+   * a Series the User is up to. Absent for a Series the Server listed no
+   * Episodes of — there is nothing to play, and a button that could only fail
+   * is worse than no button.
+   */
+  const playTarget: PlayTarget | undefined =
+    title.kind === 'Series'
+      ? page.series.upTo === undefined
+        ? undefined
+        : episodeTarget(page.series.upTo)
+      : {
+          itemId: title.itemId,
+          name: title.name,
+          ...(details.resumePositionTicks === undefined
+            ? {}
+            : { resumeTicks: details.resumePositionTicks }),
+        };
 
   return (
     <article class="title__sheet">
@@ -144,15 +194,17 @@ function TitlePage({
       </p>
 
       <p class="title__actions">
-        <button
-          type="button"
-          class="button button--primary"
-          onClick={() => {
-            setPlaying(true);
-          }}
-        >
-          {t('title.play')}
-        </button>
+        {playTarget === undefined ? null : (
+          <button
+            type="button"
+            class="button button--primary"
+            onClick={() => {
+              setPlaying(playTarget);
+            }}
+          >
+            {t('title.play')}
+          </button>
+        )}
         {/* The remote and the keyboard reach My List here, which is what a
             card's hover-only toggle cannot give them (story 70). */}
         <MyListToggle card={card} />
@@ -185,25 +237,37 @@ function TitlePage({
         <Detail label={t('title.collection')} value={page.collections} />
       </dl>
 
-      {playing ? (
+      {/* A Series' Seasons and the Episodes under them (#18). A Movie has none,
+          and this is the one part of the page whose shape the Title's kind
+          decides. */}
+      {title.kind === 'Series' ? (
+        <SeriesEpisodes
+          gateway={gateway}
+          seasons={page.series.seasons}
+          {...(page.series.upTo === undefined ? {} : { upTo: page.series.upTo })}
+          onPlayEpisode={(detail) => {
+            setPlaying(episodeTarget(detail));
+          }}
+        />
+      ) : null}
+
+      {playing === undefined ? null : (
         <Player
           gateway={gateway}
           device={device}
           userId={session.activeUser()?.userId ?? ''}
-          itemId={title.itemId}
-          titleName={title.name}
-          {...(details.resumePositionTicks === undefined
-            ? {}
-            : { resumeTicks: details.resumePositionTicks })}
+          itemId={playing.itemId}
+          titleName={playing.name}
+          {...(playing.resumeTicks === undefined ? {} : { resumeTicks: playing.resumeTicks })}
           onClose={() => {
-            setPlaying(false);
+            setPlaying(undefined);
             // The Server now holds a newer resume point than the one this
             // page was read with, and pressing Play again has to honour it
             // rather than start the film over.
             onPlaybackEnded();
           }}
         />
-      ) : null}
+      )}
 
       {page.similar.length === 0 ? null : (
         <Row

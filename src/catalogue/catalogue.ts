@@ -118,6 +118,52 @@ export type TitleDetails = {
 };
 
 /**
+ * One Episode as the title page's episode list shows it (#18): the Episode
+ * itself, the few fields only this list asks the Server for, and what this User
+ * has done with it.
+ *
+ * It is to an `Episode` what `TitleDetails` is to a `Title`, and for the same
+ * reason: Continue Watching carries Episodes and has no use for a description,
+ * so the fields a list of them needs are kept apart from the Episode itself.
+ *
+ * Every one is left out rather than defaulted, as everywhere here: an Episode
+ * the Server gave no description, no still and no runtime is a real Episode and
+ * the list draws what there is of it.
+ */
+export type EpisodeDetails = {
+  readonly episode: Episode;
+  readonly overview?: string;
+  /** `RunTimeTicks`, as whole minutes. */
+  readonly runtimeMinutes?: number;
+  /**
+   * The Episode's own `ImageTags.Primary`, which on an Episode is the still
+   * from the programme rather than a poster — what a list of them shows.
+   */
+  readonly thumbnail?: Artwork;
+  /** Where this User got to, and whether they have finished it. */
+  readonly playback: PlaybackState;
+};
+
+/**
+ * One item as an Episode the list can draw, or `undefined` when it is not an
+ * Episode at all — which is what a Season among the answer comes to, and what a
+ * Server that did not say which Series an Episode belongs to leaves.
+ */
+export function episodeDetailsFrom(dto: BaseItemDto): EpisodeDetails | undefined {
+  const item = catalogueItemFrom(dto);
+  if (item === undefined || item.kind !== 'Episode') return undefined;
+
+  const itemId = item.itemId;
+  return {
+    episode: item,
+    ...textOf('overview', dto.Overview),
+    ...numberOf('runtimeMinutes', minutesOfTicks(dto.RunTimeTicks)),
+    ...prefixed('thumbnail', artworkOf(itemId, dto.ImageTags?.Primary)),
+    playback: playbackStateOf(dto),
+  };
+}
+
+/**
  * What this User has done with one item: where they got to, how far through
  * that is, and when they last played it.
  *
