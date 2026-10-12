@@ -51,16 +51,21 @@ src/
                         the store every screen reads, `use-my-list.ts` the
                         context and hook, `my-list-toggle.tsx` the control on a
                         card, `my-list-screen.tsx` the My List page.
-  playback/             Playing a Title (#25, #26): `device-profile.ts` is what
-                        the Server negotiates against, `planning.ts` asks it how
-                        to play and reads its answer, `video-source.ts` gets that
-                        into a `<video>` (and is the one `import()` in the app),
-                        `reporting.ts` tells the Server what is happening, and
-                        `player.tsx` is the overlay itself — the one place the
-                        media element is touched. Over it: `player-controls.tsx`
-                        is the seek bar, the times and the buttons,
-                        `scrubbing.ts` the arithmetic they draw with, and
-                        `controls-visibility.ts` when they get out of the way.
+  playback/             Playing a Title (#25, #26, #27): `device-profile.ts` is
+                        what the Server negotiates against, `planning.ts` asks it
+                        how to play and reads its answer, `video-source.ts` gets
+                        that into a `<video>` (and is the one `import()` in the
+                        app), `reporting.ts` tells the Server what is happening,
+                        and `player.tsx` is the overlay itself — the one place
+                        the media element is touched. Over it:
+                        `player-controls.tsx` is the seek bar, the times and the
+                        buttons, `scrubbing.ts` the arithmetic they draw with,
+                        and `controls-visibility.ts` when they get out of the
+                        way. The tracks (#27): `media-tracks.ts` reads a source's
+                        `MediaStreams` as the two lists a User chooses from,
+                        `track-picker.tsx` is the menu, `subtitle-cues.ts` is the
+                        subtitle engine — parsing and timing, with no DOM — and
+                        `subtitles.tsx` draws its cues over the picture.
   navigation/           Arrow keys and focus: `nearest.ts` the geometry,
                         `reveal.ts` how far a scroller must move, `focusable.ts`
                         what the arrows reach, `spatial-navigation.ts` the
@@ -162,10 +167,15 @@ Jellyfin holds mutable sample data for the whole run.
    e.g. `/Items/:itemId/Similar`.
 3. Spread it into `jellyfinRoutes` in `test/fake-jellyfin/routes/index.ts`.
 
-A route normally answers with JSON. One answers with bytes — the video in
-`routes/videos.ts` — through `bytes` and `contentType` on `FakeResponse`, with
-`headers` for `Content-Range` and friends. See "The fake Jellyfin serves real
-video" below before adding a second.
+A route normally answers with JSON. Two answer with bytes — the video in
+`routes/videos.ts` and the subtitle files in `routes/subtitles.ts` — through
+`bytes` and `contentType` on `FakeResponse`, with `headers` for `Content-Range`
+and friends. See "The fake Jellyfin serves real video" below before adding a
+third.
+
+Note that `routing.ts` matches **whole segments**, so a pattern like
+`Stream.:format` is compared literally and the extension has to be read off a
+`:streamFile` parameter in the handler. Both `/Videos` route families do that.
 
 An unknown path returns 404 with a message naming what to add, so a missing route
 never looks like a product bug.
@@ -212,6 +222,13 @@ the Titles, in the order `/Genres` serves them, are exactly:
 
     Comedy, Crime, Drama, Family, Science Fiction, Thriller
 
+**Arrival is the Title the track picker (#27) is tested against**: English audio
+at stream 1, French at 2, English subtitles at 3 and Spanish at 4, with the
+streams' own `Index` values, so a client that read a position in `MediaStreams`
+instead fails here. **Heat carries a `pgssub` track** — a Blu-ray bitmap, which
+is the one kind this app cannot draw — so "says what it cannot draw" is a thing a
+test can see rather than a case to patch in.
+
 Arrival and Severance also carry everything a title page shows — a year, an age
 rating, a running time, an overview, a cast, streams in several languages,
 ratings, a logo and a backdrop — and **The Unfinished deliberately carries none
@@ -239,6 +256,9 @@ All four want a token, as the real Server does.
 **`/Users/Me` as well as `POST /Users/Configuration`**, because 12.x has no
 `GET /Users/Configuration` and that is where a client reads it. Set it after
 signing in: it is also the endpoint the session reads.
+`failSubtitleFetchWith` does it for the subtitle stream route, which is
+deliberately its own flag: a Title that will not play at all and one that plays
+with nothing to read are different things to a User (#27).
 `failPlaybackInfoWith` and `failPlaybackReportsWith` do it for
 `POST /Items/{id}/PlaybackInfo` and for the three `/Sessions/Playing` reports,
 and `playbackErrorCode` makes `PlaybackInfo` answer with a `PlaybackErrorCode`
@@ -1061,6 +1081,123 @@ tracks, #28 the Subtitle Offset, #33 Cast and #34 Play On.
   else a media element can report badly: `NaN` before the metadata, a length of
   `Infinity` for a live source, a position past the end.
 
+### The sound and the subtitles (#27)
+
+The tracks a Title is watched with. #28 grows the Subtitle Offset, #29 styled
+(ASS/SSA) subtitles and #30 image ones, and the seams each of those needs are
+noted below rather than built.
+
+- **The Server chooses the default tracks, and this app never matches a
+  language.** `UserConfiguration` holds a User's `AudioLanguagePreference`,
+  `SubtitleLanguagePreference` and `SubtitleMode`, and a Jellyfin server applies
+  all three when it answers `PlaybackInfo` — so `DefaultAudioStreamIndex` and
+  `DefaultSubtitleStreamIndex` are read and used as they come. A second copy of
+  that rule in the client would disagree with every other Jellyfin app the first
+  time a `SubtitleMode` was involved. This is also why the **fake** models the
+  rule (`routes/media-info.ts`): against a fake that always answered "the first
+  track", a client that matched languages itself would pass.
+- **An index is `MediaStream.Index`, never a position in `MediaStreams`.** They
+  differ for exactly the files that have external subtitle files, which are
+  appended with indexes of their own. `media-tracks.ts` is the one place the
+  streams are read, and the fake's sample data carries real indexes so a client
+  that used the array position is caught.
+- **Switching the subtitles never touches the media element; switching the sound
+  must.** A subtitle track is a separate file this app fetches and draws, so
+  choosing one is pure app state. A sound track is the Server's: a
+  direct-played file arrives with every track in it and a browser gives no way
+  to pick one, and a transcode carries only the track the Server was told to
+  use. So the sound re-negotiates, and what is owed the User is their **place** —
+  the next `PlaybackInfo` starts from where they were (`restartTicks` in
+  `player.tsx`), and the subtitles they chose survive it.
+- **The app parses SRT and VTT itself, which is a deliberate departure from the
+  research.** `player-subtitles.md` §6c recommends a native `<track>` in
+  `mode = 'hidden'` to borrow the platform's WebVTT parser. `subtitle-cues.ts`
+  does not, and the long reason is in that file's own header: §6c's design
+  already hands the *timing* half to the app (there is no offset hook on
+  `activeCues`), happy-dom has no WebVTT parser so the ticket's "Vitest covers
+  parsing" would have nothing to assert, a cross-origin `<track src>` fails
+  silently and the Server is always another origin, and `<track>` cannot read
+  SubRip at all. The cost is the rest of the WebVTT grammar — positioning,
+  regions, inline markup — and §6c says to choose that subset rather than
+  discover it: **the text of a cue and its line breaks, and nothing else.**
+- **A cue is plain text before it reaches the DOM.** `cue.text` is raw markup
+  out of a media library, which §6c names as a genuine XSS vector. Every tag is
+  stripped in `subtitle-cues.ts`, so no caller can turn one back into markup by
+  reaching for the wrong property, and the overlay sets text rather than HTML on
+  top of that. #29 is where a *known* tag set earns its way back in.
+- **The cue cursor is the seam #28 takes over.** `createCueCursor(cues).at(t)` is
+  asked for a moment, keeps a moving index rather than filtering two thousand
+  cues on every frame, and is correct for **any** position rather than only an
+  increasing one — which is what a User dragging an offset back and forth needs.
+  An offset is one subtraction at the call site in `subtitles.tsx` and changes
+  nothing else.
+- **A frame loop, not `timeupdate`.** `timeupdate` fires about four times a
+  second, which is a visible quarter-second of lag on a cue, and #28 has to take
+  effect while a button is held. So the overlay reads the element's position from
+  `requestAnimationFrame` — and only while there are cues, so subtitles off cost
+  nothing.
+- **The overlay is a DOM element inside the player, not inside the `<video>` and
+  not a canvas.** §6c pitfall 3: the browser draws native cues inside the video,
+  so an app-drawn overlay has to be a sibling within whatever goes full-screen or
+  it vanishes the moment it does — the player is that element. A `div` rather
+  than a canvas gives text layout, wrapping, font fallback and a screen reader
+  for free; canvas is for #30's bitmaps and #29's libass, which need one. It
+  shares the picture's grid cell rather than being positioned over it, so it can
+  never sit on top of the controls.
+- **`kind` is `text` or `image`, and that is #30's seam.** The classification
+  mirrors the Server's own predicates (`jellyfin-playback.md` §14) with **one
+  deliberate widening**, written out in `media-tracks.ts`: §14 quotes
+  `Contains("dvdsub")`/`Contains("dvbsub")` and then lists `dvd_subtitle` and
+  `dvb_subtitle` among the codecs really seen, which match neither — so the
+  Server's own test reads those as text. They are ffprobe's names for DVD and
+  DVB bitmaps, and the error is asymmetric: calling a bitmap text means fetching
+  it as `Stream.vtt`, which the Server answers with the **raw file** for
+  graphical formats, so the engine would be handed binary and draw nothing with
+  nothing to say. Calling text an image only means the picker says it cannot
+  draw that track. **Worth checking against a real Server's output.**
+- **An undrawable track is offered and labelled, not hidden.** A missing track
+  looks like a Title with no subtitles; a track that draws nothing when pressed
+  is worse. It carries `aria-disabled` rather than `disabled`, so a remote can
+  still reach it and read why — a `disabled` button is not a focus stop at all.
+- **Every choice is a `<button>` with `aria-pressed`, never a radio group**, and
+  "off" is a choice like any other. Same call as the settings screen (#11, #35)
+  and the Home Layout editor (#10), for the same reason: native radios take Left
+  and Right to move the selection, and `src/navigation/` owns the arrow keys for
+  moving focus.
+- **The menu claims Back on top of the player's claim.** `src/shell/back.ts`
+  keeps claims innermost-last, so Back closes the menu and leaves the Title
+  playing, with neither the player nor the picker knowing about the other. It is
+  `position: fixed` inside the player, which is also fixed, so focus stays inside
+  it with no focus-trapping code — the rule #7 wrote and #17's pop-up relies on.
+- **A failure is said beside the picture, not instead of it.** A Server that will
+  not hand over a subtitle track has not cost the User their film, so the notice
+  sits over the picture like #25's unreported-progress one — and it is on the
+  **player** rather than only inside the picker, because the press that failed
+  also closes the picker. A track that arrives holding no cues is the same thing
+  to a User as one that was refused, and says the same.
+- **The track's name is the Server's `DisplayTitle`**, falling back to the
+  language's translated name (`title.language`) and then to its index. A Server's
+  label is data, like a Title's name, and it is what every other Jellyfin app
+  shows for that track.
+
+Where each thing is tested: parsing and timing in
+`test/unit/subtitle-cues.test.ts`, with the WebVTT and SubRip grammars as
+written-out literals; the stream list and the text/image classification in
+`test/unit/the-tracks-of-a-title.test.ts`; the Server's own choice of default
+tracks, and the plan carrying it, in `test/unit/planning-playback.test.ts`; the
+subtitle URL's canonical path form in `test/unit/gateway.test.ts`; and the whole
+journey — the picker, the defaults coming from the account, a cue drawn, and
+which switches restart playback — in `test/unit/choosing-tracks.test.tsx`. What
+only a browser can say is in `test/e2e/playing-a-title.spec.ts`: **where an
+arrow key really sends focus**, since happy-dom gives every element a zero-sized
+box, and a cue really painted inside the picture's own box.
+
+The fake serves real subtitle files (`routes/subtitles.ts`), which is the second
+place a fake owes a client real data rather than a shape — and **the text names
+the track's language**, so "the User switched to Spanish" is read off the screen
+rather than inferred from a URL. `failSubtitleFetchWith` is a Server that holds a
+track it will not hand over.
+
 ## The fake Jellyfin serves real video
 
 `test/fake-jellyfin/routes/videos.ts` is the one place a fake owes a client
@@ -1121,6 +1258,19 @@ it is a key.
   between the seek bar and the buttons under it, where Up found it. `inert`
   would say this in one word and is Chrome 102, well past the floor, so the flow
   a thing belongs to is which fixed thing it is **inside** (`fixedRootOf`).
+- **An overlay has no way out of it, and the page does** (#27). From the page's
+  own flow, fixed chrome is a fallback once the page has run out that way, so
+  the phone's bottom bar stays reachable. From **inside** an overlay there is no
+  fallback at all: "nothing further that way" is the answer. #26 let the
+  fallback apply both ways round, and on a phone that meant Right from the
+  player's last button focused a card on the title page *behind* the picture —
+  the player's buttons sit in a column at that width, so there was nothing to
+  the right inside it. An overlay covers the screen, so anything outside it is
+  something the User cannot see. This is what makes "the arrow keys stay inside
+  the pop-up with no focus trapping of ours" true rather than nearly true, and
+  it holds for the player, the title-page pop-up and the User Picker alike.
+  `test/e2e/playing-a-title.spec.ts` presses all four directions inside the
+  player and fails if any of them leaves it.
 - **A key a screen has already answered is not the navigator's.** It leaves a
   `keydown` whose `defaultPrevented` is set alone, and that is the whole of how
   a screen takes an arrow key: the player (#26) listens on `window` in the

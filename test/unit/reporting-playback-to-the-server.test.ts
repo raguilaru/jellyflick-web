@@ -31,6 +31,9 @@ const PLAN: PlaybackPlan = {
   playMethod: 'DirectPlay',
   delivery: 'file',
   startTicks: 0,
+  // The reports carry the stream *indexes*, which are their own fields on the
+  // plan; the track list the picker offers is not reported at all.
+  tracks: { audio: [], subtitles: [] },
 };
 
 function gatewayFor(deviceId: string) {

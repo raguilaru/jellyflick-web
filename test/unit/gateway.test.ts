@@ -592,6 +592,86 @@ describe('the Jellyfin gateway', () => {
 
     await expect(gateway.getPublicSystemInfo()).rejects.toThrow();
   });
+
+  /**
+   * One subtitle stream, fetched as text so the app can draw it itself (#27).
+   *
+   * The path is the **canonical form the Server generates for itself**, quoted
+   * in `docs/research/jellyfin-playback.md` §14 out of
+   * `MediaBrowser.Model/Dlna/StreamInfo.cs`:
+   *
+   *     /Videos/{itemId}/{mediaSourceId}/Subtitles/{index}/{startPositionTicks}/Stream.{format}
+   *
+   * Everything goes in the **path**. The same query parameters exist as legacy
+   * aliases and `format` among them is annotated `[ParameterObsolete]`, so a
+   * client that sends them is using the older spelling of the same request.
+   */
+  describe('fetching one subtitle track', () => {
+    const subtitleGateway = () =>
+      createJellyfinGateway({
+        serverAddress: fakeJellyfinUrl(),
+        deviceId: 'reads-subtitles',
+        ...identity,
+        token: tokenFor('reads-subtitles'),
+      });
+
+    it('builds the URL the Server builds for itself, with everything in the path', () => {
+      const url = subtitleGateway().subtitleStreamUrl({
+        itemId: 'movie-arrival',
+        mediaSourceId: 'source-movie-arrival',
+        index: 3,
+        format: 'vtt',
+      });
+
+      expect(url).toBe(
+        `${fakeJellyfinUrl()}/Videos/movie-arrival/source-movie-arrival/Subtitles/3/0/Stream.vtt?ApiKey=${tokenFor('reads-subtitles')}`,
+      );
+    });
+
+    it('fetches the track as text, which is what the subtitle engine parses', async () => {
+      const text = await subtitleGateway().getSubtitleText({
+        itemId: 'movie-arrival',
+        mediaSourceId: 'source-movie-arrival',
+        index: 3,
+        format: 'vtt',
+      });
+
+      expect(text.startsWith('WEBVTT')).toBe(true);
+      expect(text).toContain('-->');
+    });
+
+    /**
+     * §14's one case where the URL is not ours to build: an external stream
+     * the Server has already given an address. `DeliveryUrl` is preferred
+     * wherever the Server populated it, and it is server-relative, so making
+     * it absolute is the only thing done to it — the same bargain
+     * `TranscodingUrl` gets.
+     */
+    it('uses the Server’s own DeliveryUrl when it gave one, rather than building a second one', async () => {
+      const text = await subtitleGateway().getSubtitleText({
+        itemId: 'movie-arrival',
+        mediaSourceId: 'source-movie-arrival',
+        index: 3,
+        format: 'vtt',
+        deliveryUrl: '/Videos/movie-arrival/source-movie-arrival/Subtitles/4/0/Stream.vtt',
+      });
+
+      // Index 4 is Arrival's Spanish track, so the Server's URL was used and
+      // not the one that would have been built from `index`.
+      expect(text).toContain('Hola');
+    });
+
+    it('fails rather than answering with nothing when the Server refuses a track', async () => {
+      await expect(
+        subtitleGateway().getSubtitleText({
+          itemId: 'movie-arrival',
+          mediaSourceId: 'source-movie-arrival',
+          index: 99,
+          format: 'vtt',
+        }),
+      ).rejects.toMatchObject({ status: 404 });
+    });
+  });
 });
 
 /**

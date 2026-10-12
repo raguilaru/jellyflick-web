@@ -5,6 +5,7 @@ import type {
   PlayMethod,
 } from '../jellyfin/gateway';
 import { deviceProfileFor } from './device-profile';
+import { tracksOf, type MediaTracks } from './media-tracks';
 
 /**
  * Asking the Server how to play a Title, and turning its answer into the one
@@ -40,11 +41,17 @@ export type PlaybackPlan = {
   readonly runtimeTicks?: number;
   /**
    * The streams the Server chose for this User — it has already applied their
-   * `AudioLanguagePreference` and `SubtitleLanguagePreference`, so #27 should
-   * use these rather than matching languages again.
+   * `AudioLanguagePreference`, `SubtitleLanguagePreference` and `SubtitleMode`,
+   * so the player uses these rather than matching languages again (#27).
+   *
+   * That is not tidiness: the rule lives on the Server, every other Jellyfin
+   * app follows it, and a second copy in this client would disagree with them
+   * the first time a `SubtitleMode` was involved.
    */
   readonly audioStreamIndex?: number;
   readonly subtitleStreamIndex?: number;
+  /** Every track the file holds, which is what the picker offers (#27). */
+  readonly tracks: MediaTracks;
 };
 
 /**
@@ -64,6 +71,17 @@ export type PlanPlaybackOptions = {
   device: DeviceLayer;
   /** Where this User left off, in ticks. Absent or 0 starts at the beginning. */
   resumeTicks?: number;
+  /**
+   * A track the User has chosen for themselves (#27). Absent leaves the choice
+   * to the Server, which applies their account's own preferences — so this is
+   * only ever set after a User has pressed something in the track picker.
+   *
+   * It has to go into the *request*: a direct-played file is served with every
+   * track in it and the browser picks one by itself, and a transcode is cut to
+   * carry the single track the Server was told to use.
+   */
+  audioStreamIndex?: number;
+  subtitleStreamIndex?: number;
 };
 
 export async function planPlayback(
@@ -85,6 +103,8 @@ export async function planPlayback(
       // segments and a client cannot seek into a stream that does not exist.
       startTimeTicks: startTicks,
       maxStreamingBitrate: profile.MaxStreamingBitrate,
+      ...numberIf('audioStreamIndex', options.audioStreamIndex),
+      ...numberIf('subtitleStreamIndex', options.subtitleStreamIndex),
     });
   } catch {
     return { outcome: 'unavailable' };
@@ -119,6 +139,7 @@ export async function planPlayback(
       ...numberIf('runtimeTicks', source.RunTimeTicks),
       ...numberIf('audioStreamIndex', source.DefaultAudioStreamIndex),
       ...numberIf('subtitleStreamIndex', source.DefaultSubtitleStreamIndex),
+      tracks: tracksOf(source),
     },
   };
 }

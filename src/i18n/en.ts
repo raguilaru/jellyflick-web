@@ -323,6 +323,33 @@ export const en = {
   'player.failed': 'Something went wrong while playing that Title.',
   'player.unreported': 'Jellyflick could not tell the Server how far you have watched.',
 
+  /*
+   * The sound and the subtitles (#27). The control carries the Title's name as
+   * every other one in the player does; the menu over it does not, because a
+   * User is already inside the thing that was named when they read it.
+   *
+   * A track's *own* name is not here: it is `MediaStream.DisplayTitle`, which
+   * is the Server's label and what every Jellyfin app shows, and a track with
+   * no label falls back to `title.language` above. A language's name is
+   * translated; a Server's label is data, like a Title's name.
+   */
+  'player.tracks': (p: { name: string }) => `Audio and subtitles for ${p.name}`,
+  'player.tracksLabel': 'Audio and subtitles',
+  'player.audioTracks': 'Sound',
+  'player.subtitleTracks': 'Subtitles',
+  'player.subtitlesOff': 'Off',
+  'player.tracksDone': 'Done',
+  /** A track the Server gave neither a label nor a language. */
+  'player.trackUnnamed': (p: { index: number }) => `Track ${String(p.index)}`,
+  'player.subtitlesLabel': 'Subtitles',
+  /*
+   * Picture subtitles are offered and said to be undrawable rather than left
+   * out: a track missing from the list looks like a Title that has none, and a
+   * track that draws nothing when pressed is worse. #30 is what makes them work.
+   */
+  'player.subtitlesImage': 'Jellyflick cannot draw picture subtitles yet.',
+  'player.subtitlesUnavailable': 'Jellyflick could not read those subtitles from the Server.',
+
   'nav.sections': 'Sections',
   'nav.home': 'Home',
   'nav.movies': 'Movies',

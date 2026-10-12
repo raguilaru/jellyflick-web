@@ -10,9 +10,12 @@ import {
   createPlaybackReporter,
   PING_INTERVAL_MS,
   secondsOfTicks,
+  ticksOfSeconds,
   type PlaybackReporter,
 } from './reporting';
 import { clampPosition, SEEK_STEP_SECONDS } from './scrubbing';
+import { Subtitles } from './subtitles';
+import { TrackPicker } from './track-picker';
 import { attachPlaybackSource, type AttachedSource } from './video-source';
 
 /**
@@ -74,6 +77,29 @@ export function Player({
   const [duration, setDuration] = useState<number | undefined>(undefined);
   /** Bumped by Retry: it is the whole of what asking again means. */
   const [attemptNumber, setAttemptNumber] = useState(0);
+  /**
+   * The tracks (#27). Each is a `MediaStream.Index` the **User** chose, as
+   * against the one the Server chose, which is on the plan: absent means
+   * "whatever the Server decided from this User's own Jellyfin account", so
+   * nothing here has to know the account's preferences at all.
+   *
+   * They are kept apart because the two switch completely differently. The
+   * sound is the Server's — a direct-played file carries every track and the
+   * browser picks one with no API to choose — so choosing one re-negotiates.
+   * The subtitles are a separate file this app fetches and draws, so choosing
+   * one never touches the media element. See `usePlayback` below.
+   */
+  const [chosenAudio, setChosenAudio] = useState<number | undefined>(undefined);
+  const [chosenSubtitle, setChosenSubtitle] = useState<ChosenSubtitle>('from-the-server');
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [subtitlesUnavailable, setSubtitlesUnavailable] = useState(false);
+  /**
+   * Where to start the *next* negotiation, which a change of sound track
+   * needs: the Title has to be asked for again, and the User has not asked to
+   * go back to the beginning or to the resume point they came in at. Absent
+   * means this is the first attempt, so the resume point stands.
+   */
+  const [restartTicks, setRestartTicks] = useState<number | undefined>(undefined);
 
   // Back closes the player, through the one Back handler rather than a key
   // listener of this screen's own. A layout effect, which is why #8 made it one.
@@ -81,12 +107,31 @@ export function Player({
 
   const plan = attempt?.outcome === 'play' ? attempt.plan : undefined;
   const problem = problemOf(attempt, failed);
+
+  /**
+   * Which subtitles are being drawn: the User's choice where they have made
+   * one, and the Server's otherwise — which is how a Title starts with the
+   * subtitles this User's Jellyfin account asks for without the player reading
+   * that account at all.
+   */
+  const subtitleIndex =
+    chosenSubtitle === 'from-the-server'
+      ? plan?.subtitleStreamIndex
+      : chosenSubtitle === 'off'
+        ? undefined
+        : chosenSubtitle.index;
+  const subtitleTrack = plan?.tracks.subtitles.find((track) => track.index === subtitleIndex);
+  /** Which sound is playing, the same way round. */
+  const audioIndex = chosenAudio ?? plan?.audioStreamIndex;
+
   const playing = usePlayback({
     video,
     gateway,
     device,
     plan,
     duration,
+    audioIndex,
+    subtitleIndex,
     onPausedChange: setPaused,
     onPositionChange: setPosition,
     onDurationChange: setDuration,
@@ -96,25 +141,31 @@ export function Player({
   });
 
   // Ask the Server how to play it. Once per (Title, Server, resume point), and
-  // again whenever Retry asks.
+  // again whenever Retry asks or the User chooses a different sound track.
   useEffect(() => {
     let abandoned = false;
     setAttempt(undefined);
-    void planPlayback(gateway, { itemId, userId, device, ...ticksIf(resumeTicks) }).then(
-      (planned) => {
-        if (abandoned) return;
-        setAttempt(planned);
-        setPosition(planned.outcome === 'play' ? secondsOfTicks(planned.plan.startTicks) : 0);
-        setDuration(
-          planned.outcome === 'play' ? secondsOfTicks(planned.plan.runtimeTicks ?? 0) || undefined : undefined,
-        );
-      },
-    );
+    void planPlayback(gateway, {
+      itemId,
+      userId,
+      device,
+      ...ticksIf(restartTicks ?? resumeTicks),
+      // Left out until the User has chosen one, which is what leaves the choice
+      // to the Server and so to this User's own Jellyfin account.
+      ...(chosenAudio === undefined ? {} : { audioStreamIndex: chosenAudio }),
+    }).then((planned) => {
+      if (abandoned) return;
+      setAttempt(planned);
+      setPosition(planned.outcome === 'play' ? secondsOfTicks(planned.plan.startTicks) : 0);
+      setDuration(
+        planned.outcome === 'play' ? secondsOfTicks(planned.plan.runtimeTicks ?? 0) || undefined : undefined,
+      );
+    });
     return () => {
       abandoned = true;
     };
     // The gateway is rebuilt on every render, so its address is the dependency.
-  }, [gateway.serverAddress, itemId, userId, device, resumeTicks, attemptNumber]);
+  }, [gateway.serverAddress, itemId, userId, device, resumeTicks, attemptNumber, chosenAudio, restartTicks]);
 
   const retry = useCallback(() => {
     setFailed(false);
@@ -122,11 +173,40 @@ export function Player({
     setAttemptNumber((number) => number + 1);
   }, []);
 
+  /**
+   * Choosing the sound means asking the Server again, and that is not a
+   * shortcut: a direct-played file is served with every track in it and a
+   * browser gives no way to pick one, and a transcode carries only the track
+   * the Server was told to use. So what is owed the User is their place, not
+   * that nothing happened — the next negotiation starts from where they are.
+   */
+  const chooseAudio = useCallback(
+    (index: number) => {
+      if (index === audioIndex) return;
+      setRestartTicks(ticksOfSeconds(video.current?.currentTime ?? position));
+      setChosenAudio(index);
+      setPickerOpen(false);
+    },
+    [audioIndex, position],
+  );
+
+  /**
+   * Choosing the subtitles touches nothing but this app: a separate file, read
+   * and drawn here, so the picture does not so much as flicker.
+   */
+  const chooseSubtitle = useCallback((index: number | undefined) => {
+    setSubtitlesUnavailable(false);
+    setChosenSubtitle(index === undefined ? 'off' : { index });
+    setPickerOpen(false);
+  }, []);
+
   // Controls stay up while there is nothing to watch behind them: a paused
   // player, one still negotiating, or one with something to say.
   const controls = useIdleControls({
     active: true,
-    keepVisible: paused || plan === undefined || problem !== undefined,
+    // The picker keeps them up too: it is opened from a control, so the
+    // controls hiding under it would take away the way back out.
+    keepVisible: paused || plan === undefined || problem !== undefined || pickerOpen,
   });
 
   usePlayerKeys({
@@ -147,6 +227,23 @@ export function Player({
         No `controls`: the controls are ours, so one set serves a remote too.
       */}
       <video class="player__video" ref={video} playsinline preload="auto" />
+
+      {/*
+        The subtitles the app draws itself (#27), as a sibling of the `<video>`
+        inside the player rather than inside the element: the player is what
+        goes full-screen, and an overlay outside it would vanish the moment it
+        did (`player-subtitles.md` §6c pitfall 3).
+      */}
+      {plan !== undefined ? (
+        <Subtitles
+          gateway={gateway}
+          itemId={plan.itemId}
+          mediaSourceId={plan.mediaSourceId}
+          {...(subtitleTrack === undefined ? {} : { track: subtitleTrack })}
+          video={video}
+          onUnavailable={() => setSubtitlesUnavailable(true)}
+        />
+      ) : null}
 
       {attempt === undefined && !failed ? <p class="notice">{t('player.starting')}</p> : null}
 
@@ -182,6 +279,19 @@ export function Player({
       ) : null}
 
       {/*
+        Subtitles the Server would not hand over, said the same way and for the
+        same reason: the Title is still playing, so this goes beside the picture
+        rather than instead of it. It is **here** rather than only in the picker
+        because the press that failed also closes the picker — a message only
+        the menu showed would be a message nobody ever saw.
+      */}
+      {subtitlesUnavailable ? (
+        <p class="notice notice--problem" role="alert">
+          {t('player.subtitlesUnavailable')}
+        </p>
+      ) : null}
+
+      {/*
         Hidden rather than faded: a control a User cannot see is a control the
         arrow keys must not reach and a screen reader must not read, and both of
         those are true of nothing at all and not true of something transparent.
@@ -196,10 +306,44 @@ export function Player({
           onToggle={playing.toggle}
           onSeek={playing.seekTo}
           onClose={onClose}
+          {...(plan === undefined || !hasAnyTrack(plan)
+            ? {}
+            : { onOpenTracks: () => setPickerOpen(true) })}
+        />
+      ) : null}
+
+      {/*
+        The menu, over the controls. It claims Back on top of the player's own
+        claim, so Back closes it and leaves the Title playing — see the note at
+        the top of this file about the claim stack.
+      */}
+      {pickerOpen && plan !== undefined ? (
+        <TrackPicker
+          tracks={plan.tracks}
+          {...(audioIndex === undefined ? {} : { audioIndex })}
+          {...(subtitleIndex === undefined ? {} : { subtitleIndex })}
+          subtitlesUnavailable={subtitlesUnavailable}
+          onChooseAudio={chooseAudio}
+          onChooseSubtitle={chooseSubtitle}
+          onClose={() => setPickerOpen(false)}
         />
       ) : null}
     </section>
   );
+}
+
+/**
+ * Which subtitles are being drawn, which is three states rather than two: the
+ * User has not chosen, so the Server's choice stands; the User has turned them
+ * off, which is a choice and not the absence of one; or the User picked a
+ * track. Collapsing the first two would make a Title whose account says
+ * "always" un-turn-off-able, because the Server's choice would come back.
+ */
+type ChosenSubtitle = 'from-the-server' | 'off' | { index: number };
+
+/** Whether there is anything to choose between, which decides if the control is drawn. */
+function hasAnyTrack(plan: PlaybackPlan): boolean {
+  return plan.tracks.audio.length > 1 || plan.tracks.subtitles.length > 0;
 }
 
 /** Which message to show, and whether asking again could change the answer. */
@@ -230,6 +374,12 @@ function usePlayback(options: {
   plan: PlaybackPlan | undefined;
   /** The length the controls are drawing against, so a seek can be clamped. */
   duration: number | undefined;
+  /**
+   * The tracks playing now (#27), which the reports carry. The sound cannot
+   * change without a new plan; the subtitles can, and do so without one.
+   */
+  audioIndex: number | undefined;
+  subtitleIndex: number | undefined;
   onPausedChange: (paused: boolean) => void;
   onPositionChange: (seconds: number) => void;
   onDurationChange: (seconds: number | undefined) => void;
@@ -255,6 +405,16 @@ function usePlayback(options: {
     let attached: AttachedSource | undefined;
     const sending = createPlaybackReporter(latest.current.gateway, plan, {
       now: () => latest.current.device.now(),
+      // Read through `latest` on every report, so a subtitle the User switched
+      // to a moment ago is what the Server is told about.
+      tracks: () => ({
+        ...(latest.current.audioIndex === undefined
+          ? {}
+          : { audioStreamIndex: latest.current.audioIndex }),
+        ...(latest.current.subtitleIndex === undefined
+          ? {}
+          : { subtitleStreamIndex: latest.current.subtitleIndex }),
+      }),
     });
     reporter.current = sending;
     position.current = secondsOfTicks(plan.startTicks);

@@ -260,6 +260,17 @@ export const es: Messages = {
   'player.failed': 'Algo fue mal al reproducir ese título.',
   'player.unreported': 'Jellyflick no pudo contarle al servidor cuánto has visto.',
 
+  'player.tracks': (p: { name: string }) => `Audio y subtítulos de ${p.name}`,
+  'player.tracksLabel': 'Audio y subtítulos',
+  'player.audioTracks': 'Sonido',
+  'player.subtitleTracks': 'Subtítulos',
+  'player.subtitlesOff': 'Desactivados',
+  'player.tracksDone': 'Hecho',
+  'player.trackUnnamed': (p: { index: number }) => `Pista ${String(p.index)}`,
+  'player.subtitlesLabel': 'Subtítulos',
+  'player.subtitlesImage': 'Jellyflick todavía no puede dibujar subtítulos de imagen.',
+  'player.subtitlesUnavailable': 'Jellyflick no pudo leer esos subtítulos del servidor.',
+
   'nav.sections': 'Secciones',
   'nav.home': 'Inicio',
   'nav.movies': 'Películas',
