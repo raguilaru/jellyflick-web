@@ -185,13 +185,21 @@ implementers silently did neither.
 are fixed in `57c27c2`, each with a regression test checked to fail without its fix. See
 "What the code review found" above.
 
-**The name has been redacted from `main`'s tip** (`e5d5808`), which was the live half of
+**The name has been redacted from `main`'s tip** (`09ad60a`), which was the live half of
 `decisions.md` §10: `main` had carried it all along, because the redaction was made on this
 branch and never merged down. §10's other three claims were wrong too and are corrected
 there. **The history rewrite itself is not due until the last ticket merges**, and two
 redundant remote branches (`origin/chore/agent-skills`, `origin/feat/v1-web-client`, both
 0 commits ahead of `origin/main`) still carry the name at their tips — **deleting them
 would end the remaining public exposure without touching history**, and is the host's call.
+
+**A trap worth knowing before you touch `main` again:** this branch moved
+`docs/initial-brief.md`, so anything `main` does to that file at its old path collides
+with the rename — modifying it conflicts on GitHub (which merges *without* rename
+detection), deleting it conflicts locally (*with* it). PR #38 broke on the first attempt
+and was fixed by having `main` make the identical move. **Check both strategies with
+`git -c merge.renames=false merge-tree --write-tree` before pushing to a base branch**; a
+merge that is clean locally is not necessarily clean on GitHub.
 
 Still owed: marking PR #38 ready, and the rewrite. Worktree cleanup is **done**.
 
