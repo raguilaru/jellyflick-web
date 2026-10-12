@@ -1,4 +1,10 @@
-import type { FakeItem, FakeMediaFile } from '../data.ts';
+import {
+  DEFAULT_USER_CONFIGURATION,
+  type FakeItem,
+  type FakeMediaFile,
+  type FakeMediaStream,
+  type FakeUserConfiguration,
+} from '../data.ts';
 import type { FakeRoute } from '../routing.ts';
 import { tokenFromAuthorization, userForToken } from './users.ts';
 
@@ -90,10 +96,14 @@ export const mediaInfoRoutes: readonly FakeRoute[] = [
       }
 
       const token = tokenFromAuthorization(authorization) ?? '';
+      const configuration = {
+        ...DEFAULT_USER_CONFIGURATION,
+        ...(state.userConfiguration[user.Id] ?? {}),
+      };
       return {
         status: 200,
         body: {
-          MediaSources: [sourceFor(item, media, profile, token, body)],
+          MediaSources: [sourceFor(item, media, profile, token, body, configuration)],
           PlaySessionId: playSessionFor(itemId),
           ErrorCode: null,
         },
@@ -118,10 +128,22 @@ function sourceFor(
   profile: Record<string, unknown>,
   token: string,
   body: Record<string, unknown>,
+  configuration: FakeUserConfiguration,
 ): Record<string, unknown> {
   const direct = directPlayAllowed(media, profile);
   const subProtocol = hlsWanted(profile) ? 'hls' : 'http';
   const startTicks = typeof body.StartTimeTicks === 'number' ? body.StartTimeTicks : 0;
+
+  // A client that named a track gets that track; otherwise the Server chooses,
+  // which is what the User's own configuration is for.
+  const audioIndex =
+    typeof body.AudioStreamIndex === 'number'
+      ? body.AudioStreamIndex
+      : chosenAudioIndex(item, configuration);
+  const subtitleIndex =
+    typeof body.SubtitleStreamIndex === 'number'
+      ? body.SubtitleStreamIndex
+      : chosenSubtitleIndex(item, configuration, audioIndex);
 
   return {
     Id: mediaSourceIdFor(item.Id),
@@ -133,8 +155,8 @@ function sourceFor(
     SupportsTranscoding: true,
     RunTimeTicks: item.RunTimeTicks ?? null,
     MediaStreams: item.MediaStreams ?? [],
-    DefaultAudioStreamIndex: defaultStreamIndex(item, 'Audio'),
-    DefaultSubtitleStreamIndex: defaultStreamIndex(item, 'Subtitle'),
+    DefaultAudioStreamIndex: audioIndex,
+    DefaultSubtitleStreamIndex: subtitleIndex,
     HasSegments: false,
     // Already parameterised and already carrying its own ApiKey, exactly as the
     // real Server's is, so a client that rebuilds it is doing it wrong.
@@ -218,11 +240,84 @@ function transcodingUrlFor(
     : `/Videos/${itemId}/stream.mp4?${common}`;
 }
 
-/** The stream the Server would pick for this User, as the real one answers. */
-function defaultStreamIndex(item: FakeItem, type: 'Audio' | 'Subtitle'): number | null {
-  const streams = item.MediaStreams ?? [];
-  const at = streams.findIndex((stream) => stream.Type === type);
-  return at === -1 ? null : at;
+/**
+ * Which tracks the Server starts a Title with (#27).
+ *
+ * **This is the Server's job, and that is the point of it being here.** A
+ * Jellyfin server applies `AudioLanguagePreference`,
+ * `SubtitleLanguagePreference` and `SubtitleMode` from the User's
+ * `UserConfiguration` when it answers `PlaybackInfo`, so every Jellyfin app
+ * starts the same Title with the same tracks without implementing the rule.
+ * Modelling it here is what lets a test prove Jellyflick reads the Server's
+ * answer rather than matching languages a second time in the client — a client
+ * that did would pass against a fake that always said "the first one".
+ *
+ * The rule is a faithful subset, not the whole of the real one, and the ways it
+ * is smaller are deliberate: `Smart` is approximated as "subtitles when the
+ * sound is not already in the preferred language", and the real Server's
+ * further tie-breaks (hearing-impaired tracks, external before embedded,
+ * per-Series remembered selections) are not modelled because nothing in this
+ * app reads them yet. Whoever needs one grows it here.
+ *
+ * An index returned is the stream's **own** `Index`, never its place in
+ * `MediaStreams`, which is what the real wire value is.
+ */
+function chosenAudioIndex(item: FakeItem, configuration: FakeUserConfiguration): number | null {
+  const audio = streamsOfType(item, 'Audio');
+  if (audio.length === 0) return null;
+
+  const preferred = languageOf(configuration.AudioLanguagePreference);
+  const wanted =
+    preferred === undefined
+      ? undefined
+      : audio.find((stream) => stream.Language === preferred);
+
+  const chosen = wanted ?? audio.find((stream) => stream.IsDefault === true) ?? audio[0];
+  return chosen?.Index ?? null;
+}
+
+function chosenSubtitleIndex(
+  item: FakeItem,
+  configuration: FakeUserConfiguration,
+  audioIndex: number | null,
+): number | null {
+  const subtitles = streamsOfType(item, 'Subtitle');
+  if (subtitles.length === 0) return null;
+
+  const mode = configuration.SubtitleMode ?? 'Default';
+  const preferred = languageOf(configuration.SubtitleLanguagePreference);
+  const inPreferred =
+    preferred === undefined
+      ? undefined
+      : subtitles.find((stream) => stream.Language === preferred);
+  const forced = subtitles.find((stream) => stream.IsForced === true);
+
+  switch (mode) {
+    case 'None':
+      return null;
+    case 'OnlyForced':
+      return forced?.Index ?? null;
+    case 'Always':
+      return (inPreferred ?? subtitles[0])?.Index ?? null;
+    case 'Smart': {
+      // The sound is already in the language they read: nothing to show.
+      const audio = streamsOfType(item, 'Audio').find((stream) => stream.Index === audioIndex);
+      if (preferred !== undefined && audio?.Language === preferred) return null;
+      return (inPreferred ?? forced)?.Index ?? null;
+    }
+    default:
+      // `Default`: whatever the *file* was marked with, and nothing otherwise.
+      return (forced ?? subtitles.find((stream) => stream.IsDefault === true))?.Index ?? null;
+  }
+}
+
+function streamsOfType(item: FakeItem, type: 'Audio' | 'Subtitle'): FakeMediaStream[] {
+  return (item.MediaStreams ?? []).filter((stream) => stream.Type === type);
+}
+
+/** A preference the Server stores as `''` or null means "no preference". */
+function languageOf(value: string | null | undefined): string | undefined {
+  return typeof value === 'string' && value !== '' ? value : undefined;
 }
 
 /** Whether a comma-separated profile field names a value. Empty means "any". */

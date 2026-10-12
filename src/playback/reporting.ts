@@ -67,6 +67,21 @@ export type PlaybackReporter = {
 export type PlaybackReporterOptions = {
   /** Milliseconds since the epoch. The device layer's clock, or a fixed one. */
   now: () => number;
+  /**
+   * The tracks playing *now*, when they are not the ones the plan was made
+   * with (#27).
+   *
+   * The sound cannot change without a new plan, but the subtitles can: a
+   * subtitle track is a separate file the app fetches and draws, so switching
+   * one deliberately never re-negotiates — and without this, nothing would
+   * ever correct the Server's own first answer. These two fields are what
+   * other Jellyfin apps see about this session (#34), so they have to say what
+   * the User is really watching and reading.
+   *
+   * Read on every report rather than captured, because the User can change
+   * one at any moment.
+   */
+  tracks?: () => { audioStreamIndex?: number; subtitleStreamIndex?: number };
 };
 
 export function createPlaybackReporter(
@@ -91,6 +106,15 @@ export function createPlaybackReporter(
   }
 
   function progressReport(positionSeconds: number, paused: boolean) {
+    // What is playing now, which is the plan's tracks until the player says
+    // otherwise — see the note on `tracks`.
+    const playing = options.tracks?.() ?? {
+      ...(plan.audioStreamIndex === undefined ? {} : { audioStreamIndex: plan.audioStreamIndex }),
+      ...(plan.subtitleStreamIndex === undefined
+        ? {}
+        : { subtitleStreamIndex: plan.subtitleStreamIndex }),
+    };
+
     return {
       ItemId: plan.itemId,
       PlaySessionId: plan.playSessionId,
@@ -100,12 +124,12 @@ export function createPlaybackReporter(
       IsPaused: paused,
       // Everything this app plays is a file or a seekable transcode.
       CanSeek: true,
-      ...(plan.audioStreamIndex === undefined
+      ...(playing.audioStreamIndex === undefined
         ? {}
-        : { AudioStreamIndex: plan.audioStreamIndex }),
-      ...(plan.subtitleStreamIndex === undefined
+        : { AudioStreamIndex: playing.audioStreamIndex }),
+      ...(playing.subtitleStreamIndex === undefined
         ? {}
-        : { SubtitleStreamIndex: plan.subtitleStreamIndex }),
+        : { SubtitleStreamIndex: playing.subtitleStreamIndex }),
     };
   }
 

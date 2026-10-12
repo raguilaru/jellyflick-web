@@ -91,7 +91,13 @@ export type FakeItem = {
   /** The community score, 0–10. The real Server omits it when it is not above zero. */
   CommunityRating?: number;
   People?: { Name: string; Type: string; Role?: string }[];
-  MediaStreams?: { Type: string; Language?: string; DisplayTitle?: string }[];
+  /**
+   * The tracks in the file. `Index` is the stream's **own** index, as the real
+   * Server's is, which is what `AudioStreamIndex` and `SubtitleStreamIndex`
+   * are set to — the picker (#27) and the subtitle route both read it, so a
+   * client that used a position in this array instead is caught.
+   */
+  MediaStreams?: FakeMediaStream[];
   /** One tag per backdrop. The array index is the image's `imageIndex`. */
   BackdropImageTags?: string[];
   /** Keyed by `MetadataProvider` member name: `Imdb`, `Tmdb`, … */
@@ -110,6 +116,23 @@ export type FakeItem = {
 
   /** The fake's own field: which library serves this item. */
   libraryId: string;
+};
+
+/**
+ * One track in a file, as `MediaStream` has it. `Codec` is the ffprobe name,
+ * and it is what tells a text subtitle from a graphical one
+ * (`jellyfin-playback.md` §14) — `subrip` is drawn by the app, `pgssub` is not.
+ */
+export type FakeMediaStream = {
+  Index: number;
+  /** A `MediaStreamType`: `Video`, `Audio` or `Subtitle`. */
+  Type: string;
+  Codec?: string;
+  Language?: string;
+  DisplayTitle?: string;
+  /** What the *file* was marked with, not what a User prefers. */
+  IsDefault?: boolean;
+  IsForced?: boolean;
 };
 
 /** What the Server says a file is, in the terms a DeviceProfile is matched in. */
@@ -286,6 +309,14 @@ export type FakeJellyfinState = {
    */
   failPlaybackReportsWith: number | null;
   /**
+   * A status the subtitle stream route answers with, so a test can see a
+   * Server that holds a subtitle track it will not hand over (#27). Null is
+   * the normal Server. It is separate from `failPlaybackInfoWith` because the
+   * two are a different thing to a User: a Title that will not play at all,
+   * against one that plays with nothing to read.
+   */
+  failSubtitleFetchWith: number | null;
+  /**
    * A status `AuthenticateByName` answers with whatever the credentials are, so
    * a test can see what a Server that is having a bad day looks like. Null is
    * the normal Server.
@@ -415,6 +446,7 @@ export function createSampleData(): FakeJellyfinState {
     failPlaybackInfoWith: null,
     playbackErrorCode: null,
     failPlaybackReportsWith: null,
+    failSubtitleFetchWith: null,
     failPlayedWritesWith: null,
     failRelatedQueriesWith: null,
     failDisplayPreferencesWith: null,
@@ -584,12 +616,16 @@ const SAMPLE_ITEMS: readonly FakeItem[] = [
       { Name: 'Jeremy Renner', Type: 'Actor', Role: 'Ian Donnelly' },
       { Name: 'Denis Villeneuve', Type: 'Director' },
     ],
+    // Two of each, which is what makes Arrival the Title the track picker
+    // (#27) is tested against. The indexes are the streams' **own**, as the
+    // real Server's are, and `AudioStreamIndex`/`SubtitleStreamIndex` are set
+    // to these rather than to a position in this array.
     MediaStreams: [
-      { Type: 'Video', Language: 'und' },
-      { Type: 'Audio', Language: 'eng', DisplayTitle: 'English' },
-      { Type: 'Audio', Language: 'fra', DisplayTitle: 'French' },
-      { Type: 'Subtitle', Language: 'eng', DisplayTitle: 'English' },
-      { Type: 'Subtitle', Language: 'spa', DisplayTitle: 'Spanish' },
+      { Index: 0, Type: 'Video', Codec: 'vp9', Language: 'und' },
+      { Index: 1, Type: 'Audio', Codec: 'opus', Language: 'eng', DisplayTitle: 'English', IsDefault: true },
+      { Index: 2, Type: 'Audio', Codec: 'opus', Language: 'fra', DisplayTitle: 'French' },
+      { Index: 3, Type: 'Subtitle', Codec: 'subrip', Language: 'eng', DisplayTitle: 'English' },
+      { Index: 4, Type: 'Subtitle', Codec: 'subrip', Language: 'spa', DisplayTitle: 'Spanish' },
     ],
     ProviderIds: { Imdb: 'tt2543164', Tmdb: '329865' },
     // VP9 in WebM: what the committed test video really is, so a browser can
@@ -619,7 +655,16 @@ const SAMPLE_ITEMS: readonly FakeItem[] = [
     Overview: 'A detective and a thief recognise each other.',
     CommunityRating: 8.3,
     People: [{ Name: 'Al Pacino', Type: 'Actor', Role: 'Vincent Hanna' }],
-    MediaStreams: [{ Type: 'Audio', Language: 'eng', DisplayTitle: 'English' }],
+    // A **graphical** subtitle track, which is the one kind this app cannot
+    // draw: `pgssub` is a Blu-ray bitmap, so #27's picker has to say so rather
+    // than offer a track that would show nothing, and #30 is where it becomes
+    // drawable. Heat is the right Title for it — a 4K Blu-ray rip is exactly
+    // where PGS comes from.
+    MediaStreams: [
+      { Index: 0, Type: 'Video', Codec: 'hevc', Language: 'und' },
+      { Index: 1, Type: 'Audio', Codec: 'eac3', Language: 'eng', DisplayTitle: 'English', IsDefault: true },
+      { Index: 2, Type: 'Subtitle', Codec: 'pgssub', Language: 'eng', DisplayTitle: 'English (PGS)' },
+    ],
     // 4K HEVC in Matroska with Dolby audio: the file nothing modest plays, so
     // the Server has to be asked to transcode it.
     media: { Container: 'mkv', VideoCodec: 'hevc', AudioCodec: 'eac3', Height: 2160 },
@@ -667,8 +712,8 @@ const SAMPLE_ITEMS: readonly FakeItem[] = [
     CommunityRating: 8.7,
     People: [{ Name: 'Adam Scott', Type: 'Actor', Role: 'Mark Scout' }],
     MediaStreams: [
-      { Type: 'Audio', Language: 'eng', DisplayTitle: 'English' },
-      { Type: 'Subtitle', Language: 'eng', DisplayTitle: 'English' },
+      { Index: 1, Type: 'Audio', Codec: 'aac', Language: 'eng', DisplayTitle: 'English', IsDefault: true },
+      { Index: 2, Type: 'Subtitle', Codec: 'subrip', Language: 'eng', DisplayTitle: 'English' },
     ],
     ProviderIds: { Imdb: 'tt11280740' },
     libraryId: 'lib-series',

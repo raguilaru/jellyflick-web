@@ -139,8 +139,16 @@ function moveFocus(direction: Direction): boolean {
  * and that a User cannot see — between the seek bar and the buttons under it,
  * where Up reached it. There is no `inert` to lean on at the Chromium 68 floor
  * (it is Chrome 102), so the flow a thing belongs to is which fixed thing it is
- * inside, and only once an overlay has nothing further that way does anything
- * outside it come into play.
+ * inside.
+ *
+ * **And an overlay has no fallback out of it** (#27). From the page, fixed
+ * chrome is reached once the page has run out that way; from inside an overlay,
+ * "nothing further that way" is the end of it. An overlay covers the screen, so
+ * anything outside it is something the User cannot see — #26 let the fallback
+ * apply in both directions, and on a phone that meant Right from the player's
+ * last button focused a card on the title page behind the picture. This is what
+ * makes "the arrow keys stay among the player's own controls with no focus
+ * trapping" true rather than nearly true.
  */
 function chooseCandidate(
   from: HTMLElement | undefined,
@@ -164,7 +172,18 @@ function chooseCandidate(
   const sameFlow = candidates.filter((item) => fixedRootOf(item) === flowHere);
   const otherFlow = candidates.filter((item) => fixedRootOf(item) !== flowHere);
 
-  for (const group of [sameFlow, otherFlow]) {
+  // From the page's own flow, fixed chrome is a fallback: the phone's bottom
+  // bar has to be reachable once the page has run out that way. **From inside
+  // an overlay there is no fallback at all**, which is the half of the rule
+  // #27 had to add. An overlay covers the screen, so everything outside it is
+  // invisible, and "nothing further that way" is the honest answer rather than
+  // a jump to something the User cannot see. Before this, Right from the
+  // player's last button on a phone focused a card on the title page *behind*
+  // the picture — the player's buttons sit in a column at that width, so there
+  // was nothing to the right inside it.
+  const groups = flowHere === undefined ? [sameFlow, otherFlow] : [sameFlow];
+
+  for (const group of groups) {
     const index = nearestInDirection(
       fromBox,
       group.map((item) => boxOf(item)),
