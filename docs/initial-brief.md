@@ -1,3 +1,5 @@
+_The original brief for the project, kept for history. Spec #1 and the ADRs in `docs/adr/` supersede it where they differ._
+
 # Project Jellyflick
 
 ## Constraints
