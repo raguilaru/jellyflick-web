@@ -79,6 +79,18 @@ _Avoid_: Resume row, Next Up (as a separate concept)
 The Row of the newest Titles across all libraries. A Series appears once, however many Episodes were added.
 _Avoid_: Recently Added, Latest, New Releases
 
+**Watch Again**:
+The Row of Titles the User has finished, the most recently finished first.
+_Avoid_: Rewatch, Watched, History
+
+**Genre Row**:
+A Row of the Titles in one genre the User chose. A User can have several, one per genre.
+_Avoid_: Category row, tag row
+
+**Collection Row**:
+A Row of the Titles in one Collection the User chose. A User can have several.
+_Avoid_: Franchise row, box set row
+
 **Title Label**:
 A short tag on a Title's card art saying what's new about it: Recently Added, New Season, or New Episodes.
 _Avoid_: Badge, tag, ribbon

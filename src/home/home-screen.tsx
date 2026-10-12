@@ -2,7 +2,7 @@ import { useTranslate } from '../i18n/index';
 import type { Session, SignedInUser } from '../session/session';
 import { HOME_LAYOUT_PATH } from '../settings/home-layout-screen';
 import { useSettings } from '../settings/settings-provider';
-import { visibleRows } from './home-layout';
+import { rowKeyOf, visibleRows } from './home-layout';
 import { HomeRowFor, isRowBuilt } from './home-rows';
 
 export type HomeScreenProps = {
@@ -38,9 +38,11 @@ export function HomeScreen({ user, session }: HomeScreenProps) {
       </p>
 
       {rows.map((row) => (
+        // Keyed by the Row's identity rather than its kind: a User can have
+        // several genre Rows, and two of them must not share a key.
         <HomeRowFor
-          key={row.kind}
-          kind={row.kind}
+          key={rowKeyOf(row)}
+          row={row}
           gateway={gateway}
           readKey={`${gateway.serverAddress}|${user.userId}`}
         />

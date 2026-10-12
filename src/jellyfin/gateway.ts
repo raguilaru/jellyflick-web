@@ -4,6 +4,7 @@ import type { BaseItemDtoQueryResult } from '@jellyfin/sdk/lib/generated-client/
 import type { DisplayPreferencesDto } from '@jellyfin/sdk/lib/generated-client/models/display-preferences-dto';
 import type { PublicSystemInfo } from '@jellyfin/sdk/lib/generated-client/models/public-system-info';
 import type { QuickConnectResult } from '@jellyfin/sdk/lib/generated-client/models/quick-connect-result';
+import type { RecommendationDto } from '@jellyfin/sdk/lib/generated-client/models/recommendation-dto';
 import type { UserConfiguration } from '@jellyfin/sdk/lib/generated-client/models/user-configuration';
 import type { UserDto } from '@jellyfin/sdk/lib/generated-client/models/user-dto';
 import type { UserItemDataDto } from '@jellyfin/sdk/lib/generated-client/models/user-item-data-dto';
@@ -191,6 +192,22 @@ export type JellyfinGateway = {
    */
   getPlayedEpisodes(options?: ContinueWatchingOptions): Promise<BaseItemDto[]>;
   /**
+   * `GET /Items?isPlayed=true&sortBy=DatePlayed` again, for the two kinds the
+   * app shows: the **Titles** this User has finished, most recently finished
+   * first, which is the Watch Again Row (#15, story 46).
+   *
+   * Deliberately not `getPlayedEpisodes` with another `includeItemTypes`: that
+   * one asks for no artwork at all, because nothing it answers is drawn, and a
+   * Row's cards are. A finished Episode is left to the Server to exclude — what
+   * a User rewatches is its Series, which Jellyfin marks played in its own
+   * right once every Episode has been.
+   *
+   * It is also what Because You Watched reads to find a Title to suggest from,
+   * so the Row that says "because you watched Severance" and the Row that
+   * offers Severance again agree about what was watched last.
+   */
+  getPlayedTitles(options?: ContinueWatchingOptions): Promise<BaseItemDto[]>;
+  /**
    * `GET /Items/{itemId}/Similar` — the Titles the Server thinks are like a
    * given one, which is the title page's More like this Row (#17).
    *
@@ -203,6 +220,39 @@ export type JellyfinGateway = {
    * A Title in none is an empty answer rather than a failure.
    */
   getCollectionsFor(itemId: string): Promise<BaseItemDto[]>;
+  /**
+   * `GET /Movies/Recommendations` — Jellyfin's own "because you watched" for
+   * films, which is what the Because You Watched Row reads for a Movie (#15,
+   * story 43).
+   *
+   * It is the odd one out twice over: it answers a **bare array** of
+   * `RecommendationDto` rather than a `BaseItemDtoQueryResult`, and each entry
+   * is a *category* — some Titles, plus the `BaselineItemName` saying which
+   * Title the Server suggested them from. That name is the only thing a Row
+   * saying "Because you watched Heat" can be built on.
+   *
+   * There is no equivalent for a Series: `/Items/{id}/Similar` is what answers
+   * for one, which is why the Row has two branches at all.
+   */
+  getMovieRecommendations(options?: MovieRecommendationsOptions): Promise<RecommendationDto[]>;
+  /**
+   * `GET /Items?includeItemTypes=BoxSet` — the Collections on the Server, in
+   * name order, which is what a User picks one of when they add a Collection
+   * Row (#15, story 45).
+   *
+   * A Collection is a `BoxSet`, so this is deliberately not `getTitles`: that
+   * one narrows to `Movie,Series` everywhere, and a BoxSet is neither.
+   */
+  getCollections(): Promise<BaseItemDto[]>;
+  /**
+   * `GET /Items?parentId={collectionId}` — the Titles in one Collection, which
+   * is the Collection Row itself.
+   *
+   * `recursive` is on and the kinds are narrowed as everywhere else, so a
+   * Collection that also holds a trailer or a stray video answers with the
+   * Titles alone.
+   */
+  getCollectionTitles(options: CollectionTitlesOptions): Promise<BaseItemDto[]>;
   /**
    * `POST /UserPlayedItems/{itemId}` — marks a Title watched (story 78). The
    * 12.x replacement for `/Users/{userId}/PlayedItems/{id}`, which is gone.
@@ -460,6 +510,19 @@ export type RecentAdditionsOptions = {
 
 export type SimilarTitlesOptions = {
   itemId: string;
+  limit?: number;
+};
+
+export type MovieRecommendationsOptions = {
+  /** How many categories the Server offers: how many Titles it suggests from. */
+  categoryLimit?: number;
+  /** How many Titles in each category, which is one Row's worth. */
+  itemLimit?: number;
+};
+
+export type CollectionTitlesOptions = {
+  /** The Collection's own item id, which is what a Home Layout stores. */
+  collectionId: string;
   limit?: number;
 };
 
@@ -778,6 +841,26 @@ export function createJellyfinGateway(options: JellyfinGatewayOptions): Jellyfin
         })}`,
       ).then((result) => result.Items ?? []),
 
+    getPlayedTitles: (options = {}) =>
+      request<BaseItemDtoQueryResult>(
+        'GET',
+        `/Items${query({
+          includeItemTypes: TITLE_ITEM_TYPES,
+          recursive: true,
+          isPlayed: true,
+          // When they were finished, most recent first, which is the order
+          // Watch Again offers them in.
+          sortBy: 'DatePlayed',
+          sortOrder: 'Descending',
+          // These are drawn as cards, unlike the Episodes beside them.
+          enableImageTypes: 'Primary',
+          imageTypeLimit: 1,
+          enableUserData: false,
+          enableTotalRecordCount: false,
+          ...(options.limit === undefined ? {} : { limit: options.limit }),
+        })}`,
+      ).then((result) => result.Items ?? []),
+
     getSimilarTitles: (options) =>
       request<BaseItemDtoQueryResult>(
         'GET',
@@ -800,6 +883,58 @@ export function createJellyfinGateway(options: JellyfinGatewayOptions): Jellyfin
           enableImageTypes: 'Primary',
           imageTypeLimit: 1,
           enableTotalRecordCount: false,
+        })}`,
+      ).then((result) => result.Items ?? []),
+
+    getMovieRecommendations: (options = {}) =>
+      // A bare array, not a query result: this endpoint is the odd one out.
+      request<RecommendationDto[]>(
+        'GET',
+        `/Movies/Recommendations${query({
+          // The categories are about Movies whatever is asked for, but saying
+          // so keeps the query honest about what the Row shows.
+          includeItemTypes: 'Movie',
+          enableImageTypes: 'Primary',
+          imageTypeLimit: 1,
+          enableUserData: false,
+          ...(options.categoryLimit === undefined
+            ? {}
+            : { categoryLimit: options.categoryLimit }),
+          ...(options.itemLimit === undefined ? {} : { itemLimit: options.itemLimit }),
+        })}`,
+      ),
+
+    getCollections: () =>
+      request<BaseItemDtoQueryResult>(
+        'GET',
+        `/Items${query({
+          // A Collection is a BoxSet, which is neither of the kinds every
+          // other query here narrows to.
+          includeItemTypes: 'BoxSet',
+          recursive: true,
+          sortBy: 'SortName',
+          sortOrder: 'Ascending',
+          enableImageTypes: 'Primary',
+          imageTypeLimit: 1,
+          enableUserData: false,
+          enableTotalRecordCount: false,
+        })}`,
+      ).then((result) => result.Items ?? []),
+
+    getCollectionTitles: (options) =>
+      request<BaseItemDtoQueryResult>(
+        'GET',
+        `/Items${query({
+          parentId: options.collectionId,
+          includeItemTypes: TITLE_ITEM_TYPES,
+          recursive: true,
+          sortBy: 'SortName',
+          sortOrder: 'Ascending',
+          enableImageTypes: 'Primary',
+          imageTypeLimit: 1,
+          enableUserData: false,
+          enableTotalRecordCount: false,
+          ...(options.limit === undefined ? {} : { limit: options.limit }),
         })}`,
       ).then((result) => result.Items ?? []),
 

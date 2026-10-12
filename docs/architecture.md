@@ -42,9 +42,10 @@ src/
                         drawn by what, `row.tsx` the Row, its card and
                         `cardForTitle`, `open-title.ts` what pressing a card
                         opens, one module per Row beside it —
-                        `new-on-jellyflick.ts`, and `continue-watching.ts`
-                        with the `-row.tsx` that draws it. The Billboard is
-                        still to come.
+                        `new-on-jellyflick.ts`, `continue-watching.ts`
+                        with the `-row.tsx` that draws it, and
+                        `suggestion-rows.ts` for the four of #15. The Billboard
+                        is still to come.
   i18n/                 `en.ts` is the key set, `es.ts` is typed against it.
   jellyfin/             The gateway: the only module that talks HTTP to the Server.
   my-list/              My List, which is Jellyfin's Favorites: `my-list.ts` is
@@ -255,6 +256,25 @@ is ordered by (#12), so a test that wants a household with a viewing history
 seeds both. `failUserItemDataWritesWith` makes
 `POST /UserItems/{itemId}/UserData` answer with a status, which is how a refused
 "take this off Continue Watching" is reached.
+
+`/Items` also answers two questions the suggestion Rows ask (#15). A query whose
+`includeItemTypes` is exactly `BoxSet` is answered from `state.collections`
+rather than from the items, because a Collection's membership is not a field on
+an item and so a Collection is not one either; and `parentId` means "inside this
+folder", which on this Server is either a library or a Collection. A `parentId`
+the Server does not have holds **nothing**, which is a real answer rather than
+an error: a Collection deleted on the Server leaves a Row with nothing in it.
+
+`/Movies/Recommendations` is `routes/movies.ts`, and it is the odd one out twice
+over — a **bare array** of `RecommendationDto`, each entry a *category* carrying
+`BaselineItemName`, the Title the Server suggested from. The fake serves one
+category per played Movie that `state.movieRecommendations` has an entry for,
+most recently played first, so which Title Because You Watched is about follows
+`state.played` and `state.lastPlayedDates` as it would on a real Server, and the
+Row's two branches can be told apart. It is seeded **empty**: a Server has no
+recommendations until a household has watched something, and seeding a relation
+would make "nothing to go on yet" unreachable. It goes quiet with
+`failRelatedQueriesWith`, alongside `/Items/{id}/Similar`.
 
 `/UserItems/Resume` and `/Shows/NextUp` are the Row's own two endpoints
 (`routes/user-items.ts` and `routes/shows.ts`). The fake models the two
@@ -489,23 +509,65 @@ belongs to a screen rather than a person.
   flagged in #10's editor, fixed in #11 rather than waited out in the tests.
 
 The Home Layout itself is `src/home/home-layout.ts`: an ordered list of Rows,
-each with a kind and an optional `hidden`, and the rules are pure functions of
-it (`addRow`, `hideRow`, `showRow`, `moveRow`, `visibleRows`,
-`addableRowKinds`). Hiding keeps a Row's place, so showing it again puts it
-back; adding appends; moving is clamped at the ends. A stored layout that cannot
-be read falls back to `DEFAULT_HOME_LAYOUT` rather than emptying Home, and an
-unknown kind is dropped on its own, so a layout written by a newer Jellyflick
-keeps the Rows this version understands. `parameter` is carried but unread —
-genre and Collection Rows (#15) need it and will not have to change the format.
+each with a kind, an optional `hidden` and an optional `parameter`, and the
+rules are pure functions of it (`addRow`, `hideRow`, `showRow`, `moveRow`,
+`visibleRows`, `addableRowKinds`, `parametersFor`). Hiding keeps a Row's place,
+so showing it again puts it back; adding appends; moving is clamped at the ends.
+A stored layout that cannot be read falls back to `DEFAULT_HOME_LAYOUT` rather
+than emptying Home, and an unknown kind is dropped on its own, so a layout
+written by a newer Jellyflick keeps the Rows this version understands.
+
+**A Row is identified by its kind *and* its parameter**, which is `rowKeyOf`
+(`'my-list'`, `'genre:Comedy'`), because a User can have several genre and
+Collection Rows — one per genre they like (#15, stories 44 and 45). Every rule
+above takes that key, and an unparameterised Row's key is simply its kind, so
+"one Continue Watching" and "one Comedy Row beside one Thriller Row" are one
+rule rather than two. The kinds that need a choice are `PARAMETERISED_ROW_KINDS`;
+they are **always** among `addableRowKinds`, because whether any choice is left
+is the Server's answer and not a layout's — the editor subtracts
+`parametersFor` from what the Server offers and is the one place that knows
+there is nothing left. A stored genre Row with no genre is dropped the way an
+unknown kind is: there is nothing to draw and nothing to guess.
 
 **Which Rows exist is `src/home/home-rows.tsx`**, not the layout: `ROW_NAME_KEYS`
-is a Row's name wherever it is shown, and `BUILT_ROW_KINDS` is the kinds whose
-feature exists. Home draws the visible rows whose kind is built and leaves the
-rest out — an empty Row would look like something that failed, and the editor
-says "Not on Home yet" in words instead. **Adding a Row's feature** (#12 Continue
-Watching, #15 the suggestion Rows) is: a loader beside `new-on-jellyflick.ts`, a
-case in `HomeRowFor`, and the kind in `BUILT_ROW_KINDS`. The layout already
-carries it — My List (#13) was added exactly that way.
+is a Row's name wherever the *app* names it, and `BUILT_ROW_KINDS` is the kinds
+whose feature exists. Home draws the visible rows whose kind is built and leaves
+the rest out — an empty Row would look like something that failed, and the editor
+says "Not on Home yet" in words instead. Every kind the layout names is built as
+of #15, and the list stays because the next kind will reach the layout before
+its loader does. **Adding a Row's feature** is: a loader beside
+`new-on-jellyflick.ts`, a case in `HomeRowFor`, and the kind in
+`BUILT_ROW_KINDS`. The layout already carries it — My List (#13) was added
+exactly that way.
+
+## The suggestion Rows
+
+`src/home/suggestion-rows.ts` is #15 and stories 43 to 46: Watch Again, Because
+You Watched, genre Rows and Collection Rows. One module, because they differ
+only in the question they ask the Server, and one `SuggestionRow` component in
+`home-rows.tsx` draws all four.
+
+- **Because You Watched is two endpoints, and which one answers is the ticket.**
+  Jellyfin has `/Movies/Recommendations` for films — its own "because you
+  watched", already grouped by the Title it came from — and nothing of the kind
+  for a Series, so a Series is asked `/Items/{id}/Similar` instead. The most
+  recently finished Title is the one suggested from, and the Row is named after
+  it either way, because "Because You Watched" with nothing after it tells a
+  User nothing. The Title watched is filtered out of its own suggestions:
+  `/Movies/Recommendations` can include it.
+- **`getPlayedTitles` serves two Rows**, so Watch Again and Because You Watched
+  cannot disagree about what was watched last. It is deliberately not
+  `getPlayedEpisodes` with other `includeItemTypes`: that one asks for no
+  artwork, because nothing it answers is drawn, and these cards are.
+- **A Collection Row stores an id and reads the name.** The layout holds the
+  Collection's item id, which is what survives it being renamed on the Server,
+  so the Row reads the Collections as well as the members and heads itself with
+  the name it finds. A Collection that is gone is an empty Row, not a failure.
+- **An empty Row draws nothing** and a Server that will not answer says so —
+  Continue Watching's bargain, for the same reasons.
+- **The heading is the Server's where the Server names it**: the genre, the
+  Collection, the Title a suggestion came from. `ROW_NAME_KEYS` is only what
+  the *editor* calls them, plus the Rows the app names itself.
 
 The editor, `src/settings/home-layout-screen.tsx`:
 
@@ -518,6 +580,17 @@ The editor, `src/settings/home-layout-screen.tsx`:
   arrow keys at once, and they are reachable because `src/navigation/` reaches
   anything focusable.
 - **There is no Save button**, so there is none to leave unpressed.
+- **Adding a genre or Collection Row is two presses**, because the Row means
+  nothing without the choice: the first opens the choices, and picking one is
+  what adds it. The choices are the Server's — `/Genres` and the BoxSets — read
+  once when the screen opens, which makes this the one settings screen that
+  reads the library. They are also how a Collection Row already in the layout
+  gets its name, since what is stored for one is an **id**: a Collection
+  renamed on the Server is renamed here. A choice list still in flight, or one
+  the Server refused, leaves the control offered and says what happened when it
+  is pressed, rather than appearing and vanishing under the User's hands. They
+  are buttons in a list, not a `<select>`, for the reason everything else here
+  is: a remote can reach a button.
 
 ## The settings screen, Accent Colour and language
 

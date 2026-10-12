@@ -4,27 +4,40 @@ import type { JellyfinGateway } from '../jellyfin/gateway';
 import { MyListToggle } from '../my-list/my-list-toggle';
 import { useMyList } from '../my-list/use-my-list';
 import { ContinueWatchingRow } from './continue-watching-row';
-import type { HomeRowKind } from './home-layout';
+import type { HomeRow, HomeRowKind } from './home-layout';
 import { loadNewOnJellyflick, type NewOnJellyflickResult } from './new-on-jellyflick';
 import { useOpenTitle } from './open-title';
 import { Row, type RowCard } from './row';
+import {
+  loadBecauseYouWatched,
+  loadCollectionRow,
+  loadGenreRow,
+  loadWatchAgain,
+  type SuggestionRowResult,
+} from './suggestion-rows';
 
 /**
  * Which Row each kind in a Home Layout is, and what draws it.
  *
- * The Home Layout can name a Row whose feature is not built yet — the
- * suggestion Rows are #15 — so Home draws
+ * The Home Layout can name a Row whose feature is not built yet, so Home draws
  * only the kinds in `BUILT_ROW_KINDS` and simply leaves the rest out. That is
  * deliberately not a placeholder: an empty Row on Home would look like
  * something that failed, whereas a Row that is not there yet is honest about
- * what the app does today. The Home Layout editor says so in words.
+ * what the app does today. The Home Layout editor says so in words. Every kind
+ * the layout names is built since #15; the list stays because the next kind to
+ * be added will arrive in the layout before its loader does.
  *
  * **Adding a Row's feature** is: a loader of its own beside
  * `new-on-jellyflick.ts`, a case in `HomeRowFor`, and the kind added to
  * `BUILT_ROW_KINDS`. Nothing else changes — the layout already carries it.
  */
 
-/** A Row's name, wherever it is shown: as its heading, and in the editor. */
+/**
+ * A Row's name where the app is what names it: in the editor, and on Home for
+ * the Rows that are not named after something of the Server's. A genre or
+ * Collection Row is headed by its own genre or Collection instead, which is
+ * `rowHeadingOf` below.
+ */
 export const ROW_NAME_KEYS: Readonly<Record<HomeRowKind, MessageKey>> = {
   'continue-watching': 'home.row.continueWatching',
   'my-list': 'home.row.myList',
@@ -32,6 +45,23 @@ export const ROW_NAME_KEYS: Readonly<Record<HomeRowKind, MessageKey>> = {
   'new-on-jellyflick': 'home.newOnJellyflick',
   'watch-again': 'home.row.watchAgain',
   'because-you-watched': 'home.row.becauseYouWatched',
+  genre: 'home.row.genre',
+  collection: 'home.row.collection',
+};
+
+/**
+ * What the editor calls the control that adds a Row needing a choice. A kind
+ * without one here is added by a press and needs nothing asking.
+ */
+export const ROW_CHOICE_KEYS: Readonly<Partial<Record<HomeRowKind, MessageKey>>> = {
+  genre: 'homeLayout.chooseGenre',
+  collection: 'homeLayout.chooseCollection',
+};
+
+/** The heading over the choices, once that control has been pressed. */
+export const ROW_CHOICE_HEADING_KEYS: Readonly<Partial<Record<HomeRowKind, MessageKey>>> = {
+  genre: 'homeLayout.chooseGenreHeading',
+  collection: 'homeLayout.chooseCollectionHeading',
 };
 
 /** The kinds whose feature exists, and so the ones Home can draw today. */
@@ -39,6 +69,10 @@ export const BUILT_ROW_KINDS: readonly HomeRowKind[] = [
   'continue-watching',
   'my-list',
   'new-on-jellyflick',
+  'watch-again',
+  'because-you-watched',
+  'genre',
+  'collection',
 ];
 
 /**
@@ -53,25 +87,153 @@ export function isRowBuilt(kind: HomeRowKind): boolean {
 }
 
 export type HomeRowProps = {
-  kind: HomeRowKind;
+  /**
+   * The Row as the layout holds it, not just its kind: a genre or Collection
+   * Row is only half itself without the choice it carries.
+   */
+  row: HomeRow;
   gateway: JellyfinGateway;
   /** Changes when the User or the Server does, so a Row reads itself again. */
   readKey: string;
 };
 
 /** One Row of Home, whichever kind it is. */
-export function HomeRowFor({ kind, gateway, readKey }: HomeRowProps) {
-  switch (kind) {
+export function HomeRowFor({ row, gateway, readKey }: HomeRowProps) {
+  const t = useTranslate();
+  const choice = row.parameter;
+
+  switch (row.kind) {
     case 'continue-watching':
       return <ContinueWatchingRow gateway={gateway} readKey={readKey} />;
     case 'my-list':
       return <MyListRow />;
     case 'new-on-jellyflick':
       return <NewOnJellyflickRow gateway={gateway} readKey={readKey} />;
+    case 'watch-again':
+      return (
+        <SuggestionRow
+          name="home.row.watchAgain"
+          readKey={readKey}
+          load={() => loadWatchAgain(gateway)}
+        />
+      );
+    case 'because-you-watched':
+      return (
+        <SuggestionRow
+          name="home.row.becauseYouWatched"
+          readKey={readKey}
+          load={() => loadBecauseYouWatched(gateway)}
+          // The Server says which Title it suggested from; the heading is the
+          // sentence that makes of it.
+          headingFrom={(title) => t('home.row.becauseYouWatchedTitle', { title })}
+        />
+      );
+    case 'genre':
+      // A Row the layout holds with no choice at all cannot be drawn.
+      // `parseHomeLayout` drops one on the way in, so this is only reachable
+      // through a layout built by hand in code.
+      if (choice === undefined) return null;
+      return (
+        <SuggestionRow
+          name="home.row.genre"
+          readKey={`${readKey}|${choice}`}
+          load={() => loadGenreRow(gateway, choice)}
+        />
+      );
+    case 'collection':
+      if (choice === undefined) return null;
+      return (
+        <SuggestionRow
+          name="home.row.collection"
+          readKey={`${readKey}|${choice}`}
+          load={() => loadCollectionRow(gateway, choice)}
+        />
+      );
     default:
       // A kind whose feature is not built yet. See the note above.
       return null;
   }
+}
+
+/**
+ * One of #15's Rows: ask the Server, draw what comes back (stories 43 to 46).
+ *
+ * The four of them differ in the question alone, which is the loader's, so
+ * there is one component over all of them rather than four that each read a
+ * little differently. Every rule about *which* Titles is in
+ * `suggestion-rows.ts`.
+ *
+ * - **An empty Row draws nothing**, as My List's and Continue Watching's do. A
+ *   User who has finished nothing, or whose genre holds one Title they have
+ *   since removed, is an ordinary state and not worth a notice on every visit.
+ * - **A Server that will not answer is worth saying**, because a Row that
+ *   quietly vanished would look like the app having lost something.
+ * - **The heading is the Server's where the Server names it** — the genre, the
+ *   Collection, the Title a suggestion came from — and the Row's own name
+ *   otherwise.
+ */
+function SuggestionRow({
+  name,
+  readKey,
+  load,
+  headingFrom,
+}: {
+  name: MessageKey;
+  readKey: string;
+  load: () => Promise<SuggestionRowResult>;
+  /**
+   * What to make of the name the Server gave the Row. Without one the Server's
+   * name *is* the heading, which is what a genre and a Collection want: the
+   * strip is headed "Comedy", not "Genre: Comedy".
+   */
+  headingFrom?: (fromServer: string) => string;
+}) {
+  const t = useTranslate();
+  const openTitle = useOpenTitle();
+  const [result, setResult] = useState<SuggestionRowResult | undefined>(undefined);
+
+  useEffect(() => {
+    let abandoned = false;
+    setResult(undefined);
+    void load().then((loaded) => {
+      if (abandoned) return;
+      setResult(loaded);
+    });
+    return () => {
+      abandoned = true;
+    };
+    // The gateway is rebuilt on every render, so what the Row is *about* — the
+    // Server, the User and the choice — is the dependency.
+  }, [readKey]);
+
+  if (result === undefined) return <p class="notice">{t('home.rowLoading')}</p>;
+  if (result.outcome === 'unavailable') {
+    return (
+      <p class="notice notice--problem" role="alert">
+        {t('home.row.unavailable', { row: t(name) })}
+      </p>
+    );
+  }
+  if (result.titles.length === 0) return null;
+
+  // The name the Server gave the Row, as this Row reads it, and the Row's own
+  // name when the Server gave it none.
+  const fromServer = result.heading;
+  const heading =
+    fromServer === undefined
+      ? t(name)
+      : headingFrom === undefined
+        ? fromServer
+        : headingFrom(fromServer);
+
+  return (
+    <Row
+      heading={heading}
+      cards={result.titles}
+      onCardPress={openTitle}
+      cardControl={myListControl}
+    />
+  );
 }
 
 /**
