@@ -349,18 +349,33 @@ function itemFrom(
 }
 
 /**
- * When this entry was last touched: its own last-played date, or its Series'
- * when it has none — a next-up Episode nobody has played. Zero when nothing
- * says, which sorts it to the end of the Row in the order the Server answered.
+ * When this entry was last touched.
+ *
+ * For a Movie that is its own last-played date. For anything belonging to a
+ * Series it is the **Series'** most recent activity — the later of the
+ * Episode's own date and the newest played Episode of the show — and taking
+ * the later of the two rather than just the Episode's is load-bearing twice
+ * over:
+ *
+ * - a next-up Episode has never been played and has no date at all, so its
+ *   Series' is the only thing to order it by;
+ * - and hiding a Series stores this number, while the *next* load compares the
+ *   Series' activity against it. Were the two different measures, hiding a
+ *   part-watched Episode of a show with newer activity elsewhere — an abandoned
+ *   Episode 5 and a rewatched Episode 1 — would store the older of the two and
+ *   the Series would come straight back on the next load, taking its own
+ *   hidden record with it.
+ *
+ * Zero when nothing says anything, which sorts the entry to the end of the Row
+ * in the order the Server answered.
  */
 function activityOf(
   lastPlayedAt: number | undefined,
   seriesId: string | undefined,
   lastWatched: ReadonlyMap<string, number>,
 ): number {
-  if (lastPlayedAt !== undefined) return lastPlayedAt;
-  if (seriesId === undefined) return 0;
-  return lastWatched.get(seriesId) ?? 0;
+  const series = seriesId === undefined ? undefined : lastWatched.get(seriesId);
+  return Math.max(lastPlayedAt ?? 0, series ?? 0);
 }
 
 /**

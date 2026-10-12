@@ -24,6 +24,9 @@ const ticks = (minutes: number) => minutes * 60 * 10_000_000;
 /** A household that is part-way through Heat and watching Severance. */
 const WATCHING = {
   playbackPositions: { 'user-rafael': { 'movie-heat': ticks(42) } },
+  // Heat has been started twice, so "the play count is left alone" is a number
+  // a test can watch rather than a zero that would prove nothing.
+  playCounts: { 'user-rafael': { 'movie-heat': 2 } },
   played: { 'user-rafael': ['episode-severance-s2e3'] },
   lastPlayedDates: {
     'user-rafael': {
@@ -75,6 +78,7 @@ function progress(): (string | null)[] {
 
 async function storedState(): Promise<{
   playbackPositions: Record<string, Record<string, number>>;
+  playCounts: Record<string, Record<string, number>>;
   played: Record<string, string[]>;
   displayPreferences: Record<string, Record<string, string | null>>;
 }> {
@@ -126,7 +130,52 @@ describe('a household picking up where it left off', () => {
       // touched: story 37's "my watch history stays as it is".
       expect(state.playbackPositions['user-rafael']?.['movie-heat']).toBe(0);
       expect(state.played['user-rafael']).toEqual(['episode-severance-s2e3']);
+      // And the play count, which is the other half of story 37's promise.
+      expect(state.playCounts['user-rafael']?.['movie-heat']).toBe(2);
     });
+  });
+
+  it('puts a part-watched Episode’s card back, and un-hides its Series, when the write fails', async () => {
+    // Both halves of the removal are taken back, or the card could not come
+    // back at all: the Series would still be hidden while the Row said the
+    // change had failed.
+    // Severance's next Episode is part-watched, so removing it is the case
+    // that writes to both the Server and the User's own list.
+    await setFakeState({
+      ...WATCHING,
+      playbackPositions: { 'user-rafael': { 'episode-severance-s2e4': ticks(5) } },
+      failUserItemDataWritesWith: 500,
+    });
+    await signInAndLand();
+    await waitFor(() => expect(cardNames()).toEqual(['Severance']));
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Remove Severance from Continue Watching' }),
+    );
+
+    await screen.findByText('Jellyflick could not save that change on the Server.');
+    await waitFor(() => expect(cardNames()).toEqual(['Severance']));
+    await waitFor(async () => {
+      const state = await storedState();
+      expect(state.displayPreferences[PREFS_KEY]?.['jf.hiddenSeries']).toBe('[]');
+    });
+  });
+
+  it('does not claim the User’s own change failed when another screen’s save did', async () => {
+    // `saveFailed` belongs to the settings store, which every screen that
+    // writes a setting shares — so the Row has to mean *its* writes by it.
+    await setFakeState({ ...WATCHING, failDisplayPreferencesWith: 500 });
+    await signInAndLand();
+    await waitFor(() => expect(cardNames()).toEqual(['Severance', 'Heat']));
+
+    fireEvent.click(await screen.findByRole('link', { name: 'Edit Home' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Hide My List' }));
+    fireEvent.click(await screen.findByRole('link', { name: 'Done' }));
+
+    await waitFor(() => expect(cardNames()).toEqual(['Severance', 'Heat']));
+    expect(
+      screen.queryByText('Jellyflick could not save that change on the Server.'),
+    ).toBeNull();
   });
 
   it('puts the card back and says so when the Server will not record the change', async () => {

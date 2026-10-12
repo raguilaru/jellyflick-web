@@ -211,6 +211,19 @@ export type FakeJellyfinState = {
    */
   playbackPositions: Record<string, Record<string, number>>;
   /**
+   * How many times each User has played each item, by user id then item id —
+   * `UserData.PlayCount`. The **start** report increments it, as the real
+   * Server does, and nothing else touches it: that is what makes "taking
+   * something out of Continue Watching leaves the play count alone" (story 37)
+   * a thing a test can hold, rather than a number derived from the resume
+   * point that would fall to zero the moment the point was cleared.
+   *
+   * Seeded empty. A User the sample data says has *played* something and has no
+   * count stored is served a count of one, which is the least a played item can
+   * have.
+   */
+  playCounts: Record<string, Record<string, number>>;
+  /**
    * When each User last played each item, by user id then item id, as the ISO
    * strings `UserData.LastPlayedDate` is served from — which is what Continue
    * Watching is ordered by (#12). The playback reports write it, as the real
@@ -384,6 +397,7 @@ export function createSampleData(): FakeJellyfinState {
     favourites: {},
     played: {},
     playbackPositions: {},
+    playCounts: {},
     lastPlayedDates: {},
     failUserItemDataWritesWith: null,
     failPlaybackInfoWith: null,

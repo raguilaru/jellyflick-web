@@ -262,6 +262,37 @@ describe('a Series the User has taken out of Continue Watching', () => {
     expect(row.hiddenToForget).toEqual(['series-severance']);
   });
 
+  it('stays hidden when the Series was last watched through a different Episode', () => {
+    // The bug the first code review found. Episode 5 was abandoned on the
+    // 10th, Episode 1 rewatched on the 14th: the entry that was hidden carries
+    // the 10th, and the next load reads the Series' activity as the 14th. With
+    // the two measured differently, hiding lasted exactly one load.
+    const abandoned = merge({
+      resume: [episode('x-s1e5', 'series-x', { positionTicks: ticks(5), playedAt: '2026-06-10T09:00:00Z' })],
+      nextUp: [],
+      playedEpisodes: [
+        episode('x-s1e1', 'series-x', { played: true, playedAt: '2026-06-14T09:00:00Z' }),
+      ],
+    });
+    // An entry of a Series is placed by the Series' own most recent activity.
+    expect(abandoned.items[0]?.activityAt).toBe(AT('2026-06-14T09:00:00Z'));
+
+    const hiddenThen: readonly HiddenSeries[] = [
+      { seriesId: 'series-x', hiddenAt: abandoned.items[0]?.activityAt ?? 0 },
+    ];
+    const afterHiding = merge({
+      resume: [],
+      nextUp: [episode('x-s1e5', 'series-x')],
+      playedEpisodes: [
+        episode('x-s1e1', 'series-x', { played: true, playedAt: '2026-06-14T09:00:00Z' }),
+      ],
+      hidden: hiddenThen,
+    });
+
+    expect(afterHiding.items).toEqual([]);
+    expect(afterHiding.hiddenToForget).toEqual([]);
+  });
+
   it('stays out of the way of every other Series', () => {
     expect(
       titleIds({

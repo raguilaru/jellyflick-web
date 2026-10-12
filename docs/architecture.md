@@ -40,7 +40,8 @@ src/
   home/                 Where a signed-in User lands: `home-layout.ts` is which
                         Rows and in what order, `home-rows.tsx` which kind is
                         drawn by what, `row.tsx` the Row, its card and
-                        `cardForTitle`, one module per Row beside it —
+                        `cardForTitle`, `open-title.ts` what pressing a card
+                        opens, one module per Row beside it —
                         `new-on-jellyflick.ts`, and `continue-watching.ts`
                         with the `-row.tsx` that draws it. The Billboard is
                         still to come.
@@ -244,7 +245,11 @@ and `playbackErrorCode` makes `PlaybackInfo` answer with a `PlaybackErrorCode`
 and no playable source — which is a healthy Server refusing, not a failure.
 `state.playbackPositions` is `UserData.PlaybackPositionTicks` per User, written
 by the progress and stop reports, so a test can watch a resume point arrive and
-then be honoured. `state.lastPlayedDates` is `UserData.LastPlayedDate` beside
+then be honoured. `state.playCounts` is `UserData.PlayCount`,
+incremented by the **start** report alone and never derived from the position —
+a count worked out from the resume point would fall to zero the moment a client
+cleared it, which is the opposite of story 37 and would make the promise
+untestable. `state.lastPlayedDates` is `UserData.LastPlayedDate` beside
 it, written by the same reports and seeded empty — it is what Continue Watching
 is ordered by (#12), so a test that wants a household with a viewing history
 seeds both. `failUserItemDataWritesWith` makes
@@ -702,6 +707,27 @@ the first file, as a pure function of what the Server said.
   is **spent** once the Series is shown again, and the Row writes it off the
   list: leaving it would hide the Series a second time the next time its next
   Episode came round.
+- **An entry's activity is its *Series'*, not its own**, and the first code
+  review found out why the hard way. Hiding stores that number and the next
+  load compares the Series' activity against it, so the two have to be the same
+  measure: with an Episode's own date stored, hiding a part-watched Episode of
+  a show with newer activity elsewhere — Episode 5 abandoned on the 10th,
+  Episode 1 rewatched on the 14th — lasted exactly one load, and took its own
+  record with it when it went.
+- **Both halves of a removal are taken back together.** A part-watched Episode
+  hides its Series *and* clears its resume point; when the Server refuses the
+  second, the first is undone as well. Otherwise the card could not come back —
+  the Series would still be hidden — and the Row would be reporting a failure
+  the screen showed as done.
+- **Every write to the hidden list is computed from a ref, not from the
+  render's `settings.hiddenSeries`.** `change` applies behind the screen, so two
+  writes in one tick (the prune and a press, or two presses) would both start
+  from the array that render saw and the second would drop the first's record.
+- **`saveFailed` is the settings store's, so the Row has to mean its own.** The
+  provider is shared with every screen that writes a setting: without a local
+  "the User pressed something here" flag, a failed save in the Home Layout
+  editor would have Continue Watching claiming the User's own change had not
+  been saved on the way back to Home.
 - **The Row holds the Server's answer, not the merged entries.** Hiding has to
   show at once, and the merge is cheap and pure, so it is run on every render
   against the User's current list — with what they have just removed kept
@@ -1190,8 +1216,10 @@ it is a key.
   width. Search and New on Jellyflick both use it; a new Row should too rather
   than build an image URL of its own.
 - **Opening a result opens its title page** (#17), which is the same handler
-  every Row on Home passes — `useOpenTitle` in `src/home/home-rows.tsx`, where
-  Home already decided what a card offers.
+  every Row on Home passes — `useOpenTitle`, in `src/home/open-title.ts` since
+  #12: it used to live in `home-rows.tsx`, which each Row's own module then had
+  to import back from the file that imports *them*, and a cycle like that works
+  only until one of the two grows something evaluated at import time.
 
 ## Chromium 68 constraints that will bite
 

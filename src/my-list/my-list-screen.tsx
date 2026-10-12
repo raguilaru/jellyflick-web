@@ -1,5 +1,5 @@
 import { useTranslate } from '../i18n/index';
-import { useOpenTitle } from '../home/home-rows';
+import { useOpenTitle } from '../home/open-title';
 import { CardArtwork } from '../home/row';
 import { MyListToggle } from './my-list-toggle';
 import { useMyList } from './use-my-list';

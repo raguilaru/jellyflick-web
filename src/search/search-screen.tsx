@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { useOpenTitle } from '../home/home-rows';
+import { useOpenTitle } from '../home/open-title';
 import { Row } from '../home/row';
 import { useTranslate } from '../i18n/index';
 import { FOCUSABLE_SELECTOR, groupOf, tabStopIn } from '../navigation/focusable';

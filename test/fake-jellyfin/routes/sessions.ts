@@ -53,7 +53,9 @@ export const sessionRoutes: readonly FakeRoute[] = [
   {
     method: 'POST',
     path: '/Sessions/Playing',
-    handle: (request, state) => reportFrom(request, state, { remembersPosition: false }),
+    handle: (request, state) =>
+      // Starting playback is what the Server counts as a play.
+      reportFrom(request, state, { remembersPosition: false, countsAPlay: true }),
   },
   {
     method: 'POST',
@@ -100,7 +102,7 @@ export const sessionRoutes: readonly FakeRoute[] = [
 function reportFrom(
   request: FakeRequest,
   state: FakeJellyfinState,
-  options: { remembersPosition: boolean },
+  options: { remembersPosition: boolean; countsAPlay?: boolean },
 ): FakeResponse {
   const user = userForToken(request.headers.authorization ?? '', state);
   if (user === undefined) {
@@ -132,6 +134,12 @@ function reportFrom(
     const forUser = state.playbackPositions[user.Id] ?? {};
     forUser[itemId] = body.PositionTicks;
     state.playbackPositions[user.Id] = forUser;
+  }
+
+  if (options.countsAPlay === true) {
+    const counted = state.playCounts[user.Id] ?? {};
+    counted[itemId] = (counted[itemId] ?? 0) + 1;
+    state.playCounts[user.Id] = counted;
   }
 
   // Playing something is the only thing that sets `LastPlayedDate` on the real

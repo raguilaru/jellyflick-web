@@ -356,7 +356,10 @@ export function userDataFor(
     ItemId: item.Id,
     Played: played,
     IsFavorite: (state.favourites[userId] ?? []).includes(item.Id),
-    PlayCount: played || positionTicks > 0 ? 1 : 0,
+    // What the Server counted, not something worked out from the resume point:
+    // clearing a position must not change how many times a User has played
+    // something (story 37).
+    PlayCount: state.playCounts[userId]?.[item.Id] ?? (played ? 1 : 0),
     // Where this User got to, which is the resume point (#25). The real
     // Server sends 0 for an item nobody has started, never nothing.
     PlaybackPositionTicks: positionTicks,

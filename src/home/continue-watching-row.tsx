@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { useTranslate } from '../i18n/index';
 import type { JellyfinGateway } from '../jellyfin/gateway';
 import { MyListToggle } from '../my-list/my-list-toggle';
@@ -10,8 +10,9 @@ import {
   withoutHiddenSeries,
   type ContinueWatchingEntry,
   type ContinueWatchingRead,
+  type HiddenSeries,
 } from './continue-watching';
-import { useOpenTitle } from './home-rows';
+import { useOpenTitle } from './open-title';
 import { Row, type RowCard } from './row';
 
 /**
@@ -47,6 +48,31 @@ export function ContinueWatchingRow({ gateway, readKey }: ContinueWatchingRowPro
    */
   const [removed, setRemoved] = useState<readonly string[]>([]);
   const [resetFailed, setResetFailed] = useState(false);
+  /**
+   * Whether the User has pressed anything on *this* Row. The settings store's
+   * `saveFailed` is shared with every other screen that writes a setting, so
+   * without this the Row would tell a User their Continue Watching change had
+   * not been saved when what failed was the Home Layout editor's save on the
+   * way here.
+   */
+  const [changedHere, setChangedHere] = useState(false);
+
+  /**
+   * The hidden list as it stands, which is **not** `settings.hiddenSeries`
+   * during a render that has already written to it: `change` applies behind
+   * the screen, so two writes in one tick — the prune below and a press on a
+   * card, or two presses — would otherwise both start from the same array and
+   * the second would drop the first's record.
+   */
+  const hidden = useRef(settings.hiddenSeries);
+  useEffect(() => {
+    hidden.current = settings.hiddenSeries;
+  }, [settings.hiddenSeries]);
+
+  const changeHidden = (next: readonly HiddenSeries[]): void => {
+    hidden.current = next;
+    change({ hiddenSeries: next });
+  };
 
   useEffect(() => {
     let abandoned = false;
@@ -82,24 +108,24 @@ export function ContinueWatchingRow({ gateway, readKey }: ContinueWatchingRowPro
   const spentKey = spent.join('|');
   useEffect(() => {
     if (spentKey === '') return;
-    change({ hiddenSeries: withoutHiddenSeries(settings.hiddenSeries, spentKey.split('|')) });
+    changeHidden(withoutHiddenSeries(hidden.current, spentKey.split('|')));
     // Keyed by the records themselves rather than by the array, which is a new
     // object on every render.
   }, [spentKey]);
 
   const remove = (entry: ContinueWatchingEntry): void => {
+    setChangedHere(true);
+
     // A Series goes on the User's own list, so its next Episode stops being
     // offered until they play another one (stories 38 and 39). An Episode's own
     // resume point is the Server's, below: both happen for a part-watched
     // Episode, because clearing the point alone would leave the Server offering
     // that very Episode as the one to watch next.
-    if (entry.seriesId !== undefined) {
-      change({
-        hiddenSeries: withHiddenSeries(settings.hiddenSeries, {
-          seriesId: entry.seriesId,
-          hiddenAt: entry.activityAt,
-        }),
-      });
+    const seriesId = entry.seriesId;
+    if (seriesId !== undefined) {
+      changeHidden(
+        withHiddenSeries(hidden.current, { seriesId, hiddenAt: entry.activityAt }),
+      );
     }
 
     if (!entry.resumable) return;
@@ -112,8 +138,14 @@ export function ContinueWatchingRow({ gateway, readKey }: ContinueWatchingRowPro
       .saveUserItemData({ itemId: entry.itemId, playbackPositionTicks: 0 })
       .catch(() => {
         // A change that reverted itself silently would look like the app losing
-        // track, so the card comes back and the Row says why.
+        // track, so the card comes back and the Row says why — and **both**
+        // halves are taken back, or an Episode's card could not come back at
+        // all: the Series would still be hidden, and the Row would be saying a
+        // change had failed while the screen showed it as done.
         setRemoved((taken) => taken.filter((itemId) => itemId !== entry.itemId));
+        if (seriesId !== undefined) {
+          changeHidden(withoutHiddenSeries(hidden.current, [seriesId]));
+        }
         setResetFailed(true);
       });
   };
@@ -128,7 +160,9 @@ export function ContinueWatchingRow({ gateway, readKey }: ContinueWatchingRowPro
   }
 
   const entries = row?.entries ?? [];
-  const unsaved = resetFailed || saveFailed;
+  // Only this Row's own failures: `saveFailed` belongs to the settings store,
+  // which every screen that writes a setting shares.
+  const unsaved = resetFailed || (changedHere && saveFailed);
   // Nothing to carry on with draws no Row — but a failed write still has
   // something to say, even if it was the last card on the Row.
   if (entries.length === 0 && !unsaved) return null;
