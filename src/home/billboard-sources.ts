@@ -3,8 +3,9 @@ import type { JellyfinGateway } from '../jellyfin/gateway';
 import { spotlightPick } from './spotlight';
 
 /**
- * The Billboard: the one Title featured at the top of Home (#16, stories 22 to
- * 33).
+ * What the Billboard reads from the Server (#16, stories 22 to 33): the Title
+ * it features, and the trailer it can play over the backdrop. `billboard.tsx`
+ * is what a User sees.
  *
  * **What picks that Title is the Billboard Source**, and this module is the
  * seam the Sources sit behind. Spotlight is the default and the only one built

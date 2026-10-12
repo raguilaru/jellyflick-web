@@ -102,6 +102,16 @@ export const es: Messages = {
   'continueWatching.unsaved': 'Jellyflick no pudo guardar ese cambio en el servidor.',
   'continueWatching.remove': (p) => `Quitar ${p.name} de Seguir viendo`,
 
+  'billboard.region': 'Destacado',
+  'billboard.play': 'Reproducir',
+  'billboard.moreInfo': 'Más información',
+  'billboard.unavailable':
+    'Jellyflick no pudo leer del servidor ningún título para destacar.',
+  'billboard.unmute': 'Activar el sonido del tráiler',
+  'billboard.mute': 'Silenciar el tráiler',
+  'billboard.pauseTrailer': 'Pausar el tráiler',
+  'billboard.playTrailer': 'Reproducir el tráiler',
+
   'home.newOnJellyflick': 'Novedades en Jellyflick',
   'home.newOnJellyflick.empty': 'Todavía no se ha añadido nada a tus bibliotecas.',
   'home.newOnJellyflick.unavailable': 'Jellyflick no pudo leer las novedades del servidor.',
@@ -209,6 +219,12 @@ export const es: Messages = {
   'settings.spoken.por': 'Portugués',
   'settings.spoken.jpn': 'Japonés',
   'settings.spoken.kor': 'Coreano',
+
+  'settings.billboardTrailerHeading': 'El tráiler del destacado',
+  'settings.billboardTrailerExplanation':
+    'Inicio puede reproducir solo el tráiler del título destacado, sin sonido. Al desactivarlo se ahorran datos y memoria, y se muestra la imagen de fondo.',
+  'settings.billboardTrailer.autoPlay': 'Reproducirlo automáticamente',
+  'settings.billboardTrailer.off': 'Mostrar solo la imagen de fondo',
 
   'settings.homeHeading': 'Inicio',
   'settings.homeExplanation': 'Elige las filas de tu Inicio y el orden en que aparecen.',

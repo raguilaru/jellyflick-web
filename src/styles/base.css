@@ -239,6 +239,179 @@ body {
 }
 
 /*
+ * The Billboard: one Title at the top of Home, large (#16, stories 22 to 27).
+ *
+ * It is a stack — the backdrop, then the trailer over it, then a scrim, then
+ * the words — built with `position: absolute` and an explicit `top`/`right`/
+ * `bottom`/`left` rather than the `inset` shorthand, which is Chrome 87 and
+ * ships raw past the minifier. Its height is a `clamp()`, which is downleveled,
+ * rather than `aspect-ratio`, which is Chrome 88; `vh` rather than `dvh`, which
+ * ADR 0002 bans. `object-fit` is Chrome 32 and safe.
+ *
+ * The negative margin is exactly `.screen`'s padding, so the backdrop bleeds to
+ * the edges of the window while everything inside stays lined up with the Rows
+ * below. It is the one thing on Home that is not inset.
+ */
+.billboard {
+  position: relative;
+  display: grid;
+  align-content: end;
+  min-height: clamp(320px, 52vw, 620px);
+  margin: calc(var(--space-4) * -1);
+  margin-bottom: var(--space-4);
+  padding: var(--space-5) var(--space-4) var(--space-4);
+  overflow: hidden;
+}
+
+.billboard__backdrop,
+.billboard__trailer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  /* Fills the box however the Server's artwork is shaped. */
+  object-fit: cover;
+  /* Nothing of the page behind shows through a gap while artwork loads. */
+  background: var(--surface-raised);
+}
+
+/* Over the backdrop, which stays underneath so there is never an empty box. */
+.billboard__trailer {
+  z-index: 1;
+}
+
+/*
+ * The scrim that keeps the words readable over any artwork. A gradient rather
+ * than `backdrop-filter`, which is Chrome 76 and above the floor.
+ */
+.billboard::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 2;
+  /* Decoration: it must never swallow a press meant for what is under it. */
+  pointer-events: none;
+  background:
+    linear-gradient(
+      to top,
+      rgb(11 11 13 / 95%) 0%,
+      rgb(11 11 13 / 70%) 35%,
+      rgb(11 11 13 / 10%) 75%,
+      rgb(11 11 13 / 0%) 100%
+    );
+}
+
+.billboard__words {
+  position: relative;
+  /* Above the scrim, which is above the artwork. */
+  z-index: 3;
+  display: grid;
+  justify-items: start;
+  gap: var(--space-3);
+  /* A readable measure: a description the width of a television is unreadable. */
+  max-width: min(100%, 46rem);
+}
+
+.billboard__title {
+  margin: 0;
+}
+
+/*
+ * The Title's own logo, as artwork. A height in `em` so a wide logo and a tall
+ * one both sit on the same line as the words below them.
+ */
+.billboard__logo {
+  display: block;
+  max-width: min(100%, 420px);
+  max-height: 160px;
+  width: auto;
+  height: auto;
+}
+
+/*
+ * The Title's name when the Server has no logo for it: the logo font, so the
+ * heading reads as artwork rather than as a heading whose image failed. Bebas
+ * Neue has one weight, so size and spacing are what make it loud.
+ */
+.billboard__name {
+  display: block;
+  font-family: var(--font-display);
+  font-size: clamp(40px, 7vw, 86px);
+  line-height: 1;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.billboard__rating {
+  margin: 0;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.billboard__overview {
+  margin: 0;
+  color: var(--text-strong);
+}
+
+/* Grid, so `gap` is the Chrome 66 one rather than the Chrome 84 flex one. */
+.billboard__actions {
+  margin: 0;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
+  justify-content: start;
+  gap: var(--space-2);
+}
+
+/*
+ * The trailer's sound and pause controls, in the corner away from the words.
+ * Above the scrim with the words, because they are things to press.
+ */
+.billboard__trailer-controls {
+  position: absolute;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  z-index: 3;
+  margin: 0;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
+  gap: var(--space-2);
+}
+
+/* A phone has no room for a Billboard this tall, nor for a wide logo. */
+@media (max-width: 599px) {
+  .billboard {
+    min-height: 420px;
+  }
+
+  .billboard__logo {
+    max-height: 96px;
+  }
+
+  /*
+   * The controls move under the words rather than over them: at this width
+   * they would otherwise sit on top of the buttons. `order` puts them after
+   * the words whatever the document order is, so the trailer's element can go
+   * on being drawn before them.
+   */
+  .billboard__trailer-controls {
+    position: static;
+    order: 1;
+    justify-content: start;
+  }
+}
+
+/*
  * A Row and its cards.
  *
  * Grid throughout, so `gap` is the Chrome 66 one and not the Chrome 84 flex

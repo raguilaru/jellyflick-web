@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { loadBillboard, loadBillboardTrailer } from '../../src/home/billboard';
+import { loadBillboard, loadBillboardTrailer } from '../../src/home/billboard-sources';
 import { createJellyfinGateway, type JellyfinGateway } from '../../src/jellyfin/gateway';
 import {
   fakeRequests,

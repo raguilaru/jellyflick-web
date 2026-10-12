@@ -8,8 +8,9 @@ import { SPOKEN_LANGUAGES, SUBTITLE_MODES } from './spoken-languages';
 import { deviceLocaleFor, uiLocaleFor } from './ui-language';
 
 /**
- * The settings screen: a User's Accent Colour and the language the app is in
- * (stories 112 and 113), with the way to their Home Layout beside them.
+ * The settings screen: a User's Accent Colour, the language the app is in and
+ * whether the Billboard plays a trailer (stories 112, 113 and 27), with the way
+ * to their Home Layout beside them.
  *
  * **Its address is not a section**, the same way the Home Layout editor's is
  * not: `src/shell/sections.ts` is the list of sections and this is not one of
@@ -32,9 +33,11 @@ import { deviceLocaleFor, uiLocaleFor } from './ui-language';
  * "Match my device" to a User who has chosen neither — and a press then would
  * save those defaults over their real settings.
  *
- * **Two stores, said apart in words.** The Accent Colour, the UI language and
- * the Home Layout are Jellyflick's own (Client Settings, under the client
- * `jellyflick`); the audio language, the subtitle language, when to show
+ * **Two stores, said apart in words.** The Accent Colour, the UI language, the
+ * Billboard trailer and the Home Layout are Jellyflick's own (Client Settings,
+ * under the client `jellyflick`) — no other Jellyfin app has a Billboard, so
+ * there is nothing of Jellyfin's that setting could be; the audio language,
+ * the subtitle language, when to show
  * subtitles and next-Episode autoplay are the User's **Jellyfin account**
  * (`UserConfiguration`), so every Jellyfin app they use follows those four. The
  * screen says which is which rather than letting a User guess — the language
@@ -141,6 +144,35 @@ export function SettingsScreen({ device }: SettingsScreenProps) {
                   onClick={() => change({ uiLanguage: locale })}
                 >
                   {t(LANGUAGE_NAME_KEYS[locale])}
+                </button>
+              ))}
+            </p>
+          </section>
+
+          <section class="settings-group">
+            <h2 class="settings-group__heading">{t('settings.billboardTrailerHeading')}</h2>
+            <p class="notice">{t('settings.billboardTrailerExplanation')}</p>
+            {/* Two buttons with `aria-pressed`, as every choice on this screen
+                is: a native checkbox would be a different shape for the same
+                kind of decision, and the arrow keys are the navigator's. */}
+            <p
+              class="settings-choices"
+              role="group"
+              aria-label={t('settings.billboardTrailerHeading')}
+            >
+              {([true, false] as const).map((autoplay) => (
+                <button
+                  key={String(autoplay)}
+                  type="button"
+                  class="button button--quiet"
+                  aria-pressed={settings.billboardTrailerAutoplay === autoplay}
+                  onClick={() => change({ billboardTrailerAutoplay: autoplay })}
+                >
+                  {t(
+                    autoplay
+                      ? 'settings.billboardTrailer.autoPlay'
+                      : 'settings.billboardTrailer.off',
+                  )}
                 </button>
               ))}
             </p>
