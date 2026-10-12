@@ -48,12 +48,16 @@ src/
                         the store every screen reads, `use-my-list.ts` the
                         context and hook, `my-list-toggle.tsx` the control on a
                         card, `my-list-screen.tsx` the My List page.
-  playback/             Playing a Title (#25): `device-profile.ts` is what the
-                        Server negotiates against, `planning.ts` asks it how to
-                        play and reads its answer, `video-source.ts` gets that
+  playback/             Playing a Title (#25, #26): `device-profile.ts` is what
+                        the Server negotiates against, `planning.ts` asks it how
+                        to play and reads its answer, `video-source.ts` gets that
                         into a `<video>` (and is the one `import()` in the app),
                         `reporting.ts` tells the Server what is happening, and
-                        `player.tsx` is the overlay itself.
+                        `player.tsx` is the overlay itself — the one place the
+                        media element is touched. Over it: `player-controls.tsx`
+                        is the seek bar, the times and the buttons,
+                        `scrubbing.ts` the arithmetic they draw with, and
+                        `controls-visibility.ts` when they get out of the way.
   navigation/           Arrow keys and focus: `nearest.ts` the geometry,
                         `reveal.ts` how far a scroller must move, `focusable.ts`
                         what the arrows reach, `spatial-navigation.ts` the
@@ -833,9 +837,59 @@ tracks, #28 the Subtitle Offset, #33 Cast and #34 Play On.
   down — the browser presses a focused button itself, and acting on the key as
   well would toggle twice for one press. **#26's arrow keys are the ones that
   have to be taken *before* the navigator**, not beside it.
-- **Both controls carry the Title's name** ("Pause Arrival"), as a card's My
-  List toggle does: a screen reader hears what is being paused, and the
-  player's Play is never confused with the title page's underneath it.
+- **Every control carries the Title's name** ("Pause Arrival", "Seek through
+  Arrival"), as a card's My List toggle does: a screen reader hears what is
+  being paused, and the player's Play is never confused with the title page's
+  underneath it.
+
+### The controls over it (#26)
+
+- **The seek bar is a `role="slider"`, not an `<input type="range">`.** A range
+  input comes with its keys, its drag and its semantics for nothing, and it
+  cannot be used: it is an `<input>`, and both `src/shell/back.ts` and
+  `src/navigation/focusable.ts` deliberately leave a *field's* keys alone — so a
+  focused range input would quietly take Back and the arrow keys away from the
+  player. A slider is not a field.
+- **The player owns every key it answers, and the arrow keys are decided
+  against the state *before* the press.** With the controls hidden the first
+  press of anything is "show me the controls" and nothing else; with them up the
+  arrows are the navigator's and move between the controls, except on the seek
+  bar, where Left and Right are a step along it. A remote's own Rewind and Fast
+  Forward are always a seek. This is why keys are **not** among the inputs
+  `controls-visibility.ts` listens for: a listener there would reveal the
+  controls before the player could tell which case it was in.
+- **The controls are not rendered while they are idle**, rather than faded or
+  `visibility: hidden`. A control a User cannot see must not be reachable by the
+  arrow keys and must not be read out, and both of those are true of nothing at
+  all and false of something transparent.
+- **Controls that appear take focus**, unless focus is already inside the
+  player. Two moments need it and they are the same moment: the player opening
+  (focus is still on the title page's Play button *behind* the picture, and the
+  flow rule above means an arrow key there would walk the page nobody can see)
+  and the controls coming back after hiding (the control focus was on has gone,
+  so the browser has handed focus to the document). It waits for the
+  negotiation, because until then there is nothing to pause, the button is
+  disabled, and `focus()` on a disabled button does nothing at all.
+- **Controls stay up whenever there is nothing to watch behind them**: paused,
+  still negotiating, or showing a problem. A paused player that hid its controls
+  would be a still frame with nothing to press and no sign there was anything.
+- **Retry is for the failures that could answer differently.** A Server that
+  would not answer, and a `<video>` that failed, are worth asking again, and
+  Retry is one piece of state: the planning effect depends on an attempt number.
+  A Server that answered "there is no way to play this" is a healthy Server
+  saying no, and asking twice gets the same answer, so Back is the only honest
+  offer.
+- **The length is the element's own as soon as it has one, and the Server's
+  until then.** `PlaybackInfo` says how long a source is before a browser has
+  read a byte, which is what the bar draws with while the file loads; the file
+  in front of the User is the one that is right. The e2e suite leans on exactly
+  this gap — the fake's library says Arrival is 116 minutes and the file it
+  really serves is six seconds.
+- **A seek never lands on the end.** Seeking to exactly the end fires `ended`,
+  which reports the stop and closes the player, and a User pressing Right has
+  not asked to leave. `scrubbing.ts` stops a second short, and holds everything
+  else a media element can report badly: `NaN` before the metadata, a length of
+  `Infinity` for a live source, a position past the end.
 
 ## The fake Jellyfin serves real video
 
@@ -891,7 +945,18 @@ it is a key.
   is fixed to the bottom of the screen, which makes it the nearest thing
   downwards from anywhere on the page; without this rule Down would never reach
   the next Row. From inside a fixed overlay — the player, a title-page pop-up —
-  the overlay is the flow, so the rule keeps working as the app grows.
+  **that overlay** is the flow, and the distinction is load-bearing: the phone's
+  bottom bar and the player are both fixed, so grouping everything fixed
+  together put a bar the player is drawn over, and that a User cannot see,
+  between the seek bar and the buttons under it, where Up found it. `inert`
+  would say this in one word and is Chrome 102, well past the floor, so the flow
+  a thing belongs to is which fixed thing it is **inside** (`fixedRootOf`).
+- **A key a screen has already answered is not the navigator's.** It leaves a
+  `keydown` whose `defaultPrevented` is set alone, and that is the whole of how
+  a screen takes an arrow key: the player (#26) listens on `window` in the
+  **capture** phase and calls `preventDefault` on the keys it means to have.
+  `stopPropagation` is not the mechanism and cannot be — a capture listener on
+  `window` does not stop `window`'s own listener on the way back up.
 - **A Row scrolls because focus moves**, not because it snaps: ADR 0002 puts
   `scroll-snap-*` at Chrome 69, one above the floor. `reveal.ts` is the
   arithmetic, on one axis, and it serves both — the Row scrolls itself sideways

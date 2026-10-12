@@ -1092,12 +1092,99 @@ html[data-input='pointer'] [tabindex]:focus {
   object-fit: contain;
 }
 
+/*
+ * The controls (#26): the seek bar and its two times above the buttons.
+ *
+ * They are the player's second grid row rather than something floated over the
+ * picture, so a bar of chrome never sits on top of a face. The row is simply
+ * not rendered while the controls are idle — see the note in `player.tsx` on
+ * hiding rather than fading — so nothing here has a hidden state to style.
+ */
 .player__controls {
+  display: grid;
+  gap: var(--space-2);
+}
+
+/*
+ * `auto 1fr auto`: the times take what they need and the bar takes the rest.
+ * The times are tabular so the bar does not shuffle sideways every second as
+ * the digits change width.
+ */
+.player__scrubber {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.player__time {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * The bar is a `role="slider"`, which is a `div`, so its track is drawn here.
+ * It is three times taller than the track it shows: a line four pixels high is
+ * nothing to aim a mouse at, and a focus ring around a four-pixel box is not a
+ * focus ring anyone sees across a room.
+ */
+.player__seek {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: var(--space-3);
+  cursor: pointer;
+}
+
+.player__seek::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: var(--space-1);
+  border-radius: var(--radius);
+  background: var(--surface-line);
+}
+
+/*
+ * How far along, in the User's own Accent Colour, which is what every Row's
+ * progress bar uses. Its width is the one thing the player sets inline: it is a
+ * number that changes four times a second, and a custom property set on every
+ * frame is the same write with more indirection.
+ */
+.player__seek-played {
+  position: relative;
+  height: var(--space-1);
+  border-radius: var(--radius);
+  background: var(--accent);
+}
+
+/* The handle, so where the bar has got to is readable at a glance on a TV. */
+.player__seek-played::after {
+  content: '';
+  position: absolute;
+  right: calc(var(--space-2) * -1);
+  top: calc(var(--space-1) * -1.5);
+  width: var(--space-3);
+  height: var(--space-3);
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.player__buttons {
   display: grid;
   grid-auto-flow: column;
   justify-content: center;
   gap: var(--space-2);
   margin: 0;
+}
+
+/* What went wrong, and the way out of it, as one block over the picture. */
+.player__problem {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: center;
 }
 
 /*

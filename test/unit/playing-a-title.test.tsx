@@ -1,7 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/preact';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/preact';
 import { App } from '../../src/app';
 import { en } from '../../src/i18n/en';
+import { CONTROLS_IDLE_MS } from '../../src/playback/controls-visibility';
 import { ticksOfSeconds } from '../../src/playback/reporting';
 import { inMemoryDeviceStorage, testDeviceLayer } from '../device/profiles';
 import {
@@ -273,5 +274,247 @@ describe('a User pressing Play', () => {
     await screen.findByText(en['player.unreported']);
     // And the film is still playing, because that is not the User's problem.
     expect(video().paused).toBe(false);
+  });
+});
+
+/**
+ * The controls over the picture (#26): the seek bar, the two times, the
+ * shortcuts, controls that get out of the way, and what Back means.
+ *
+ * The length here comes from the Server rather than the element — happy-dom
+ * decodes nothing, so `video.duration` is `NaN` — and that is the real
+ * behaviour too: `PlaybackInfo` says how long a source is before a browser has
+ * read a byte of it. Arrival is 116 minutes, so the bar reads `1:56:00`.
+ */
+describe('the player’s controls', () => {
+  /**
+   * Puts the picture at a position this test chose, the way playback does.
+   * Where the Title is when the controls are first drawn is the Server's
+   * resume point — which an earlier test in this file may have moved.
+   */
+  async function watchUpTo(seconds: number): Promise<void> {
+    video().currentTime = seconds;
+    fireEvent(video(), new Event('timeupdate'));
+    await waitFor(() => {
+      expect(seekBar().getAttribute('aria-valuenow')).toBe(String(seconds));
+    });
+  }
+
+  /** The seek bar, by the only role it has. */
+  function seekBar(): HTMLElement {
+    return screen.getByRole('slider', { name: 'Seek through Arrival' });
+  }
+
+  it('shows the seek bar with the time played and the time left', async () => {
+    await pressPlay();
+    await startReport();
+
+    await waitFor(() => {
+      expect(seekBar().getAttribute('aria-valuetext')).toBe('0:00 of 1:56:00');
+    });
+    expect(seekBar().getAttribute('aria-valuemax')).toBe('6960');
+    expect(screen.getByText('0:00')).toBeTruthy();
+    expect(screen.getByText('-1:56:00')).toBeTruthy();
+  });
+
+  it('follows the picture as it moves', async () => {
+    await pressPlay();
+    await startReport();
+    await waitFor(() => seekBar());
+
+    video().currentTime = 125;
+    fireEvent(video(), new Event('timeupdate'));
+
+    await waitFor(() => {
+      expect(seekBar().getAttribute('aria-valuenow')).toBe('125');
+    });
+    expect(screen.getByText('2:05')).toBeTruthy();
+    expect(screen.getByText('-1:53:55')).toBeTruthy();
+  });
+
+  it('seeks ten seconds at a time from the bar, and tells the Server at once', async () => {
+    await pressPlay();
+    await startReport();
+    await waitFor(() => seekBar());
+
+    // From a position this test states, rather than from wherever the Server's
+    // resume point happens to leave it.
+    await watchUpTo(300);
+
+    seekBar().focus();
+    fireEvent.keyDown(seekBar(), { key: 'ArrowRight', bubbles: true });
+
+    await waitFor(() => {
+      expect(video().currentTime).toBe(310);
+    });
+    // A seek is news, so it does not wait for the ten-second throttle.
+    await waitFor(async () => {
+      const progress = await reportsTo('/Sessions/Playing/Progress');
+      expect(progress[progress.length - 1]?.body).toMatchObject({
+        PositionTicks: ticksOfSeconds(310),
+      });
+    });
+
+    fireEvent.keyDown(seekBar(), { key: 'ArrowLeft', bubbles: true });
+    await waitFor(() => {
+      expect(video().currentTime).toBe(300);
+    });
+  });
+
+  it('plays and pauses on Enter from the bar, rather than jumping to the start', async () => {
+    await pressPlay();
+    await startReport();
+    await waitFor(() => seekBar());
+    await watchUpTo(300);
+
+    // The bar is a focus stop rather than a button, so the navigator presses
+    // it on Enter — and a press it did not get from a pointer is at (0, 0),
+    // which read as a press on the very start of the bar would throw the User
+    // back to the beginning of the Title.
+    seekBar().focus();
+    fireEvent.keyDown(seekBar(), { key: 'Enter', bubbles: true });
+
+    await waitFor(() => {
+      expect(video().paused).toBe(true);
+    });
+    expect(video().currentTime).toBe(300);
+  });
+
+  it('seeks from the remote’s own Rewind and Fast Forward, wherever focus is', async () => {
+    await pressPlay();
+    await startReport();
+    await waitFor(() => seekBar());
+
+    await watchUpTo(300);
+
+    // Focus is on a button, as it almost always is in this player.
+    screen.getByRole('button', { name: 'Pause Arrival' }).focus();
+    fireEvent.keyDown(window, { key: 'MediaFastForward' });
+
+    await waitFor(() => {
+      expect(video().currentTime).toBe(310);
+    });
+
+    fireEvent.keyDown(window, { key: 'MediaRewind' });
+    await waitFor(() => {
+      expect(video().currentTime).toBe(300);
+    });
+  });
+
+  it('never seeks past the end, so Fast Forward cannot end the Title', async () => {
+    await pressPlay();
+    await startReport();
+    await waitFor(() => seekBar());
+
+    video().currentTime = 6955;
+    fireEvent(video(), new Event('timeupdate'));
+    fireEvent.keyDown(window, { key: 'MediaFastForward' });
+
+    await waitFor(() => {
+      expect(video().currentTime).toBe(6959);
+    });
+    expect(await reportsTo('/Sessions/Playing/Stopped')).toHaveLength(0);
+  });
+
+  it('gets out of the way when nothing happens, and comes back on any input', async () => {
+    await pressPlay();
+    await startReport();
+    await waitFor(() => seekBar());
+
+    vi.useFakeTimers();
+    try {
+      // The wait is started by input, so one press puts it on this clock.
+      act(() => {
+        fireEvent.keyDown(window, { key: 'ArrowUp' });
+      });
+      act(() => {
+        vi.advanceTimersByTime(CONTROLS_IDLE_MS + 100);
+      });
+
+      expect(screen.queryByRole('slider')).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Pause Arrival' })).toBeNull();
+
+      // Any input at all brings them back — the arrow keys included, which is
+      // why the player takes those before the navigator would move focus.
+      act(() => {
+        fireEvent.keyDown(window, { key: 'ArrowUp' });
+      });
+      expect(screen.getByRole('slider', { name: 'Seek through Arrival' })).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps the controls up while playback is paused', async () => {
+    await pressPlay();
+    await startReport();
+    await waitFor(() => seekBar());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pause Arrival' }));
+    await waitFor(() => {
+      expect(video().paused).toBe(true);
+    });
+
+    vi.useFakeTimers();
+    try {
+      act(() => {
+        fireEvent.keyDown(window, { key: 'ArrowUp' });
+      });
+      act(() => {
+        vi.advanceTimersByTime(CONTROLS_IDLE_MS + 100);
+      });
+      // A paused player with no controls is a User looking at a still frame
+      // with nothing to press.
+      expect(screen.getByRole('slider', { name: 'Seek through Arrival' })).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('offers Retry when the Server would not say how to play a Title', async () => {
+    await setFakeState({ failPlaybackInfoWith: 503 });
+    await pressPlay();
+    await screen.findByText(en['player.unavailable']);
+
+    await setFakeState({ failPlaybackInfoWith: null });
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+
+    // The same Title, asked again, without leaving the player.
+    await startReport();
+    expect(screen.queryByText(en['player.unavailable'])).toBeNull();
+  });
+
+  it('offers a way out when a Title cannot be played at all, rather than only a message', async () => {
+    await pressPlay('The Unfinished');
+    await screen.findByText(en['player.cannotPlay']);
+
+    // Nothing will make that Title playable, so Back is the honest offer.
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    await waitFor(() => {
+      expect(screen.queryByText(en['player.cannotPlay'])).toBeNull();
+    });
+    expect(screen.getByRole('heading', { name: 'The Unfinished', level: 1 })).toBeTruthy();
+  });
+
+  it('closes the player on Back before it leaves the title page underneath it', async () => {
+    await pressPlay();
+    await screen.findByRole('region', { name: 'Playing Arrival' });
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+
+    await waitFor(() => {
+      expect(document.querySelector('video')).toBeNull();
+    });
+    // The player was over the title page, so the first Back was the player's
+    // and the title page is still where the User left it.
+    expect(window.location.pathname).toBe('/title/movie-arrival');
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+
+    // Only now does Back mean what it means everywhere else.
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/');
+    });
   });
 });
