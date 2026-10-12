@@ -91,6 +91,10 @@ src/
                         it reads from the Server, `title-screen.tsx` the screen
                         — a pop-up on a wide pointer, a full page elsewhere.
                         Its Play button opens `playback/`'s player.
+  title-labels/         What is new about a Title, on its card art (#14):
+                        `title-labels.ts` is the rules and the one read,
+                        `use-title-labels.ts` the context the shell holds and
+                        `card-label.tsx` the label itself.
 test/
   setup.ts              Vitest: unmounts components after each test.
   unit/                 Vitest specs. One file per behaviour, not per source file.
@@ -214,9 +218,12 @@ are the unguarded fields a client has to cope with itself. `state.played` is
 Classics, holding Heat and Arrival) and `state.similar` is the fixed More like
 this relation.
 
-`/Items` honours `ids`, `fields`, `enableImageTypes` and `enableUserData`, so a
-query that forgot to ask for `Overview` fails against the fake rather than only
-against a real Server. `Genres` is deliberately not gated: every query this app
+`/Items` honours `ids`, `fields`, `enableImageTypes`, `enableImages` and
+`enableUserData`, so a query that forgot to ask for `Overview` — or for
+`DateCreated`, which every Title Label is derived from — fails against the fake
+rather than only against a real Server. It sorts by `Name` or `SortName`
+ascending and by `DateCreated` **descending**, which is "the newest additions"
+(#14), and refuses any other order rather than quietly ignoring it. `Genres` is deliberately not gated: every query this app
 makes asks for it.
 
 `failLibraryQueriesWith` makes `/UserViews`, `/Items/Latest`, `/Items` and
@@ -687,6 +694,54 @@ Row on Home at all, where New on Jellyflick says so in words: an empty My List i
 where every User starts and is theirs to fill, so a notice on Home on every
 visit would be in the way. The page explains it instead, and also carries the
 "the Server would not say" message.
+
+## Title Labels
+
+`src/title-labels/` is #14 and story 42: the one word across the bottom of a
+card's art saying what is new about that Title — Recently Added, New Season or
+New Episodes.
+
+- **A label is about what was *added*, which is not the Title it lands on.** A
+  Series is not re-added when an Episode of it arrives, so "New Episodes" on
+  Severance's card comes from an *Episode's* `DateCreated`, and "New Season"
+  from a *Season's*. That is why the feature has a query of its own —
+  `gateway.getRecentAdditions`, the only one in the gateway that asks for
+  `Movie,Series,Season,Episode` rather than the two kinds the app shows — and
+  why `/Items/Latest` is the wrong endpoint however close it sounds: it answers
+  per library and leaves Seasons out altogether, which is exactly the
+  distinction between the two labels.
+- **One read for the whole app, held in the shell** beside My List, as a map
+  from a Title's id to its label. A Title's label is the same wherever its card
+  is drawn, and Home alone can draw one Title in several Rows. The context's
+  default is *no labels*, so a card rendered outside the shell — a unit test of
+  a `Row`, every screen before the read lands — is a card without one, which is
+  what a Title with nothing new about it looks like anyway.
+- **At most one label per card, strongest claim first**: `recently-added`,
+  then `new-season`, then `new-episodes`. A Series added this week is new
+  however much of it arrived, and a whole Season beats a handful of Episodes.
+  A Season and its Episodes always arrive together, so this is the common case
+  rather than an edge one.
+- **The window is a count of additions, not a date**, because `/Items` has no
+  "added since" filter: the newest `RECENT_ADDITIONS_LIMIT` items are read and
+  `RECENTLY_ADDED_DAYS` is applied here. An addition the Server gave no date
+  says nothing — a label is a claim about a date. One dated in the *future* is
+  kept, because a Server whose clock runs ahead of the device's has still just
+  added it.
+- **The clock is `device.now()`**, never `Date.now()`, which is what lets
+  `test/unit/title-labels.test.ts` hold every rule still against `FIXED_NOW`.
+  A Playwright test cannot: a browser's clock is the real one, so
+  `title-labels-on-cards.spec.ts` re-dates the sample library instead, and what
+  it is there for is what only a laid-out page can say — that the label is on
+  the art, at the bottom of it, in the Accent Colour.
+- **It is drawn inside `CardArtwork`**, so it reaches a card in a Row, a card
+  in the My List grid and a card in More like this without any of them knowing
+  about it. The label is positioned from the artwork's *top* plus a translate,
+  because the card is a grid of artwork and then the name and `bottom` would
+  put it under the name; `--card-artwork-height` is what the two share.
+- **It is not `aria-hidden`.** A card's accessible name is its Title's, and
+  folding the label into it would rename every card (and every test that finds
+  one by name), so the label is left in the document as text beside that name
+  rather than hidden from a screen reader altogether.
 
 ## The title page
 

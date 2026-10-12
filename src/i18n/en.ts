@@ -131,6 +131,13 @@ export const en = {
   'home.row.watchAgain': 'Watch Again',
   'home.row.becauseYouWatched': 'Because You Watched',
 
+  // Title Labels (#14, story 42): the one word on a card's art saying what is
+  // new about it. Short, because the card art is small and the label sits
+  // across the bottom of it.
+  'titleLabel.recentlyAdded': 'Recently Added',
+  'titleLabel.newSeason': 'New Season',
+  'titleLabel.newEpisodes': 'New Episodes',
+
   'homeLayout.heading': 'Edit Home',
   'homeLayout.explanation':
     'Choose the Rows on your Home and the order they come in. Your Home follows you to every device.',

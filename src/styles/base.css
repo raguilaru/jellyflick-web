@@ -60,6 +60,16 @@
 
   --radius: 4px;
 
+  /*
+   * A card's poster box. A fixed 2:3 box rather than `aspect-ratio`, which is
+   * Chrome 88 and ships raw — and a token rather than two literals, because
+   * what is drawn *over* the artwork (the Title Label, the progress bar) has
+   * to know where its bottom edge is: the card itself is a grid of artwork
+   * then name, so there is nothing else to measure from.
+   */
+  --card-artwork-width: 150px;
+  --card-artwork-height: 225px;
+
   /* Condensed fallbacks, so the layout barely moves while the face loads. */
   --font-display: 'Bebas Neue', 'Haettenschweiler', 'Arial Narrow', Impact, sans-serif;
   --font-ui: system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
@@ -334,8 +344,8 @@ body {
 
 /* A fixed 2:3 poster box rather than `aspect-ratio`, which ships raw at 88. */
 .card__artwork {
-  width: 150px;
-  height: 225px;
+  width: var(--card-artwork-width);
+  height: var(--card-artwork-height);
   border-radius: var(--radius);
   background: var(--surface-raised);
   object-fit: cover;
@@ -343,6 +353,41 @@ body {
 
 .card__artwork--none {
   border: 1px solid var(--surface-line);
+}
+
+/*
+ * The Title Label (#14): what is new about this Title, across the bottom of its
+ * artwork in the User's Accent Colour.
+ *
+ * Positioned from the *top* plus a translate rather than with `bottom`: the
+ * card is a grid of artwork and then the name, so the card's own bottom edge is
+ * below the name and `bottom` would put the label there. `--card-artwork-height`
+ * is the artwork's bottom edge, and the translate lifts the label onto it.
+ *
+ * In the accent, with `--accent-text` on it: the presets carry that pair
+ * precisely so text on a filled block stays readable (#11).
+ */
+.card__label {
+  position: absolute;
+  left: 0;
+  max-width: 100%;
+  top: var(--card-artwork-height);
+  transform: translateY(-100%);
+  padding: 2px var(--space-1);
+  /* Physical, not the logical `border-start-end-radius`, which is Chrome 89. */
+  border-top-right-radius: var(--radius);
+  background: var(--accent);
+  color: var(--accent-text);
+  font-family: var(--font-display);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  /* The face has one weight; a synthesised bold on it looks wrong. */
+  font-weight: 400;
+  /* Long enough in Spanish that it has to be allowed to sit on one line. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .card__name {

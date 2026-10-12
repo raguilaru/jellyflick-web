@@ -29,6 +29,7 @@ import type { Title } from '../catalogue/catalogue';
 import type { JellyfinGateway } from '../jellyfin/gateway';
 import { FOCUS_GROUP_ATTRIBUTE } from '../navigation/focusable';
 import { scrollToReveal } from '../navigation/reveal';
+import { CardLabel } from '../title-labels/card-label';
 
 /** One Title as a card: what it is called, and the artwork to show it by. */
 export type RowCard = {
@@ -208,12 +209,21 @@ function scrollSmoothly(element: Element, left: number): void {
  * cards out as a grid.
  */
 export function CardArtwork({ card }: { card: RowCard }) {
-  if (card.artworkUrl === undefined) {
-    return <span class="card__artwork card__artwork--none" aria-hidden="true" />;
-  }
-  // The name is on the card next to the artwork, so the artwork itself adds
-  // nothing for a screen reader and is left out of the card's name.
-  return <img class="card__artwork" src={card.artworkUrl} alt="" loading="lazy" />;
+  return (
+    <>
+      {card.artworkUrl === undefined ? (
+        <span class="card__artwork card__artwork--none" aria-hidden="true" />
+      ) : (
+        // The name is on the card next to the artwork, so the artwork itself
+        // adds nothing for a screen reader and is left out of the card's name.
+        <img class="card__artwork" src={card.artworkUrl} alt="" loading="lazy" />
+      )}
+      {/* What is new about this Title (#14). It is drawn over the bottom of the
+          artwork, so it belongs to the artwork rather than to each Row, and a
+          Title with nothing new about it draws nothing. */}
+      <CardLabel titleId={card.titleId} />
+    </>
+  );
 }
 
 /** A heading as an id fragment, so the strip can point at its own heading. */

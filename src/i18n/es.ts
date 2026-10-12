@@ -114,6 +114,10 @@ export const es: Messages = {
   'home.row.watchAgain': 'Volver a ver',
   'home.row.becauseYouWatched': 'Porque viste',
 
+  'titleLabel.recentlyAdded': 'Añadido hace poco',
+  'titleLabel.newSeason': 'Nueva temporada',
+  'titleLabel.newEpisodes': 'Nuevos episodios',
+
   'homeLayout.heading': 'Editar Inicio',
   'homeLayout.explanation':
     'Elige las filas de tu Inicio y su orden. Tu Inicio te sigue a todos tus dispositivos.',

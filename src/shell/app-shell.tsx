@@ -15,6 +15,7 @@ import { SettingsProvider } from '../settings/settings-provider';
 import { useAccentColour } from '../settings/use-accent-colour';
 import { UiLanguage } from '../settings/ui-language';
 import { TITLE_PATH } from '../title/title-page';
+import { useLoadedTitleLabels, TitleLabelsProvider } from '../title-labels/use-title-labels';
 import { TitleScreen } from '../title/title-screen';
 import { useBackClaim, useBackHandler } from './back';
 import { useWideScreen } from './layout';
@@ -87,7 +88,14 @@ export function AppShell({ user, session, device, users }: AppShellProps) {
             {/* And one copy of My List, for the Row on Home, the My List page and
                 every card's toggle (#13). */}
             <MyListProvider value={useLoadedMyList(session, user)}>
-              <ShellFrame user={user} session={session} device={device} users={users} />
+              {/* And one set of Title Labels, for every card in the app: what
+                  is new about a Title is the same wherever its card is drawn,
+                  so it is read once here rather than per Row (#14). */}
+              <TitleLabelsProvider
+                value={useLoadedTitleLabels(session.gateway(), user.userId, device)}
+              >
+                <ShellFrame user={user} session={session} device={device} users={users} />
+              </TitleLabelsProvider>
             </MyListProvider>
           </UiLanguage>
         </PlaybackPreferencesProvider>

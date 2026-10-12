@@ -136,6 +136,22 @@ export type JellyfinGateway = {
    */
   getTitles(options?: TitlesQueryOptions): Promise<BaseItemDto[]>;
   /**
+   * `GET /Items` again, and deliberately **not** `getTitles`: the newest
+   * additions to the Server, newest first, as the four kinds they really are —
+   * a Movie, a Series, a Season or an Episode (#14).
+   *
+   * Every other query in this gateway narrows to `Movie,Series`, because that
+   * is all the app *shows*. A Title Label is about what was **added**, and what
+   * is added to a Series is a Season or an Episode, never the Series itself —
+   * so this one query has to see them, and the Titles they stand for are
+   * `src/catalogue/`'s to work out.
+   *
+   * `/Items/Latest` is the wrong endpoint for it, however close it sounds: it
+   * answers per library, and it leaves Seasons out altogether, which is exactly
+   * the difference between "New Season" and "New Episodes".
+   */
+  getRecentAdditions(options?: RecentAdditionsOptions): Promise<BaseItemDto[]>;
+  /**
    * `GET /Items/{itemId}/Similar` — the Titles the Server thinks are like a
    * given one, which is the title page's More like this Row (#17).
    *
@@ -379,6 +395,15 @@ export type TitlesQueryOptions = {
   detail?: boolean;
 };
 
+export type RecentAdditionsOptions = {
+  /**
+   * How many of the newest additions to read. The Server has no "added since"
+   * filter on this endpoint, so the window is a count rather than a date, and
+   * the caller is what turns it into days.
+   */
+  limit?: number;
+};
+
 export type SimilarTitlesOptions = {
   itemId: string;
   limit?: number;
@@ -404,6 +429,14 @@ export type JellyfinGatewayOptions = ServerIdentity & {
  * place rather than a filter on each screen.
  */
 const TITLE_ITEM_TYPES = 'Movie,Series';
+
+/**
+ * The kinds an *addition* can be, which is a wider set than the app shows: a
+ * Series grows by a Season or an Episode, so a query about what is new has to
+ * see those even though no screen ever draws one. Only `getRecentAdditions`
+ * uses it.
+ */
+const ADDITION_ITEM_TYPES = 'Movie,Series,Season,Episode';
 
 /**
  * The `fields` a title page needs and a Row does not. The ratings,
@@ -592,6 +625,30 @@ export function createJellyfinGateway(options: JellyfinGatewayOptions): Jellyfin
           ...(options.searchTerm === undefined ? {} : { searchTerm: options.searchTerm }),
           ...(options.genre === undefined ? {} : { genres: options.genre }),
           ...(options.ids === undefined ? {} : { ids: options.ids.join(',') }),
+          ...(options.limit === undefined ? {} : { limit: options.limit }),
+        })}`,
+      ).then((result) => result.Items ?? []),
+
+    getRecentAdditions: (options = {}) =>
+      request<BaseItemDtoQueryResult>(
+        'GET',
+        `/Items${query({
+          // The four kinds an addition can be. A Season and an Episode are here
+          // only to say what happened to a Series — see the note on the method.
+          includeItemTypes: ADDITION_ITEM_TYPES,
+          recursive: true,
+          // Newest first, which is the whole point of the query: with a limit,
+          // this is "the most recent additions" rather than an arbitrary page.
+          sortBy: 'DateCreated',
+          sortOrder: 'Descending',
+          // `DateCreated` is not returned unless it is asked for by name, and
+          // it is the only field a label is derived from.
+          fields: 'DateCreated',
+          // A label is drawn over artwork a Row already asked for, so this
+          // query wants none of its own.
+          enableImages: false,
+          enableUserData: false,
+          enableTotalRecordCount: false,
           ...(options.limit === undefined ? {} : { limit: options.limit }),
         })}`,
       ).then((result) => result.Items ?? []),

@@ -108,23 +108,24 @@ export const itemRoutes: readonly FakeRoute[] = [
         };
       }
 
-      // `Name` and `SortName` are both asked for — My List by `Name`, because
-      // a client inserting a Title it just added has only the name to place it
-      // by, and Search by `SortName`. The real Server falls back to the name
-      // when an item has no sort name, and no sample item has one, so here the
-      // two orders are the same. Any other order is refused rather than
-      // quietly ignored.
-      const sortBy = request.query.get('sortBy');
-      const sortOrder = request.query.get('sortOrder');
-      if (
-        (sortBy !== null && sortBy !== 'Name' && sortBy !== 'SortName') ||
-        (sortOrder !== null && sortOrder !== 'Ascending')
-      ) {
+      // Three orders are asked for. `Name` and `SortName` ascending — My List
+      // by `Name`, because a client inserting a Title it just added has only
+      // the name to place it by, and Search by `SortName`; the real Server
+      // falls back to the name when an item has no sort name, and no sample
+      // item has one, so here the two are the same order. And `DateCreated`
+      // descending, which is what "the newest additions" means (#14). Any
+      // other order is refused rather than quietly ignored.
+      const sortBy = request.query.get('sortBy') ?? 'Name';
+      const sortOrder = request.query.get('sortOrder') ?? 'Ascending';
+      const newestFirst = sortBy === 'DateCreated' && sortOrder === 'Descending';
+      const byName =
+        (sortBy === 'Name' || sortBy === 'SortName') && sortOrder === 'Ascending';
+      if (!newestFirst && !byName) {
         return {
           status: 400,
           body: {
             error:
-              'The fake Jellyfin only implements sortBy=Name or SortName, ascending. Implement the order your ticket needs in test/fake-jellyfin/routes/items.ts.',
+              'The fake Jellyfin only implements sortBy=Name or SortName ascending, and sortBy=DateCreated descending. Implement the order your ticket needs in test/fake-jellyfin/routes/items.ts.',
           },
         };
       }
@@ -149,7 +150,11 @@ export const itemRoutes: readonly FakeRoute[] = [
         .filter(
           (item) => genres.length === 0 || genres.some((genre) => hasGenre(item, genre)),
         )
-        .sort((left, right) => left.Name.localeCompare(right.Name))
+        .sort((left, right) =>
+          newestFirst
+            ? Date.parse(right.DateCreated) - Date.parse(left.DateCreated)
+            : left.Name.localeCompare(right.Name),
+        )
         .slice(0, limitOf(request.query.get('limit')))
         .map((item) => asAskedFor(item, request, state, user.Id));
 
@@ -259,6 +264,10 @@ const GATED_BY_FIELDS: Readonly<Record<string, keyof FakeItem>> = {
   People: 'People',
   MediaStreams: 'MediaStreams',
   ProviderIds: 'ProviderIds',
+  // What a Title Label is derived from (#14), and what merging the libraries
+  // needs (#4). A query that forgot to ask for it would otherwise see dates
+  // here and none at all from a real Server.
+  DateCreated: 'DateCreated',
 };
 
 /**
@@ -278,6 +287,14 @@ function asAskedFor(
 
   for (const [field, property] of Object.entries(GATED_BY_FIELDS)) {
     if (!fields.includes(field)) delete dto[property];
+  }
+
+  // `enableImages=false` is the Server sending no artwork at all, which a query
+  // whose answer is only read for dates asks for (#14).
+  if (request.query.get('enableImages') === 'false') {
+    delete dto.ImageTags;
+    delete dto.BackdropImageTags;
+    delete dto.SeriesPrimaryImageTag;
   }
 
   // Omitted means every image type, which is the real Server's default.
