@@ -97,6 +97,11 @@ export const es: Messages = {
   'home.rowLoading': 'Buscando títulos…',
 
   // El nombre de la fila es el nombre de la aplicación, así que no se traduce.
+  'continueWatching.unavailable':
+    'Jellyflick no pudo leer lo que estás viendo del servidor.',
+  'continueWatching.unsaved': 'Jellyflick no pudo guardar ese cambio en el servidor.',
+  'continueWatching.remove': (p) => `Quitar ${p.name} de Seguir viendo`,
+
   'home.newOnJellyflick': 'Novedades en Jellyflick',
   'home.newOnJellyflick.empty': 'Todavía no se ha añadido nada a tus bibliotecas.',
   'home.newOnJellyflick.unavailable': 'Jellyflick no pudo leer las novedades del servidor.',

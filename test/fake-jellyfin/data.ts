@@ -210,6 +210,13 @@ export type FakeJellyfinState = {
    * watch a position arrive and then be honoured by the next Play.
    */
   playbackPositions: Record<string, Record<string, number>>;
+  /**
+   * When each User last played each item, by user id then item id, as the ISO
+   * strings `UserData.LastPlayedDate` is served from — which is what Continue
+   * Watching is ordered by (#12). The playback reports write it, as the real
+   * Server does, and a test seeds it to get a household with a viewing history.
+   */
+  lastPlayedDates: Record<string, Record<string, string>>;
   /** The Collections on the Server, and which Titles are in each (#17). */
   collections: FakeCollection[];
   /**
@@ -224,6 +231,12 @@ export type FakeJellyfinState = {
    * normal Server.
    */
   failPlayedWritesWith: number | null;
+  /**
+   * A status `POST /UserItems/{itemId}/UserData` answers with, so a test can
+   * see what taking something out of Continue Watching looks like when the
+   * Server refuses it. Null is the normal Server.
+   */
+  failUserItemDataWritesWith: number | null;
   /**
    * A status `/Items/{itemId}/Similar` and `/Items/{itemId}/Collections` answer
    * with, so a test can see a title page whose extra Rows the Server will not
@@ -371,6 +384,8 @@ export function createSampleData(): FakeJellyfinState {
     favourites: {},
     played: {},
     playbackPositions: {},
+    lastPlayedDates: {},
+    failUserItemDataWritesWith: null,
     failPlaybackInfoWith: null,
     playbackErrorCode: null,
     failPlaybackReportsWith: null,
@@ -457,6 +472,9 @@ const SAMPLE_ITEMS: readonly FakeItem[] = [
     ParentIndexNumber: 2,
     IndexNumber: 3,
     libraryId: 'lib-kids',
+    // The real Server always sends a runtime, and a progress bar is a
+    // fraction of it (#12).
+    RunTimeTicks: 7 * 60 * 10_000_000,
   },
   {
     Id: 'episode-bluey-s2e2',
@@ -469,6 +487,9 @@ const SAMPLE_ITEMS: readonly FakeItem[] = [
     ParentIndexNumber: 2,
     IndexNumber: 2,
     libraryId: 'lib-kids',
+    // The real Server always sends a runtime, and a progress bar is a
+    // fraction of it (#12).
+    RunTimeTicks: 7 * 60 * 10_000_000,
   },
   {
     Id: 'episode-severance-s2e4',
@@ -481,6 +502,9 @@ const SAMPLE_ITEMS: readonly FakeItem[] = [
     ParentIndexNumber: 2,
     IndexNumber: 4,
     libraryId: 'lib-series',
+    // The real Server always sends a runtime, and a progress bar is a
+    // fraction of it (#12).
+    RunTimeTicks: 45 * 60 * 10_000_000,
   },
   {
     Id: 'movie-paddington',
@@ -507,6 +531,9 @@ const SAMPLE_ITEMS: readonly FakeItem[] = [
     ParentIndexNumber: 2,
     IndexNumber: 3,
     libraryId: 'lib-series',
+    // The real Server always sends a runtime, and a progress bar is a
+    // fraction of it (#12).
+    RunTimeTicks: 45 * 60 * 10_000_000,
   },
   // The richest Title on the Server: everything a title page can show is here,
   // so a missing field in the client is visible rather than indistinguishable

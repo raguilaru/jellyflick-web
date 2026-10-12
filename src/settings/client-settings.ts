@@ -1,5 +1,10 @@
 import type { DisplayPreferencesDto } from '@jellyfin/sdk/lib/generated-client/models/display-preferences-dto';
 import {
+  parseHiddenSeries,
+  serialiseHiddenSeries,
+  type HiddenSeries,
+} from '../home/continue-watching';
+import {
   DEFAULT_HOME_LAYOUT,
   parseHomeLayout,
   serialiseHomeLayout,
@@ -61,6 +66,7 @@ export const SETTINGS_KEY_PREFIX = 'jf.';
 export const HOME_LAYOUT_KEY = `${SETTINGS_KEY_PREFIX}homeLayout`;
 export const UI_LANGUAGE_KEY = `${SETTINGS_KEY_PREFIX}uiLanguage`;
 export const ACCENT_COLOUR_KEY = `${SETTINGS_KEY_PREFIX}accentColour`;
+export const HIDDEN_SERIES_KEY = `${SETTINGS_KEY_PREFIX}hiddenSeries`;
 
 /**
  * A User's settings, typed, with a default for every one of them — a new User
@@ -84,9 +90,24 @@ export type ClientSettings = {
    * treatment `HomeRow.parameter` gets.
    */
   readonly accentColour?: string;
+  /**
+   * The Series the User has taken out of Continue Watching, and when (#12,
+   * stories 38 and 39).
+   *
+   * It is here rather than in device storage because it is a statement about
+   * what one *person* wants to see, not about one screen: a show dropped on the
+   * laptop is dropped on the phone as well. Jellyfin has nowhere of its own to
+   * put it — a hidden Series is not a fact about the account, and resetting a
+   * resume point is what the Server *does* hold — so it is one of ours, under
+   * `jf.`.
+   */
+  readonly hiddenSeries: readonly HiddenSeries[];
 };
 
-export const DEFAULT_CLIENT_SETTINGS: ClientSettings = { homeLayout: DEFAULT_HOME_LAYOUT };
+export const DEFAULT_CLIENT_SETTINGS: ClientSettings = {
+  homeLayout: DEFAULT_HOME_LAYOUT,
+  hiddenSeries: [],
+};
 
 /**
  * What came of reading. A Server that will not answer is an outcome rather than
@@ -186,6 +207,7 @@ function ourKeysOf(
 function settingsFrom(prefs: Record<string, string | null>): ClientSettings {
   return {
     homeLayout: parseHomeLayout(prefs[HOME_LAYOUT_KEY]),
+    hiddenSeries: parseHiddenSeries(prefs[HIDDEN_SERIES_KEY]),
     // An empty string is how "no choice" is stored, so it is not a choice.
     ...chosen('uiLanguage', prefs[UI_LANGUAGE_KEY]),
     ...chosen('accentColour', prefs[ACCENT_COLOUR_KEY]),
@@ -206,6 +228,9 @@ function prefsFor(changes: Partial<ClientSettings>): Record<string, string | nul
   const prefs: Record<string, string | null> = {};
   if (changes.homeLayout !== undefined) {
     prefs[HOME_LAYOUT_KEY] = serialiseHomeLayout(changes.homeLayout);
+  }
+  if (changes.hiddenSeries !== undefined) {
+    prefs[HIDDEN_SERIES_KEY] = serialiseHiddenSeries(changes.hiddenSeries);
   }
   if ('uiLanguage' in changes) {
     // Chosen, or back to the browser's: an empty string is how "no choice" is

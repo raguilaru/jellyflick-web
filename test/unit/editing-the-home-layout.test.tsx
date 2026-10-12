@@ -223,6 +223,7 @@ describe('a Home with no Rows on it', () => {
     await openTheEditor();
     // Every Row whose feature is built, or Home would still be drawing one of
     // them. The rest are in the layout but are not on Home yet.
+    fireEvent.click(screen.getByRole('button', { name: 'Hide Continue Watching' }));
     fireEvent.click(screen.getByRole('button', { name: 'Hide New on Jellyflick' }));
     fireEvent.click(screen.getByRole('button', { name: 'Hide My List' }));
     await backToHome();

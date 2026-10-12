@@ -10,6 +10,11 @@ export async function setFakeState(patch: unknown): Promise<void> {
   await control('POST', '/__fake/state', patch);
 }
 
+/** The sample data as it stands: what a test asserts the Server now holds. */
+export async function fakeState(): Promise<Record<string, unknown>> {
+  return (await control('GET', '/__fake/state')) as Record<string, unknown>;
+}
+
 /** Puts the sample data back to how it was seeded. */
 export async function resetFakeState(): Promise<void> {
   await control('DELETE', '/__fake/state');

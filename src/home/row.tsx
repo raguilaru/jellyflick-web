@@ -37,6 +37,16 @@ export type RowCard = {
   readonly name: string;
   /** Absent when the Server has no artwork for the Title. */
   readonly artworkUrl?: string;
+  /**
+   * How far through this Title the User is, from 0 to 1, drawn as a bar across
+   * the bottom of the artwork (#12, story 36).
+   *
+   * Absent means there is no progress to show, which is not the same as zero:
+   * Continue Watching draws the bar on every one of its cards — a next-up
+   * Episode at zero is honest about there being none of it watched — and no
+   * other Row draws one at all.
+   */
+  readonly progress?: number;
 };
 
 export type RowProps = {
@@ -218,11 +228,38 @@ export function CardArtwork({ card }: { card: RowCard }) {
         // adds nothing for a screen reader and is left out of the card's name.
         <img class="card__artwork" src={card.artworkUrl} alt="" loading="lazy" />
       )}
+      {/* How far through it the User is (#12), where a Row says so. */}
+      <CardProgress progress={card.progress} />
       {/* What is new about this Title (#14). It is drawn over the bottom of the
           artwork, so it belongs to the artwork rather than to each Row, and a
           Title with nothing new about it draws nothing. */}
       <CardLabel titleId={card.titleId} />
     </>
+  );
+}
+
+/**
+ * The progress bar across the bottom of a card's artwork (story 36), or nothing
+ * at all on a card that has no progress to show.
+ *
+ * `role="progressbar"` with `aria-valuenow` rather than a bare `<div>`: how much
+ * is left is the point of the bar, and a screen reader has nothing else to read
+ * it from — the card's own name is the Title's. It is rounded to whole percent,
+ * because "47.3% watched" is a number nobody wants read out.
+ */
+export function CardProgress({ progress }: { progress?: number }) {
+  if (progress === undefined) return null;
+  const percent = Math.round(Math.max(0, Math.min(1, progress)) * 100);
+  return (
+    <span
+      class="card__progress"
+      role="progressbar"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={percent}
+    >
+      <span class="card__progress-watched" style={{ width: `${String(percent)}%` }} />
+    </span>
   );
 }
 

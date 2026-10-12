@@ -75,9 +75,12 @@ test('Home says what is the case when the Server will not say what is new', asyn
 
   await signIn(page);
 
-  await expect(page.getByRole('alert')).toHaveText(
-    'Jellyflick could not read what is new from the Server.',
-  );
+  // Continue Watching is reading the same Server and says so too (#12), so
+  // this is the Row's own message being on the screen rather than the only
+  // thing on it.
+  await expect(
+    page.getByRole('alert').filter({ hasText: 'could not read what is new' }),
+  ).toHaveCount(1);
 });
 
 type RequestReader = { get(url: string): Promise<{ json(): Promise<unknown> }> };

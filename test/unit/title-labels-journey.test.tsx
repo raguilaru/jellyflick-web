@@ -85,8 +85,10 @@ describe('a User browsing Home', () => {
 
     // The Row itself says the Server would not answer; what matters here is
     // that a label nobody could read is not a second problem on the screen.
-    expect((await screen.findByRole('alert')).textContent).toBe(
-      'Jellyflick could not read what is new from the Server.',
+    await waitFor(() =>
+      expect(
+        screen.getAllByRole('alert').map((alert) => alert.textContent),
+      ).toContain('Jellyflick could not read what is new from the Server.'),
     );
     expect(document.querySelector('.card__label')).toBeNull();
   });

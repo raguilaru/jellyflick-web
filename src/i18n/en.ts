@@ -109,6 +109,13 @@ export const en = {
   'home.signedInAs': (p: { name: string }) => `Signed in as ${p.name}.`,
   'home.rowLoading': 'Looking for Titles…',
 
+  // Continue Watching (#12). The Row's name itself is `home.row.continueWatching`
+  // below, which is also what the Home Layout editor calls it.
+  'continueWatching.unavailable':
+    'Jellyflick could not read what you are watching from the Server.',
+  'continueWatching.unsaved': 'Jellyflick could not save that change on the Server.',
+  'continueWatching.remove': (p: { name: string }) => `Remove ${p.name} from Continue Watching`,
+
   'home.newOnJellyflick': 'New on Jellyflick',
   'home.newOnJellyflick.empty': 'Nothing has been added to your libraries yet.',
   'home.newOnJellyflick.unavailable': 'Jellyflick could not read what is new from the Server.',

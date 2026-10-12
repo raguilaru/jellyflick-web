@@ -5,6 +5,7 @@ import { titlePathFor } from '../title/title-page';
 import type { JellyfinGateway } from '../jellyfin/gateway';
 import { MyListToggle } from '../my-list/my-list-toggle';
 import { useMyList } from '../my-list/use-my-list';
+import { ContinueWatchingRow } from './continue-watching-row';
 import type { HomeRowKind } from './home-layout';
 import { loadNewOnJellyflick, type NewOnJellyflickResult } from './new-on-jellyflick';
 import { Row, type RowCard } from './row';
@@ -12,8 +13,8 @@ import { Row, type RowCard } from './row';
 /**
  * Which Row each kind in a Home Layout is, and what draws it.
  *
- * The Home Layout can name a Row whose feature is not built yet — Continue
- * Watching is #12 and the suggestion Rows #15 — so Home draws
+ * The Home Layout can name a Row whose feature is not built yet — the
+ * suggestion Rows are #15 — so Home draws
  * only the kinds in `BUILT_ROW_KINDS` and simply leaves the rest out. That is
  * deliberately not a placeholder: an empty Row on Home would look like
  * something that failed, whereas a Row that is not there yet is honest about
@@ -35,7 +36,11 @@ export const ROW_NAME_KEYS: Readonly<Record<HomeRowKind, MessageKey>> = {
 };
 
 /** The kinds whose feature exists, and so the ones Home can draw today. */
-export const BUILT_ROW_KINDS: readonly HomeRowKind[] = ['my-list', 'new-on-jellyflick'];
+export const BUILT_ROW_KINDS: readonly HomeRowKind[] = [
+  'continue-watching',
+  'my-list',
+  'new-on-jellyflick',
+];
 
 /**
  * The My List toggle on every card on Home, which is how a Title gets into My
@@ -70,6 +75,8 @@ export type HomeRowProps = {
 /** One Row of Home, whichever kind it is. */
 export function HomeRowFor({ kind, gateway, readKey }: HomeRowProps) {
   switch (kind) {
+    case 'continue-watching':
+      return <ContinueWatchingRow gateway={gateway} readKey={readKey} />;
     case 'my-list':
       return <MyListRow />;
     case 'new-on-jellyflick':

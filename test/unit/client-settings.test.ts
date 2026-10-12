@@ -180,6 +180,23 @@ describe('the settings the settings screen saves', () => {
     expect(read.settings.uiLanguage).toBeUndefined();
   });
 
+  it('reads back the Series the User has taken out of Continue Watching', async () => {
+    // A per-User list of ours (#12): Jellyfin has nowhere of its own to keep
+    // "do not offer me this show", so it lives under `jf.` with the rest.
+    await rafaelsStore().save({
+      hiddenSeries: [{ seriesId: 'series-severance', hiddenAt: 1_781_514_000_000 }],
+    });
+
+    const read = await rafaelsStore().read();
+    expect(read.settings.hiddenSeries).toEqual([
+      { seriesId: 'series-severance', hiddenAt: 1_781_514_000_000 },
+    ]);
+  });
+
+  it('is an empty list for a User who has never hidden a Series', async () => {
+    expect((await rafaelsStore().read()).settings.hiddenSeries).toEqual([]);
+  });
+
   it('keeps the Home Layout when only the colour changes', async () => {
     await rafaelsStore().save({ homeLayout: layout });
 

@@ -118,6 +118,85 @@ export type TitleDetails = {
 };
 
 /**
+ * What this User has done with one item: where they got to, how far through
+ * that is, and when they last played it.
+ *
+ * It is read apart from the item itself because it belongs to a *User* rather
+ * than to the catalogue — the same Episode has a different one for everybody in
+ * the household — and because only the Rows and screens that ask the Server for
+ * `UserData` have it at all.
+ *
+ * Every field is left out rather than defaulted, as everywhere else here: a
+ * resume point of zero is the *absence* of a resume point (the Server sends a
+ * zero rather than nothing), and an item nobody has played has no last-played
+ * date rather than one at the epoch.
+ */
+export type PlaybackState = {
+  /** `UserData.PlaybackPositionTicks`, in Jellyfin's 100-nanosecond ticks. */
+  readonly positionTicks?: number;
+  /** How far through, from 0 to 1 — what a card draws its progress bar from. */
+  readonly progress?: number;
+  /** `UserData.LastPlayedDate` as milliseconds since the epoch. */
+  readonly lastPlayedAt?: number;
+  /** `UserData.Played`: whether this User has finished it. */
+  readonly played: boolean;
+};
+
+/**
+ * One item's playback state for the User the query was made as.
+ *
+ * `PlayedPercentage` is the Server's own answer and is preferred, because it
+ * knows the real length of the file; `RunTimeTicks` is the fallback, for the
+ * endpoints that send a position but no percentage. Either way the progress is
+ * clamped into 0–1 and left out when there is nothing to say.
+ */
+export function playbackStateOf(dto: BaseItemDto): PlaybackState {
+  const userData = dto.UserData;
+  const positionTicks =
+    typeof userData?.PlaybackPositionTicks === 'number' && userData.PlaybackPositionTicks > 0
+      ? userData.PlaybackPositionTicks
+      : undefined;
+
+  return {
+    ...positiveNumberOf('positionTicks', positionTicks),
+    ...numberOf('progress', progressOf(userData?.PlayedPercentage, positionTicks, dto.RunTimeTicks)),
+    ...numberOf('lastPlayedAt', dateOf(userData?.LastPlayedDate)),
+    played: userData?.Played === true,
+  };
+}
+
+function progressOf(
+  playedPercentage: unknown,
+  positionTicks: number | undefined,
+  runTimeTicks: unknown,
+): number | undefined {
+  if (typeof playedPercentage === 'number' && Number.isFinite(playedPercentage)) {
+    return clampedToAFraction(playedPercentage / 100);
+  }
+  if (
+    positionTicks === undefined ||
+    typeof runTimeTicks !== 'number' ||
+    !Number.isFinite(runTimeTicks) ||
+    runTimeTicks <= 0
+  ) {
+    return undefined;
+  }
+  return clampedToAFraction(positionTicks / runTimeTicks);
+}
+
+/** A fraction of the way through, however badly the Server reported it. */
+function clampedToAFraction(fraction: number): number {
+  return Math.max(0, Math.min(1, fraction));
+}
+
+/** An ISO date as a timestamp, left out when there was none or it was unreadable. */
+function dateOf(value: unknown): number | undefined {
+  if (typeof value !== 'string') return undefined;
+  const at = Date.parse(value);
+  return Number.isNaN(at) ? undefined : at;
+}
+
+/**
  * One item as everything the title page shows, or `undefined` when it is not a
  * Title at all — which is also what a hand-typed address for an Episode or an
  * album comes to.

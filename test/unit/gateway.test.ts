@@ -304,6 +304,127 @@ describe('the Jellyfin gateway', () => {
     expect((await gateway.getFavouriteItems()).map((item) => item.Id)).toEqual(['movie-arrival']);
   });
 
+  it('reads the newest additions of every kind, newest first, with their dates', async () => {
+    const gateway = createJellyfinGateway({
+      serverAddress: fakeJellyfinUrl(),
+      deviceId: 'reads-additions',
+      ...identity,
+      token: tokenFor('reads-additions'),
+    });
+
+    const additions = await gateway.getRecentAdditions({ limit: 3 });
+
+    // The one query that sees a Season and an Episode as themselves, because a
+    // Title Label is about what was added (#14) — and it asks for
+    // `DateCreated`, which the Server sends only when it is named. The newest
+    // addition on the whole Server is an album, and it is still not in this:
+    // nothing the app shows is made new by it.
+    expect(additions.map((item) => item.Id)).toEqual([
+      'episode-bluey-s2e3',
+      'episode-bluey-s2e2',
+      'episode-severance-s2e4',
+    ]);
+    expect(additions[0]?.DateCreated).toBe('2026-06-14T20:00:00Z');
+  });
+
+  it('reads what a User has started and not finished, most recently played first', async () => {
+    await setFakeState({
+      playbackPositions: {
+        'user-rafael': { 'movie-heat': 100, 'episode-severance-s2e4': 200 },
+      },
+      lastPlayedDates: {
+        'user-rafael': {
+          'movie-heat': '2026-06-14T21:00:00Z',
+          'episode-severance-s2e4': '2026-06-15T09:00:00Z',
+        },
+      },
+    });
+    const gateway = createJellyfinGateway({
+      serverAddress: fakeJellyfinUrl(),
+      deviceId: 'reads-resume',
+      ...identity,
+      token: tokenFor('reads-resume'),
+    });
+
+    const resume = await gateway.getResumeItems();
+
+    expect(resume.map((item) => item.Id)).toEqual(['episode-severance-s2e4', 'movie-heat']);
+    // The progress bar and the resume point are both `UserData`, so this is the
+    // one Row's query that cannot do without it.
+    expect(resume[0]?.UserData?.PlaybackPositionTicks).toBe(200);
+    expect(resume[0]?.UserData?.LastPlayedDate).toBe('2026-06-15T09:00:00Z');
+  });
+
+  it('reads the next Episode of each Series a User is watching', async () => {
+    await setFakeState({
+      played: { 'user-rafael': ['episode-severance-s2e3'] },
+      lastPlayedDates: { 'user-rafael': { 'episode-severance-s2e3': '2026-06-15T09:00:00Z' } },
+    });
+    const gateway = createJellyfinGateway({
+      serverAddress: fakeJellyfinUrl(),
+      deviceId: 'reads-next-up',
+      ...identity,
+      token: tokenFor('reads-next-up'),
+    });
+
+    const nextUp = await gateway.getNextUpItems();
+
+    // One Episode per Series, and only for a Series the User has started —
+    // Bluey is untouched, so there is no "next" Episode of it.
+    expect(nextUp.map((item) => item.Id)).toEqual(['episode-severance-s2e4']);
+  });
+
+  it('reads when each Series was last watched, from the Episodes a User finished', async () => {
+    await setFakeState({
+      played: { 'user-rafael': ['episode-severance-s2e3', 'episode-bluey-s2e2'] },
+      lastPlayedDates: {
+        'user-rafael': {
+          'episode-severance-s2e3': '2026-06-15T09:00:00Z',
+          'episode-bluey-s2e2': '2026-06-16T08:00:00Z',
+        },
+      },
+    });
+    const gateway = createJellyfinGateway({
+      serverAddress: fakeJellyfinUrl(),
+      deviceId: 'reads-played-episodes',
+      ...identity,
+      token: tokenFor('reads-played-episodes'),
+    });
+
+    const played = await gateway.getPlayedEpisodes();
+
+    // Most recently played first: it is the only thing this query is for, and
+    // the next unwatched Episode of a Series has no date of its own at all.
+    expect(played.map((item) => item.Id)).toEqual([
+      'episode-bluey-s2e2',
+      'episode-severance-s2e3',
+    ]);
+  });
+
+  it('clears a resume point without touching the watched state', async () => {
+    await setFakeState({
+      playbackPositions: { 'user-rafael': { 'movie-heat': 500 } },
+      played: { 'user-rafael': ['movie-arrival'] },
+    });
+    const gateway = createJellyfinGateway({
+      serverAddress: fakeJellyfinUrl(),
+      deviceId: 'clears-a-resume-point',
+      ...identity,
+      token: tokenFor('clears-a-resume-point'),
+    });
+
+    const data = await gateway.saveUserItemData({
+      itemId: 'movie-heat',
+      playbackPositionTicks: 0,
+    });
+
+    expect(data.PlaybackPositionTicks).toBe(0);
+    // Nothing else changes: only the fields the write named are sent, and the
+    // Server leaves the rest of the record as it was (story 37).
+    expect(data.Played).toBe(false);
+    expect((await gateway.getResumeItems()).map((item) => item.Id)).toEqual([]);
+  });
+
   it('reads one Title in full, by id, with the fields the title page shows', async () => {
     const gateway = createJellyfinGateway({
       serverAddress: fakeJellyfinUrl(),

@@ -40,8 +40,10 @@ src/
   home/                 Where a signed-in User lands: `home-layout.ts` is which
                         Rows and in what order, `home-rows.tsx` which kind is
                         drawn by what, `row.tsx` the Row, its card and
-                        `cardForTitle`, one module per Row beside it. The
-                        Billboard is still to come.
+                        `cardForTitle`, one module per Row beside it —
+                        `new-on-jellyflick.ts`, and `continue-watching.ts`
+                        with the `-row.tsx` that draws it. The Billboard is
+                        still to come.
   i18n/                 `en.ts` is the key set, `es.ts` is typed against it.
   jellyfin/             The gateway: the only module that talks HTTP to the Server.
   my-list/              My List, which is Jellyfin's Favorites: `my-list.ts` is
@@ -242,7 +244,20 @@ and `playbackErrorCode` makes `PlaybackInfo` answer with a `PlaybackErrorCode`
 and no playable source — which is a healthy Server refusing, not a failure.
 `state.playbackPositions` is `UserData.PlaybackPositionTicks` per User, written
 by the progress and stop reports, so a test can watch a resume point arrive and
-then be honoured.
+then be honoured. `state.lastPlayedDates` is `UserData.LastPlayedDate` beside
+it, written by the same reports and seeded empty — it is what Continue Watching
+is ordered by (#12), so a test that wants a household with a viewing history
+seeds both. `failUserItemDataWritesWith` makes
+`POST /UserItems/{itemId}/UserData` answer with a status, which is how a refused
+"take this off Continue Watching" is reached.
+
+`/UserItems/Resume` and `/Shows/NextUp` are the Row's own two endpoints
+(`routes/user-items.ts` and `routes/shows.ts`). The fake models the two
+properties a client leans on: NextUp answers **one Episode per Series**, and
+only for a Series the User has actually started, ordered by when they last
+watched it. `POST /UserItems/{itemId}/UserData` changes **only** the fields it
+is sent, as the real controller does, which is what makes "clearing a resume
+point leaves the watched state alone" a thing a test can prove.
 
 Each User's `UserConfiguration` lives in `state.userConfiguration`, keyed by
 user id, per User and seeded empty as `favourites` and `played` are — so a User
@@ -444,7 +459,8 @@ belongs to a screen rather than a person.
   reads no body.
 - **A new setting is three lines**: a `jf.` key, a field on `ClientSettings`
   with a default, and a line each in `settingsFrom` and `prefsFor`. There are
-  three keys today: `jf.homeLayout`, `jf.uiLanguage` and `jf.accentColour`. A
+  four keys today: `jf.homeLayout`, `jf.uiLanguage`, `jf.accentColour` and
+  `jf.hiddenSeries` (#12). A
   setting whose value is a name rather than a structure is typed as a plain
   `string`, not a union, so a preset a *newer* Jellyflick offers survives being
   read by an older one — the reader falls back when it draws it
@@ -589,7 +605,7 @@ about which one a new setting belongs in:
 | Where on the Server | `DisplayPreferences.CustomPrefs` | `UserConfiguration`, on the User's account |
 | Partitioned by | `client=jellyflick` — Jellyflick's alone | nothing: it is the Jellyfin account |
 | Who else can see it | no other app | **every** Jellyfin app, and they can change it |
-| What lives there | Home Layout, Accent Colour, UI language | audio language, subtitle language, when to show subtitles, next-Episode autoplay |
+| What lives there | Home Layout, Accent Colour, UI language, hidden Series | audio language, subtitle language, when to show subtitles, next-Episode autoplay |
 | Keys | prefixed `jf.`, ours to name | the Server's own field names |
 
 - **Pick the store by who the setting belongs to.** Something Jellyfin itself
@@ -634,6 +650,79 @@ about which one a new setting belongs in:
   reads the Server's own copy back rather than the screen's.
 
 The settings screen section above says how the copy keeps both stores honest.
+
+## Continue Watching
+
+`src/home/continue-watching.ts` is #12 and stories 35 to 39: what the household
+started and has not finished, merged with the next unwatched Episode of each
+Series it is watching. `continue-watching-row.tsx` draws it; every rule is in
+the first file, as a pure function of what the Server said.
+
+- **It is three reads, because the Server asks three different questions.**
+  `GET /UserItems/Resume` is what is part-watched, with where the User got to;
+  `GET /Shows/NextUp` is which Episode comes next in each Series, one per
+  Series, so "a Series appears once" is the Server's own doing; and
+  `GET /Items?isPlayed=true&sortBy=DatePlayed` is **when each Series was last
+  watched**. That third one is the subtle one: the next unwatched Episode has
+  never been played, so it carries no `LastPlayedDate` at all, and ordering a
+  Series by it would put a show finished an hour ago below a film abandoned
+  last month. The Episode before it has a date, and one query answers that for
+  every Series at once.
+- **An entry is two things, and keeping them apart is the whole ticket.** The
+  `itemId` is the Movie or Episode — what is resumed, and what a resume point
+  belongs to — and the `title` is the Movie or the *Series*, which is whose
+  card is drawn and whose page a press opens. A part-watched Episode beats a
+  next-up one for the same Series, whatever their dates: the User is in the
+  middle of it.
+- **A failure is the whole Row's**, unlike New on Jellyflick, where a library
+  that will not answer is simply a shorter Row. Half of this one silently
+  missing would look like the app having forgotten what a household was
+  watching.
+- **The order's tie-break is the Server's own order**, carried as a rank beside
+  each entry rather than left to a stable sort: `Array.prototype.sort` is only
+  stable from Chromium 70, one above the floor ADR 0002 sets.
+- **Taking an entry out is two different writes, and which ones happen is the
+  kind of entry:**
+  - a resume point is cleared with `POST /UserItems/{itemId}/UserData` carrying
+    **only** `PlaybackPositionTicks: 0`. That endpoint changes only the fields
+    it is sent, which is why it is not `markPlayed`: story 37 is "my watch
+    history stays as it is", so `Played` and the play count must not move.
+  - a **Series** goes on the User's own hidden list, `jf.hiddenSeries` in
+    Client Settings (story 38). Jellyfin has nowhere of its own for "stop
+    offering me this show", and it is a statement about a person rather than a
+    screen, so it follows them to every device.
+  - a part-watched **Episode** does **both**, and that is not belt and braces:
+    clearing the point alone leaves the Server offering that very Episode as
+    the one to watch next, so the Row would not change at all.
+- **Hiding undoes itself, with no second write and no clock.** A record stores
+  the Series' activity at the moment it was hidden, and the Series comes back
+  when its activity moves past that — which is exactly "another of its
+  Episodes has been played" (story 39). A Series whose activity nothing says is
+  hidden at zero, so the next thing the User plays brings it back. The record
+  is **spent** once the Series is shown again, and the Row writes it off the
+  list: leaving it would hide the Series a second time the next time its next
+  Episode came round.
+- **The Row holds the Server's answer, not the merged entries.** Hiding has to
+  show at once, and the merge is cheap and pure, so it is run on every render
+  against the User's current list — with what they have just removed kept
+  beside it, because a change shows before the Server has agreed to it, the
+  bargain My List makes. A refusal puts the card back and says so.
+- **An empty Row draws nothing**, as My List's does and for the same reason: a
+  User who has watched nothing yet is every new User, and a notice on Home on
+  every visit would be in the way.
+- **The card's progress bar is `RowCard.progress`**, drawn by `CardProgress` in
+  `row.tsx` and absent on every other Row's cards. It is a `role="progressbar"`
+  rather than a styled `<div>`: how much is left is the point of it, and a
+  screen reader has nothing else to read it from. A next-up Episode carries a
+  bar at **zero** rather than no bar, because none of that Episode has been
+  watched and that is worth seeing.
+- **The remove control is pointer-only**, like the My List toggle beside it and
+  for the reason in `src/navigation/`: a second focus stop inside a card would
+  stop the arrow keys reading a Row as a line of cards. So a remote cannot take
+  something off this Row today — the enlarged hover card (#21) is where a card's
+  controls finally become reachable, and this one belongs there with Play, My
+  List and More info. The Playwright spec skips those two journeys in the
+  keyboard-only project for exactly that reason.
 
 ## My List
 

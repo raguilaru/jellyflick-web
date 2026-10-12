@@ -336,6 +336,17 @@ body {
   display: block;
 }
 
+/*
+ * A card can carry two controls: My List, and Continue Watching's own "take
+ * this off the Row" (#12). The second sits at the other top corner rather than
+ * under the first, so neither covers the artwork's middle and both are a
+ * thumb's width apart on a phone.
+ */
+.card__control--remove {
+  right: auto;
+  left: var(--space-2);
+}
+
 .card__control[aria-pressed='true'] {
   background: var(--accent);
   border-color: var(--accent);
@@ -356,6 +367,36 @@ body {
 }
 
 /*
+ * The progress bar across the bottom of a card's artwork (#12, story 36).
+ *
+ * Positioned the same way the Title Label is, and for the same reason — the
+ * card's own bottom edge is below the name, so `--card-artwork-height` is what
+ * both measure from. It sits flush on the artwork's bottom edge and the label
+ * sits above it, which is why the label's offset subtracts its height.
+ *
+ * The watched part is the Accent Colour over a muted track, so "how much is
+ * left" reads at a glance from across a room.
+ */
+.card__progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: var(--card-artwork-height);
+  transform: translateY(-100%);
+  height: 4px;
+  border-bottom-left-radius: var(--radius);
+  border-bottom-right-radius: var(--radius);
+  background: var(--surface-line);
+  overflow: hidden;
+}
+
+.card__progress-watched {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+/*
  * The Title Label (#14): what is new about this Title, across the bottom of its
  * artwork in the User's Accent Colour.
  *
@@ -371,7 +412,8 @@ body {
   position: absolute;
   left: 0;
   max-width: 100%;
-  top: var(--card-artwork-height);
+  /* Clear of the progress bar, which is 4px on the artwork's bottom edge. */
+  top: calc(var(--card-artwork-height) - 4px);
   transform: translateY(-100%);
   padding: 2px var(--space-1);
   /* Physical, not the logical `border-start-end-radius`, which is Chrome 89. */

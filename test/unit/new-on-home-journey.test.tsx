@@ -77,8 +77,13 @@ describe('a User landing on Home', () => {
 
     await signInAndLand();
 
-    expect((await screen.findByRole('alert')).textContent).toBe(
-      'Jellyflick could not read what is new from the Server.',
+    // Continue Watching is reading the same Server and says so too (#12), so
+    // this is about the Row's own message being among them rather than the only
+    // thing on the screen.
+    await waitFor(() =>
+      expect(
+        screen.getAllByRole('alert').map((alert) => alert.textContent),
+      ).toContain('Jellyflick could not read what is new from the Server.'),
     );
   });
 

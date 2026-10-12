@@ -81,14 +81,17 @@ test('the label sits across the bottom of the card art, in the Accent Colour', a
   const label = card.locator('.card__label');
   await expect(label).toBeVisible();
 
-  // Only a real layout can say where it landed: the label's bottom edge is the
-  // artwork's bottom edge, and it starts at the artwork's left.
+  // Only a real layout can say where it landed: the label sits on the bottom of
+  // the artwork — just clear of where a progress bar would be (#12) — and
+  // starts at the artwork's left.
   const artwork = await card.locator('img.card__artwork').boundingBox();
   const drawn = await label.boundingBox();
   expect(artwork).not.toBeNull();
   expect(drawn).not.toBeNull();
   const artworkBottom = (artwork?.y ?? 0) + (artwork?.height ?? 0);
-  expect(Math.abs((drawn?.y ?? 0) + (drawn?.height ?? 0) - artworkBottom)).toBeLessThan(1.5);
+  const labelBottom = (drawn?.y ?? 0) + (drawn?.height ?? 0);
+  expect(labelBottom).toBeLessThanOrEqual(artworkBottom + 0.5);
+  expect(labelBottom).toBeGreaterThan(artworkBottom - 6);
   expect(Math.abs((drawn?.x ?? 0) - (artwork?.x ?? 0))).toBeLessThan(1.5);
   // Inside the art, not under it.
   expect(drawn?.height ?? 0).toBeLessThan(artwork?.height ?? 0);

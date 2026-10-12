@@ -134,5 +134,12 @@ function reportFrom(
     state.playbackPositions[user.Id] = forUser;
   }
 
+  // Playing something is the only thing that sets `LastPlayedDate` on the real
+  // Server, and it is what Continue Watching is ordered by (#12). A test that
+  // wants a household with a history seeds `lastPlayedDates` instead.
+  const playedAt = state.lastPlayedDates[user.Id] ?? {};
+  playedAt[itemId] = new Date().toISOString();
+  state.lastPlayedDates[user.Id] = playedAt;
+
   return { status: 204 };
 }

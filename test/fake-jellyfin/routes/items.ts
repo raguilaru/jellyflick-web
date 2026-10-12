@@ -118,14 +118,17 @@ export const itemRoutes: readonly FakeRoute[] = [
       const sortBy = request.query.get('sortBy') ?? 'Name';
       const sortOrder = request.query.get('sortOrder') ?? 'Ascending';
       const newestFirst = sortBy === 'DateCreated' && sortOrder === 'Descending';
+      // `DatePlayed` descending is "when was this last watched", which is what
+      // Continue Watching orders a Series by (#12).
+      const lastPlayedFirst = sortBy === 'DatePlayed' && sortOrder === 'Descending';
       const byName =
         (sortBy === 'Name' || sortBy === 'SortName') && sortOrder === 'Ascending';
-      if (!newestFirst && !byName) {
+      if (!newestFirst && !lastPlayedFirst && !byName) {
         return {
           status: 400,
           body: {
             error:
-              'The fake Jellyfin only implements sortBy=Name or SortName ascending, and sortBy=DateCreated descending. Implement the order your ticket needs in test/fake-jellyfin/routes/items.ts.',
+              'The fake Jellyfin only implements sortBy=Name or SortName ascending, and sortBy=DateCreated or DatePlayed descending. Implement the order your ticket needs in test/fake-jellyfin/routes/items.ts.',
           },
         };
       }
@@ -135,10 +138,14 @@ export const itemRoutes: readonly FakeRoute[] = [
       const genres = csvOf(request.query.get('genres'));
       const ids = csvOf(request.query.get('ids'));
       const favourites = state.favourites[user.Id] ?? [];
+      // `isPlayed` is a filter about one User, like `isFavorite` beside it.
+      const isPlayed = request.query.get('isPlayed');
+      const played = state.played[user.Id] ?? [];
 
       const matching = state.items
         .filter((item) => ids.length === 0 || ids.includes(item.Id))
         .filter((item) => !favouritesOnly || favourites.includes(item.Id))
+        .filter((item) => isPlayed === null || played.includes(item.Id) === (isPlayed === 'true'))
         .filter((item) => includeItemTypes.length === 0 || includeItemTypes.includes(item.Type))
         // The real Server's matching is cleverer than this; a substring of the
         // name is as much as a fake owes a client.
@@ -150,11 +157,16 @@ export const itemRoutes: readonly FakeRoute[] = [
         .filter(
           (item) => genres.length === 0 || genres.some((genre) => hasGenre(item, genre)),
         )
-        .sort((left, right) =>
-          newestFirst
-            ? Date.parse(right.DateCreated) - Date.parse(left.DateCreated)
-            : left.Name.localeCompare(right.Name),
-        )
+        .sort((left, right) => {
+          if (newestFirst) return Date.parse(right.DateCreated) - Date.parse(left.DateCreated);
+          if (lastPlayedFirst) {
+            return (
+              lastPlayedAtOf(state, user.Id, right.Id) -
+              lastPlayedAtOf(state, user.Id, left.Id)
+            );
+          }
+          return left.Name.localeCompare(right.Name);
+        })
         .slice(0, limitOf(request.query.get('limit')))
         .map((item) => asAskedFor(item, request, state, user.Id));
 
@@ -312,19 +324,57 @@ function asAskedFor(
   if (request.query.get('enableUserData') === 'false') {
     delete dto.UserData;
   } else {
-    dto.UserData = {
-      Key: item.Id,
-      ItemId: item.Id,
-      Played: (state.played[userId] ?? []).includes(item.Id),
-      IsFavorite: (state.favourites[userId] ?? []).includes(item.Id),
-      PlayCount: 0,
-      // Where this User got to, which is the resume point (#25). The real
-      // Server sends 0 for an item nobody has started, never nothing.
-      PlaybackPositionTicks: state.playbackPositions[userId]?.[item.Id] ?? 0,
-    };
+    dto.UserData = userDataFor(item, state, userId);
   }
 
   return dto;
+}
+
+/**
+ * One item's `UserItemDataDto` for one User, as the real Server composes it.
+ *
+ * Shared, because three endpoints serve it — `/Items`, `/UserItems/Resume` and
+ * `/Shows/NextUp` — and a Row ordered by `LastPlayedDate` from one and a
+ * progress bar drawn from `PlayedPercentage` on another must not be able to
+ * disagree.
+ *
+ * `PlayedPercentage` is sent only where there is something to be a percentage
+ * of: the real Server works it out from the position and the runtime, and
+ * leaves it out for an item nobody has started.
+ */
+export function userDataFor(
+  item: FakeItem,
+  state: FakeJellyfinState,
+  userId: string,
+): Record<string, unknown> {
+  const positionTicks = state.playbackPositions[userId]?.[item.Id] ?? 0;
+  const lastPlayedDate = state.lastPlayedDates[userId]?.[item.Id];
+  const played = (state.played[userId] ?? []).includes(item.Id);
+
+  return {
+    Key: item.Id,
+    ItemId: item.Id,
+    Played: played,
+    IsFavorite: (state.favourites[userId] ?? []).includes(item.Id),
+    PlayCount: played || positionTicks > 0 ? 1 : 0,
+    // Where this User got to, which is the resume point (#25). The real
+    // Server sends 0 for an item nobody has started, never nothing.
+    PlaybackPositionTicks: positionTicks,
+    ...(positionTicks > 0 && item.RunTimeTicks !== undefined && item.RunTimeTicks > 0
+      ? { PlayedPercentage: (positionTicks / item.RunTimeTicks) * 100 }
+      : {}),
+    ...(lastPlayedDate === undefined ? {} : { LastPlayedDate: lastPlayedDate }),
+  };
+}
+
+/** When this User last played an item, as a timestamp. Zero for never. */
+export function lastPlayedAtOf(
+  state: FakeJellyfinState,
+  userId: string,
+  itemId: string,
+): number {
+  const date = state.lastPlayedDates[userId]?.[itemId];
+  return date === undefined ? 0 : Date.parse(date);
 }
 
 function imageTagOf(item: FakeItem | undefined, imageType: string): string | undefined {

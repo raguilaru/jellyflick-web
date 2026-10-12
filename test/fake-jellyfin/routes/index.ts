@@ -5,8 +5,10 @@ import { itemRoutes } from './items.ts';
 import { quickConnectRoutes } from './quick-connect.ts';
 import { mediaInfoRoutes } from './media-info.ts';
 import { sessionRoutes } from './sessions.ts';
+import { showRoutes } from './shows.ts';
 import { systemRoutes } from './system.ts';
 import { userFavoriteRoutes } from './user-favorites.ts';
+import { userItemRoutes } from './user-items.ts';
 import { userPlayedRoutes } from './user-played.ts';
 import { userRoutes } from './users.ts';
 import { userViewRoutes } from './user-views.ts';
@@ -27,6 +29,8 @@ export const jellyfinRoutes: readonly FakeRoute[] = [
   ...userViewRoutes,
   ...userFavoriteRoutes,
   ...userPlayedRoutes,
+  ...userItemRoutes,
+  ...showRoutes,
   ...mediaInfoRoutes,
   ...itemRoutes,
   ...videoRoutes,

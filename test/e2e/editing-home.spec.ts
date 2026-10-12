@@ -92,6 +92,7 @@ test('hiding a Row takes it off Home', async ({ page }) => {
   await page.getByRole('button', { name: 'Hide New on Jellyflick' }).press('Enter');
   // Every Row whose feature is built, or Home would still be drawing one of
   // them. The rest are in the layout but are not on Home yet.
+  await page.getByRole('button', { name: 'Hide Continue Watching' }).press('Enter');
   await page.getByRole('button', { name: 'Hide My List' }).press('Enter');
   await backToHome(page);
 

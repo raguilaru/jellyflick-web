@@ -152,6 +152,45 @@ export type JellyfinGateway = {
    */
   getRecentAdditions(options?: RecentAdditionsOptions): Promise<BaseItemDto[]>;
   /**
+   * `GET /UserItems/Resume` — what this User has started and not finished, most
+   * recently played first, which is half of Continue Watching (#12).
+   *
+   * Movies and **Episodes**, deliberately: a part-watched Episode is a thing a
+   * User resumes, so this is the one Row whose items are not all Titles. The
+   * legacy `/Users/{userId}/Items/Resume` is gone in 12.x.
+   */
+  getResumeItems(options?: ContinueWatchingOptions): Promise<BaseItemDto[]>;
+  /**
+   * `GET /Shows/NextUp` — the next unwatched Episode of each Series this User
+   * is watching, the Series they watched most recently first. The other half of
+   * Continue Watching.
+   *
+   * It answers one Episode per Series, which is what makes "one entry per
+   * Series" the Server's own property rather than something merged here.
+   */
+  getNextUpItems(options?: ContinueWatchingOptions): Promise<BaseItemDto[]>;
+  /**
+   * `POST /UserItems/{itemId}/UserData` — the general user-data write, and the
+   * only one that can move a resume point (#12, stories 37 and 38).
+   *
+   * Everything left out of `UpdateUserItemDataDto` is left alone, which is the
+   * whole reason this is not `markPlayed`: taking something out of Continue
+   * Watching clears where the User got to **without** touching whether they
+   * watched it or how many times.
+   */
+  saveUserItemData(options: UserItemDataWrite): Promise<UserItemDataDto>;
+  /**
+   * `GET /Items?isPlayed=true&sortBy=DatePlayed` — the Episodes this User has
+   * finished, most recently played first (#12).
+   *
+   * It exists for one reason: **when a Series was last watched**. The next
+   * unwatched Episode `/Shows/NextUp` answers with has never been played, so it
+   * carries no `LastPlayedDate` of its own and there is nothing on it to order
+   * Continue Watching by. The Episode *before* it has one, and this is how the
+   * Row reads it — one query for the whole Row rather than one per Series.
+   */
+  getPlayedEpisodes(options?: ContinueWatchingOptions): Promise<BaseItemDto[]>;
+  /**
    * `GET /Items/{itemId}/Similar` — the Titles the Server thinks are like a
    * given one, which is the title page's More like this Row (#17).
    *
@@ -395,6 +434,21 @@ export type TitlesQueryOptions = {
   detail?: boolean;
 };
 
+export type ContinueWatchingOptions = {
+  limit?: number;
+};
+
+/**
+ * One user-data field, or a few, to change on an item. Only what is named is
+ * sent, because the Server leaves the rest of the record as it is — and that is
+ * exactly what "my watch history stays as it is" means in story 37.
+ */
+export type UserItemDataWrite = {
+  itemId: string;
+  /** Where the User got to, in Jellyfin's 100-nanosecond ticks. */
+  playbackPositionTicks?: number;
+};
+
 export type RecentAdditionsOptions = {
   /**
    * How many of the newest additions to read. The Server has no "added since"
@@ -437,6 +491,13 @@ const TITLE_ITEM_TYPES = 'Movie,Series';
  * uses it.
  */
 const ADDITION_ITEM_TYPES = 'Movie,Series,Season,Episode';
+
+/**
+ * What a User can resume: a Movie, or one Episode of a Series. Only
+ * `getResumeItems` uses it — a Series is resumed through its next Episode,
+ * which is a different endpoint.
+ */
+const RESUMABLE_ITEM_TYPES = 'Movie,Episode';
 
 /**
  * The `fields` a title page needs and a Row does not. The ratings,
@@ -648,6 +709,70 @@ export function createJellyfinGateway(options: JellyfinGatewayOptions): Jellyfin
           // query wants none of its own.
           enableImages: false,
           enableUserData: false,
+          enableTotalRecordCount: false,
+          ...(options.limit === undefined ? {} : { limit: options.limit }),
+        })}`,
+      ).then((result) => result.Items ?? []),
+
+    getResumeItems: (options = {}) =>
+      request<BaseItemDtoQueryResult>(
+        'GET',
+        `/UserItems/Resume${query({
+          // A Movie or an Episode: the two things a User resumes. A Series is
+          // never resumable itself — its next Episode is `/Shows/NextUp`.
+          includeItemTypes: RESUMABLE_ITEM_TYPES,
+          mediaTypes: 'Video',
+          // The progress bar and the resume point are both `UserData`, so this
+          // is the one Row that cannot do without it.
+          enableUserData: true,
+          // A card shows the Series' poster, which an Episode carries as
+          // `SeriesPrimaryImageTag` rather than as an image of its own.
+          enableImageTypes: 'Primary',
+          imageTypeLimit: 1,
+          enableTotalRecordCount: false,
+          ...(options.limit === undefined ? {} : { limit: options.limit }),
+        })}`,
+      ).then((result) => result.Items ?? []),
+
+    getNextUpItems: (options = {}) =>
+      request<BaseItemDtoQueryResult>(
+        'GET',
+        `/Shows/NextUp${query({
+          enableUserData: true,
+          enableImageTypes: 'Primary',
+          imageTypeLimit: 1,
+          enableTotalRecordCount: false,
+          ...(options.limit === undefined ? {} : { limit: options.limit }),
+        })}`,
+      ).then((result) => result.Items ?? []),
+
+    saveUserItemData: (options) =>
+      request<UserItemDataDto>(
+        'POST',
+        `/UserItems/${encodeURIComponent(options.itemId)}/UserData`,
+        {
+          // Only the fields that were asked for: an absent field is one the
+          // Server does not change.
+          ...(options.playbackPositionTicks === undefined
+            ? {}
+            : { PlaybackPositionTicks: options.playbackPositionTicks }),
+        },
+      ),
+
+    getPlayedEpisodes: (options = {}) =>
+      request<BaseItemDtoQueryResult>(
+        'GET',
+        `/Items${query({
+          includeItemTypes: 'Episode',
+          recursive: true,
+          isPlayed: true,
+          // When they were played, newest first, which is the only thing this
+          // query is for.
+          sortBy: 'DatePlayed',
+          sortOrder: 'Descending',
+          // The date lives in `UserData`; nothing here is drawn, so no artwork.
+          enableUserData: true,
+          enableImages: false,
           enableTotalRecordCount: false,
           ...(options.limit === undefined ? {} : { limit: options.limit }),
         })}`,
