@@ -134,6 +134,26 @@ export const itemRoutes: readonly FakeRoute[] = [
       }
 
       const includeItemTypes = csvOf(request.query.get('includeItemTypes'));
+      const parentId = request.query.get('parentId');
+
+      // A query for BoxSets is a query for the Collections, which are held
+      // beside the items rather than among them — the membership is not a
+      // field on an item, so a Collection is not one either. This is how a
+      // User is offered the Collections to make a Row of (#15, story 45).
+      if (includeItemTypes.length === 1 && includeItemTypes[0] === 'BoxSet') {
+        const collections = state.collections
+          .filter((collection) => parentId === null || collection.Id === parentId)
+          .slice()
+          .sort((left, right) => left.Name.localeCompare(right.Name))
+          .slice(0, limitOf(request.query.get('limit')))
+          .map(servedCollectionViewOf);
+
+        return {
+          status: 200,
+          body: { Items: collections, TotalRecordCount: collections.length, StartIndex: 0 },
+        };
+      }
+
       const searchTerm = request.query.get('searchTerm');
       const genres = csvOf(request.query.get('genres'));
       const ids = csvOf(request.query.get('ids'));
@@ -144,6 +164,11 @@ export const itemRoutes: readonly FakeRoute[] = [
 
       const matching = state.items
         .filter((item) => ids.length === 0 || ids.includes(item.Id))
+        // `parentId` is "inside this folder", and the two folders this Server
+        // has are a library and a Collection. A parent it does not have holds
+        // nothing, which is a real answer: a Collection deleted on the Server
+        // leaves a Row with nothing in it rather than a failure.
+        .filter((item) => parentId === null || isInside(state, item, parentId))
         .filter((item) => !favouritesOnly || favourites.includes(item.Id))
         .filter((item) => isPlayed === null || played.includes(item.Id) === (isPlayed === 'true'))
         .filter((item) => includeItemTypes.length === 0 || includeItemTypes.includes(item.Type))
@@ -288,7 +313,7 @@ const GATED_BY_FIELDS: Readonly<Record<string, keyof FakeItem>> = {
  * off. `Genres` is deliberately not gated — the Server does gate it, and every
  * query this app makes asks for it, so gating it here would only add noise.
  */
-function asAskedFor(
+export function asAskedFor(
   item: FakeItem,
   request: FakeRequest,
   state: FakeJellyfinState,
@@ -392,6 +417,16 @@ function csvOf(raw: string | null): string[] {
     .split(',')
     .map((value) => value.trim())
     .filter((value) => value.length > 0);
+}
+
+/**
+ * Whether an item is inside a parent, which on this Server is either a library
+ * or a Collection. A parent that is neither contains nothing at all.
+ */
+function isInside(state: FakeJellyfinState, item: FakeItem, parentId: string): boolean {
+  if (item.libraryId === parentId) return true;
+  const collection = state.collections.find((candidate) => candidate.Id === parentId);
+  return collection !== undefined && collection.itemIds.includes(item.Id);
 }
 
 function hasGenre(item: FakeItem, genre: string): boolean {

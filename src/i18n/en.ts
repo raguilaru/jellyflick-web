@@ -137,6 +137,18 @@ export const en = {
   'home.row.myList': 'My List',
   'home.row.watchAgain': 'Watch Again',
   'home.row.becauseYouWatched': 'Because You Watched',
+  // The two kinds a User can have several of (#15), named generically here:
+  // on Home each one is headed by its own genre or Collection instead.
+  'home.row.genre': 'Genre',
+  'home.row.collection': 'Collection',
+
+  // The suggestion Rows (#15, stories 43 to 46). Because You Watched is headed
+  // by the Title it came from, because the Row's name on its own says nothing
+  // about why those Titles are there.
+  'home.row.becauseYouWatchedTitle': (p: { title: string }) =>
+    `Because you watched ${p.title}`,
+  'home.row.unavailable': (p: { row: string }) =>
+    `Jellyflick could not read ${p.row} from the Server.`,
 
   // Title Labels (#14, story 42): the one word on a card's art saying what is
   // new about it. Short, because the card art is small and the label sits
@@ -158,6 +170,19 @@ export const en = {
   'homeLayout.addHeading': 'Rows you can add',
   'homeLayout.add': (p: { row: string }) => `Add ${p.row}`,
   'homeLayout.nothingToAdd': 'Every Row is already on Home.',
+
+  // Adding a Row that needs a choice (#15): which genre, which Collection.
+  // Picking is part of adding one, so it happens here and from what the Server
+  // says there is.
+  'homeLayout.chooseGenre': 'Add a genre Row',
+  'homeLayout.chooseCollection': 'Add a Collection Row',
+  'homeLayout.chooseGenreHeading': 'Which genre?',
+  'homeLayout.chooseCollectionHeading': 'Which Collection?',
+  'homeLayout.choiceCancel': 'Never mind',
+  'homeLayout.choicesLoading': 'Looking for what you can add…',
+  'homeLayout.choicesUnavailable':
+    'Jellyflick could not read those from the Server. Try again in a moment.',
+  'homeLayout.noChoicesLeft': 'You already have a Row for each of those.',
   'homeLayout.notSaved': 'Jellyflick could not save that change to the Server.',
 
   // The settings screen: #11's own settings below, and the four the User's

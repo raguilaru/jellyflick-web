@@ -488,6 +488,66 @@ describe('the Jellyfin gateway', () => {
     expect(collections.map((item) => item.Name)).toEqual(['Crime Classics']);
   });
 
+  it('reads the Titles this User has finished, most recently finished first', async () => {
+    await setFakeState({
+      played: { 'user-rafael': ['movie-heat', 'series-severance'] },
+      lastPlayedDates: {
+        'user-rafael': {
+          'movie-heat': '2026-10-01T20:00:00Z',
+          'series-severance': '2026-10-09T21:00:00Z',
+        },
+      },
+    });
+    const gateway = createJellyfinGateway({
+      serverAddress: fakeJellyfinUrl(),
+      deviceId: 'reads-played-titles',
+      ...identity,
+      token: tokenFor('reads-played-titles'),
+    });
+
+    const played = await gateway.getPlayedTitles();
+
+    expect(played.map((item) => item.Id)).toEqual(['series-severance', 'movie-heat']);
+  });
+
+  it('reads Jellyfin’s own recommendations, which come back as categories', async () => {
+    await setFakeState({
+      played: { 'user-rafael': ['movie-heat'] },
+      lastPlayedDates: { 'user-rafael': { 'movie-heat': '2026-10-01T20:00:00Z' } },
+      movieRecommendations: { 'movie-heat': ['movie-arrival'] },
+    });
+    const gateway = createJellyfinGateway({
+      serverAddress: fakeJellyfinUrl(),
+      deviceId: 'reads-recommendations',
+      ...identity,
+      token: tokenFor('reads-recommendations'),
+    });
+
+    const categories = await gateway.getMovieRecommendations({ itemLimit: 5 });
+
+    // A bare array of categories, each saying which Title it is about: a
+    // different shape from every other Row's endpoint.
+    expect(categories.map((category) => category.BaselineItemName)).toEqual(['Heat']);
+    expect(categories[0]?.Items?.map((item) => item.Id)).toEqual(['movie-arrival']);
+  });
+
+  it('reads the Collections on the Server, and the Titles in one', async () => {
+    const gateway = createJellyfinGateway({
+      serverAddress: fakeJellyfinUrl(),
+      deviceId: 'reads-collection-titles',
+      ...identity,
+      token: tokenFor('reads-collection-titles'),
+    });
+
+    const collections = await gateway.getCollections();
+    expect(collections.map((item) => item.Id)).toEqual(['boxset-crime-classics']);
+
+    const inside = await gateway.getCollectionTitles({
+      collectionId: 'boxset-crime-classics',
+    });
+    expect(inside.map((item) => item.Name)).toEqual(['Arrival', 'Heat']);
+  });
+
   it('marks a Title watched and unwatched on the 12.x played routes', async () => {
     const gateway = createJellyfinGateway({
       serverAddress: fakeJellyfinUrl(),

@@ -239,6 +239,18 @@ export type FakeJellyfinState = {
    */
   similar: Record<string, string[]>;
   /**
+   * What `GET /Movies/Recommendations` answers, by the id of the **Movie a
+   * category is about** — its `BaselineItemName` (#15, story 43).
+   *
+   * The real Server works its categories out from what has been played lately,
+   * so the fake keys them by the Movie and serves one category per played
+   * Movie that has an entry, most recently played first. That is what makes
+   * Because You Watched's two branches tellable apart: which Title the Row is
+   * about follows `played` and `lastPlayedDates`, as it does on a real Server,
+   * rather than being fixed whatever the household has watched.
+   */
+  movieRecommendations: Record<string, string[]>;
+  /**
    * A status the `/UserPlayedItems` writes answer with, so a test can see what
    * marking a Title watched looks like when the Server refuses it. Null is the
    * normal Server.
@@ -416,6 +428,7 @@ export function createSampleData(): FakeJellyfinState {
     items: SAMPLE_ITEMS.map((item) => ({ ...item })),
     collections: SAMPLE_COLLECTIONS.map((collection) => ({ ...collection })),
     similar: { ...SAMPLE_SIMILAR },
+    movieRecommendations: { ...SAMPLE_MOVIE_RECOMMENDATIONS },
     users: [
       fakeUser({ Id: 'user-rafael', Name: 'Rafael', PrimaryImageTag: 'tag-rafael' }),
       fakeUser({ Id: 'user-marina', Name: 'Marina', PrimaryImageTag: 'tag-marina' }),
@@ -698,6 +711,14 @@ const SAMPLE_SIMILAR: Readonly<Record<string, string[]>> = {
   'series-severance': ['movie-arrival'],
   'movie-heat': ['movie-arrival'],
 };
+
+/**
+ * What `/Movies/Recommendations` is about, by the Movie each category comes
+ * from. Seeded empty: a Server only has recommendations once a household has
+ * watched something, and every test that wants them seeds `played` anyway, so
+ * seeding a relation here would make "nothing to go on yet" unreachable.
+ */
+const SAMPLE_MOVIE_RECOMMENDATIONS: Readonly<Record<string, string[]>> = {};
 
 /**
  * An item as the Server serves it. The fake's own fields are not fields on a

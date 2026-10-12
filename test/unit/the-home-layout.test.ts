@@ -5,7 +5,9 @@ import {
   DEFAULT_HOME_LAYOUT,
   hideRow,
   moveRow,
+  parametersFor,
   parseHomeLayout,
+  rowKeyOf,
   serialiseHomeLayout,
   showRow,
   visibleRows,
@@ -15,6 +17,11 @@ import {
 /** A layout's Rows by kind, which is how every rule below is read. */
 function kinds(layout: HomeLayout): string[] {
   return layout.map((row) => row.kind);
+}
+
+/** A layout's Rows by key, which is how a parameterised Row is told apart. */
+function keys(layout: HomeLayout): string[] {
+  return layout.map((row) => rowKeyOf(row));
 }
 
 /**
@@ -113,6 +120,8 @@ describe('adding a Row', () => {
       'new-on-jellyflick',
       'watch-again',
       'because-you-watched',
+      'genre',
+      'collection',
     ]);
   });
 
@@ -127,8 +136,70 @@ describe('adding a Row', () => {
     expect(kinds(addRow(layout, 'my-list'))).toEqual(['my-list']);
   });
 
-  it('offers nothing once every Row is on Home', () => {
-    expect(addableRowKinds(DEFAULT_HOME_LAYOUT)).toEqual([]);
+  it('offers only the Rows a User can have more than one of once the rest are on Home', () => {
+    // A genre and a Collection Row are never used up: there is always another
+    // genre to add one for. Whether any choice is *left* is the Server's
+    // answer, and so the editor's to work out — see `parametersFor` below.
+    expect(addableRowKinds(DEFAULT_HOME_LAYOUT)).toEqual(['genre', 'collection']);
+  });
+});
+
+/**
+ * Genre and Collection Rows (#15, stories 44 and 45). A User can have several
+ * of each, so a Row is identified by its kind *and* its parameter — which is
+ * what `rowKeyOf` is, and what every rule above takes.
+ */
+describe('a Row that needs a choice', () => {
+  it('is told apart from another of its kind by its parameter', () => {
+    const layout = addRow(addRow([], 'genre', 'Comedy'), 'genre', 'Thriller');
+
+    expect(keys(layout)).toEqual(['genre:Comedy', 'genre:Thriller']);
+  });
+
+  it('cannot be added twice for the same choice', () => {
+    const layout = addRow(addRow([], 'genre', 'Comedy'), 'genre', 'Comedy');
+
+    expect(keys(layout)).toEqual(['genre:Comedy']);
+  });
+
+  it('says which choices a layout has already used, so the rest can be offered', () => {
+    const layout = addRow(addRow(addRow([], 'genre', 'Comedy'), 'collection', 'boxset-1'), 'genre', 'Drama');
+
+    expect(parametersFor(layout, 'genre')).toEqual(['Comedy', 'Drama']);
+    expect(parametersFor(layout, 'collection')).toEqual(['boxset-1']);
+  });
+
+  it('is hidden, shown and moved by itself, leaving the other of its kind alone', () => {
+    const layout = addRow(addRow([], 'genre', 'Comedy'), 'genre', 'Thriller');
+
+    const hidden = hideRow(layout, 'genre:Comedy');
+    expect(keys(visibleRows(hidden))).toEqual(['genre:Thriller']);
+
+    expect(keys(visibleRows(showRow(hidden, 'genre:Comedy')))).toEqual([
+      'genre:Comedy',
+      'genre:Thriller',
+    ]);
+    expect(keys(moveRow(layout, 'genre:Thriller', 'up'))).toEqual([
+      'genre:Thriller',
+      'genre:Comedy',
+    ]);
+  });
+
+  it('keeps its choice through the round trip to the Server', () => {
+    const layout: HomeLayout = [
+      { kind: 'genre', parameter: 'Comedy' },
+      { kind: 'collection', parameter: 'boxset-crime-classics', hidden: true },
+    ];
+
+    expect(parseHomeLayout(serialiseHomeLayout(layout))).toEqual(layout);
+  });
+
+  it('is dropped when the stored Row names no choice at all', () => {
+    // A genre Row with no genre has nothing to show, so it is dropped the way
+    // an unknown kind is rather than drawn empty.
+    expect(parseHomeLayout('[{"kind":"genre"},{"kind":"my-list"}]')).toEqual([
+      { kind: 'my-list' },
+    ]);
   });
 });
 

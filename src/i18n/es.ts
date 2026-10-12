@@ -118,6 +118,11 @@ export const es: Messages = {
   'home.row.myList': 'Mi lista',
   'home.row.watchAgain': 'Volver a ver',
   'home.row.becauseYouWatched': 'Porque viste',
+  'home.row.genre': 'Género',
+  'home.row.collection': 'Colección',
+  'home.row.becauseYouWatchedTitle': (p: { title: string }) => `Porque viste ${p.title}`,
+  'home.row.unavailable': (p: { row: string }) =>
+    `Jellyflick no pudo leer ${p.row} desde el servidor.`,
 
   'titleLabel.recentlyAdded': 'Añadido hace poco',
   'titleLabel.newSeason': 'Nueva temporada',
@@ -136,6 +141,15 @@ export const es: Messages = {
   'homeLayout.addHeading': 'Filas que puedes añadir',
   'homeLayout.add': (p) => `Añadir ${p.row}`,
   'homeLayout.nothingToAdd': 'Todas las filas ya están en Inicio.',
+  'homeLayout.chooseGenre': 'Añadir una fila de género',
+  'homeLayout.chooseCollection': 'Añadir una fila de colección',
+  'homeLayout.chooseGenreHeading': '¿Qué género?',
+  'homeLayout.chooseCollectionHeading': '¿Qué colección?',
+  'homeLayout.choiceCancel': 'Déjalo',
+  'homeLayout.choicesLoading': 'Buscando lo que puedes añadir…',
+  'homeLayout.choicesUnavailable':
+    'Jellyflick no pudo leer eso desde el servidor. Inténtalo en un momento.',
+  'homeLayout.noChoicesLeft': 'Ya tienes una fila para cada uno de esos.',
   'homeLayout.notSaved': 'Jellyflick no pudo guardar ese cambio en el servidor.',
 
   'settings.heading': 'Ajustes',

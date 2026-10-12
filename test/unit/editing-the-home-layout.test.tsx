@@ -209,10 +209,148 @@ describe('a User adding a Row', () => {
   });
 
   it('is told plainly when there is nothing left to add', async () => {
+    // Every fixed Row, every genre the sample library has, and its one
+    // Collection: the only layout there is nothing to add to, now that a genre
+    // and a Collection Row can be had more than once (#15).
+    await setFakeState({
+      displayPreferences: {
+        'jellyflick|jellyflick|user-rafael': {
+          'jf.homeLayout': JSON.stringify([
+            { kind: 'continue-watching' },
+            { kind: 'my-list' },
+            { kind: 'new-on-jellyflick' },
+            { kind: 'watch-again' },
+            { kind: 'because-you-watched' },
+            ...['Comedy', 'Crime', 'Drama', 'Family', 'Science Fiction', 'Thriller'].map(
+              (genre) => ({ kind: 'genre', parameter: genre }),
+            ),
+            { kind: 'collection', parameter: 'boxset-crime-classics' },
+          ]),
+        },
+      },
+    });
     await signInAndLand();
     await openTheEditor();
 
-    expect(screen.getByText('Every Row is already on Home.')).toBeTruthy();
+    expect(await screen.findByText('Every Row is already on Home.')).toBeTruthy();
+  });
+});
+
+/**
+ * Genre and Collection Rows (#15, stories 44 and 45). A User can have several
+ * of each, and picking which is part of adding one — so the editor is where
+ * that choice is made, from what the Server says there is.
+ */
+describe('a User adding a Row that needs a choice', () => {
+  /** A User whose stored layout holds one Row, so the screen is easy to read. */
+  async function withOneRowStored() {
+    await setFakeState({
+      displayPreferences: {
+        'jellyflick|jellyflick|user-rafael': {
+          'jf.homeLayout': JSON.stringify([{ kind: 'new-on-jellyflick' }]),
+        },
+      },
+    });
+  }
+
+  it('picks the genre when they add a genre Row', async () => {
+    await withOneRowStored();
+    await signInAndLand();
+    await openTheEditor();
+    await waitFor(() => expect(listedRows()).toEqual(['New on Jellyflick']));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add a genre Row' }));
+
+    // The genres are the Server's own, so the User picks from what their
+    // libraries really hold.
+    fireEvent.click(await screen.findByRole('button', { name: 'Add Comedy' }));
+
+    await waitFor(() => expect(listedRows()).toEqual(['New on Jellyflick', 'Comedy']));
+  });
+
+  it('gets the genre’s Titles on Home, under the genre’s own name', async () => {
+    await withOneRowStored();
+    await signInAndLand();
+    await openTheEditor();
+    await waitFor(() => expect(listedRows()).toEqual(['New on Jellyflick']));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add a genre Row' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Add Comedy' }));
+    await waitFor(() => expect(listedRows()).toEqual(['New on Jellyflick', 'Comedy']));
+    await backToHome();
+
+    const row = await screen.findByRole('list', { name: 'Comedy' });
+    expect(
+      Array.from(row.querySelectorAll('.card')).map((card) => card.getAttribute('aria-label')),
+    ).toEqual(['Bluey', 'Paddington']);
+  });
+
+  it('can have a Row for each of several genres, and is not offered one twice', async () => {
+    await withOneRowStored();
+    await signInAndLand();
+    await openTheEditor();
+    await waitFor(() => expect(listedRows()).toEqual(['New on Jellyflick']));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add a genre Row' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Add Comedy' }));
+    await waitFor(() => expect(listedRows()).toEqual(['New on Jellyflick', 'Comedy']));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add a genre Row' }));
+    // The genre they already have is not among the choices any more.
+    expect(await screen.findByRole('button', { name: 'Add Drama' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Add Comedy' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Drama' }));
+    await waitFor(() =>
+      expect(listedRows()).toEqual(['New on Jellyflick', 'Comedy', 'Drama']),
+    );
+  });
+
+  it('picks the Collection when they add a Collection Row', async () => {
+    await withOneRowStored();
+    await signInAndLand();
+    await openTheEditor();
+    await waitFor(() => expect(listedRows()).toEqual(['New on Jellyflick']));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add a Collection Row' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Add Crime Classics' }));
+
+    // Named by the Collection, though what is stored is its id.
+    await waitFor(() => expect(listedRows()).toEqual(['New on Jellyflick', 'Crime Classics']));
+    await backToHome();
+
+    const row = await screen.findByRole('list', { name: 'Crime Classics' });
+    expect(
+      Array.from(row.querySelectorAll('.card')).map((card) => card.getAttribute('aria-label')),
+    ).toEqual(['Arrival', 'Heat']);
+  });
+
+  it('hides one genre Row without touching the other', async () => {
+    await setFakeState({
+      displayPreferences: {
+        'jellyflick|jellyflick|user-rafael': {
+          'jf.homeLayout': JSON.stringify([
+            { kind: 'genre', parameter: 'Comedy' },
+            { kind: 'genre', parameter: 'Drama' },
+          ]),
+        },
+      },
+    });
+    await signInAndLand();
+    await openTheEditor();
+    await waitFor(() => expect(listedRows()).toEqual(['Comedy', 'Drama']));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hide Comedy' }));
+
+    // Both Rows are still listed — hiding keeps a Row's place — and only the
+    // one they pressed is hidden.
+    expect(listedRows()).toEqual(['Comedy', 'Drama']);
+    expect(screen.getByRole('button', { name: 'Show Comedy' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Hide Drama' })).toBeTruthy();
+    await backToHome();
+
+    await waitFor(() => expect(screen.queryByRole('list', { name: 'Comedy' })).toBeNull());
+    expect(await screen.findByRole('list', { name: 'Drama' })).toBeTruthy();
   });
 });
 
@@ -221,11 +359,14 @@ describe('a Home with no Rows on it', () => {
     await signInAndLand();
 
     await openTheEditor();
-    // Every Row whose feature is built, or Home would still be drawing one of
-    // them. The rest are in the layout but are not on Home yet.
+    // Every Row in the layout: since #15 every kind in the default layout has
+    // a feature, so the message is about a Home with nothing on it at all
+    // rather than about the Rows that were not built yet.
     fireEvent.click(screen.getByRole('button', { name: 'Hide Continue Watching' }));
     fireEvent.click(screen.getByRole('button', { name: 'Hide New on Jellyflick' }));
     fireEvent.click(screen.getByRole('button', { name: 'Hide My List' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Hide Watch Again' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Hide Because You Watched' }));
     await backToHome();
 
     expect(
