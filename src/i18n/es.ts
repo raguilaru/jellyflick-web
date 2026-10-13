@@ -310,6 +310,20 @@ export const es: Messages = {
   'player.subtitlesImage': 'Jellyflick todavía no puede dibujar subtítulos de imagen.',
   'player.subtitlesUnavailable': 'Jellyflick no pudo leer esos subtítulos del servidor.',
 
+  'player.skipLabel': 'Saltar',
+  'player.skipIntro': 'Saltar intro',
+  'player.skipIntroFor': (p: { name: string }) => `Saltar la intro de ${p.name}`,
+  'player.skipCredits': 'Saltar créditos',
+  'player.skipCreditsFor': (p: { name: string }) => `Saltar los créditos de ${p.name}`,
+
+  'player.nextUpLabel': 'El siguiente episodio',
+  'player.nextUp': (p: { name: string }) => `A continuación: ${p.name}`,
+  'player.nextUpCountdown': (p: { seconds: number }) => `Empieza en ${String(p.seconds)}…`,
+  'player.playNow': 'Reproducir ya',
+  'player.playNowFor': (p: { name: string }) => `Reproducir ${p.name} ya`,
+  'player.cancelNext': 'Cancelar',
+  'player.cancelNextFor': (p: { name: string }) => `No reproducir ${p.name}`,
+
   'nav.sections': 'Secciones',
   'nav.home': 'Inicio',
   'nav.movies': 'Películas',
