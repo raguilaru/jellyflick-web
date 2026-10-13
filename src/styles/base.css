@@ -1794,6 +1794,88 @@ html[data-input='pointer'] [tabindex]:focus {
 }
 
 /*
+ * The Subtitle timing panel (#28).
+ *
+ * **Anchored to the top**, which is the whole of story 101: a User adjusting
+ * the subtitles has to be able to see them, and the cues sit at the bottom of
+ * the picture with the controls in the row below that. Top is the one place
+ * nothing of either is. This is the acceptance criterion that is checked by
+ * looking at a laid-out screen, so `test/e2e/the-subtitle-offset.spec.ts`
+ * measures this box against the cue's rather than trusting this comment.
+ *
+ * `position: fixed` inside the player, which is itself fixed, for the reason
+ * the track picker is: from inside something fixed that fixed thing is the
+ * arrow keys' flow (`fixedRootOf` in `src/navigation/`), so focus stays in the
+ * panel with no focus trapping — which is also what makes Left and Right the
+ * panel's while it is open.
+ *
+ * Narrow and centred rather than full width: it is a number and five buttons,
+ * and a panel as wide as a television would put Reset a long way from the step
+ * it undoes.
+ */
+.player__timing {
+  position: fixed;
+  z-index: 40;
+  top: var(--space-4);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(420px, calc(100% - var(--space-5)));
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius);
+  /* Opaque enough to read over a bright frame, as the next-Episode panel is. */
+  background: rgb(0 0 0 / 0.85);
+  text-align: center;
+}
+
+/*
+ * `−`, the readout, `+`, on one line at every width.
+ *
+ * `auto 1fr auto`, which is what the seek bar's own row uses and for the same
+ * reason: the two buttons take what they need and are pinned to the panel's
+ * edges, so a readout that goes from "Subtitles in sync" to "Subtitles 0.1 s
+ * later" never moves what is under a held thumb. `−` and `+` are two
+ * characters, so the wrapping the rest of the player's buttons need does not
+ * apply to these.
+ *
+ * Grid rather than flex, because `gap` in flex is Chrome 84 and silently does
+ * nothing on the floor (decisions.md §6).
+ */
+.player__timing-adjust {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/*
+ * The readout. Tabular, so stepping from 0.9 to 1.0 under a held thumb does
+ * not shuffle the digits — the same reason the clock beside the seek bar is
+ * tabular.
+ */
+.player__timing-readout {
+  margin: 0;
+  font-size: 1.125rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * Big enough to aim a thumb at and to hold. `touch-action: manipulation`
+ * (Chrome 36) takes away the double-tap-to-zoom delay a held button would
+ * otherwise wait out, and `user-select: none` stops a hold selecting the glyph
+ * instead of repeating.
+ */
+.player__timing-step {
+  min-width: 64px;
+  font-size: 1.25rem;
+  line-height: 1.2;
+  touch-action: manipulation;
+  user-select: none;
+}
+
+/*
  * Skip Intro and Skip Credits (#31).
  *
  * **It shares the picture's grid cell**, the way the subtitles above do and for

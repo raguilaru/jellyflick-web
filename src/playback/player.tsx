@@ -3,6 +3,7 @@ import type { DeviceLayer } from '../device/types';
 import { useTranslate } from '../i18n/index';
 import type { JellyfinGateway } from '../jellyfin/gateway';
 import { usePlaybackPreferences } from '../settings/playback-preferences-provider';
+import { useSettings } from '../settings/settings-provider';
 import { useBackClaim } from '../shell/back';
 import type { PlayTarget } from '../title/play-target';
 import { resolveNextEpisode } from '../title/play-target';
@@ -20,7 +21,16 @@ import {
   type PlaybackReporter,
 } from './reporting';
 import { clampPosition, SEEK_STEP_SECONDS } from './scrubbing';
+import type { SubtitleCue } from './subtitle-cues';
+import {
+  offsetToSyncToLine,
+  shiftSubtitleOffset,
+  subtitleFileOf,
+  subtitleOffsetFor,
+  withSubtitleOffset,
+} from './subtitle-offset';
 import { Subtitles } from './subtitles';
+import { SubtitleTiming } from './subtitle-timing';
 import { TrackPicker } from './track-picker';
 import { attachPlaybackSource, type AttachedSource } from './video-source';
 
@@ -100,6 +110,13 @@ export function Player({
    * says so in as many words, and #31 is the reader it was waiting for.
    */
   const { preferences } = usePlaybackPreferences();
+  /**
+   * This User's own Client Settings (#10), which is where a Subtitle Offset is
+   * kept (#28, story 102). The provider sits above the router, so the player is
+   * already inside it and there is no second path to the Server — the same
+   * argument `usePlaybackPreferences` above makes for the Jellyfin account.
+   */
+  const settings = useSettings();
   const video = useRef<HTMLVideoElement | null>(null);
   const [attempt, setAttempt] = useState<PlaybackAttempt | undefined>(undefined);
   const [paused, setPaused] = useState(false);
@@ -125,6 +142,24 @@ export function Player({
   const [chosenSubtitle, setChosenSubtitle] = useState<ChosenSubtitle>('from-the-server');
   const [pickerOpen, setPickerOpen] = useState(false);
   const [subtitlesUnavailable, setSubtitlesUnavailable] = useState(false);
+  /** Whether the Subtitle timing panel is open (#28). */
+  const [timingOpen, setTimingOpen] = useState(false);
+  /**
+   * The cues of the track being drawn, which the overlay hands up when it has
+   * parsed them. The player keeps them because "Sync to this line" has to know
+   * which line is on the screen, and the offset lives here.
+   */
+  const [cues, setCues] = useState<readonly SubtitleCue[]>([]);
+  /**
+   * The Subtitle Offset in force, in seconds.
+   *
+   * It is the player's own state rather than read straight out of the settings,
+   * and that is about **saving** rather than about drawing: a Client Settings
+   * write is a read-modify-write against the Server, and a held button is forty
+   * steps. So the offset moves here at once and is written when the panel says
+   * an adjustment has finished.
+   */
+  const [offsetSeconds, setOffsetSeconds] = useState(0);
   /**
    * Where to start the *next* negotiation, which a change of sound track
    * needs: the Title has to be asked for again, and the User has not asked to
@@ -166,6 +201,43 @@ export function Player({
   const subtitleTrack = plan?.tracks.subtitles.find((track) => track.index === subtitleIndex);
   /** Which sound is playing, the same way round. */
   const audioIndex = chosenAudio ?? plan?.audioStreamIndex;
+
+  /**
+   * Which **subtitle file** is being drawn, which is what an offset belongs to
+   * (#28, story 102). Absent while subtitles are off, which is also when there
+   * is nothing to time.
+   */
+  const subtitleFile =
+    subtitleTrack === undefined || plan === undefined
+      ? undefined
+      : subtitleFileOf(subtitleTrack, plan.mediaSourceId);
+  /** The offset stored for it, read on every render so the ref below is fresh. */
+  const storedOffset = subtitleOffsetFor(settings.settings.subtitleOffsets, subtitleFile ?? '');
+  const stored = useRef(storedOffset);
+  stored.current = storedOffset;
+
+  /**
+   * The stored offset is adopted **once per subtitle file**, which is story
+   * 102's "applied automatically next time, on any device": a track chosen on
+   * a device that has never shifted anything comes up already shifted.
+   *
+   * Once per file rather than whenever the settings change, because the second
+   * would undo a User's adjustment with the value they had just replaced — the
+   * same hazard `settings-provider.tsx` guards its first read against. It waits
+   * for `loaded`, or a slow Server would hand every file an offset of nothing
+   * and then adopt it.
+   */
+  const adopted = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (subtitleFile === undefined) {
+      adopted.current = undefined;
+      setOffsetSeconds(0);
+      return;
+    }
+    if (!settings.loaded || adopted.current === subtitleFile) return;
+    adopted.current = subtitleFile;
+    setOffsetSeconds(stored.current);
+  }, [subtitleFile, settings.loaded]);
 
   const playing = usePlayback({
     video,
@@ -298,6 +370,67 @@ export function Player({
     setPickerOpen(false);
   }, []);
 
+  /**
+   * Shifting the subtitles (#28). It touches nothing but this state: the offset
+   * is subtracted as a cue is chosen, so the picture does not move and the
+   * Server is not asked anything.
+   */
+  const shiftSubtitles = (steps: number): void => {
+    setOffsetSeconds((held) => shiftSubtitleOffset(held, steps));
+  };
+
+  /**
+   * "Sync to this line" (story 100), worked out from the **element's** own
+   * position rather than from `position`, which is the four-times-a-second
+   * reading the seek bar draws with. A User presses this on hearing a line, so
+   * a quarter of a second of staleness would be a quarter of a second of error
+   * in the one number being measured.
+   */
+  const syncToLine = (): void => {
+    const at = video.current?.currentTime ?? position;
+    const synced = offsetToSyncToLine({ cues, position: at, offset: offsetSeconds });
+    if (synced !== undefined) setOffsetSeconds(synced);
+  };
+
+  /**
+   * Whether there is a line on the screen to sync to, which decides whether the
+   * button can be pressed. It is read against `position` rather than the
+   * element, because it is drawn and so can only be as fresh as a render.
+   */
+  const lineOnScreen =
+    offsetToSyncToLine({ cues, position, offset: offsetSeconds }) !== undefined;
+
+  /**
+   * How many adjustments have finished. The panel reports each one — a button
+   * or key let go, one press of Reset or Sync — and this is what the save
+   * hangs off.
+   *
+   * A counter and an effect rather than saving inside the panel's callback,
+   * and that is load-bearing rather than roundabout: a press that both shifts
+   * the offset *and* finishes the adjustment sets two pieces of state in one
+   * tick, so a callback reading `offsetSeconds` would read the value from
+   * before its own press. The effect runs after the render that applied both,
+   * so it sees the offset the User is looking at.
+   */
+  const [adjustments, setAdjustments] = useState(0);
+
+  useEffect(() => {
+    if (adjustments === 0 || subtitleFile === undefined) return;
+    // `settings.change` shows it at once and writes behind it, one write at a
+    // time; a write that will not land says so beside the settings screen
+    // rather than costing the User their film.
+    settings.change({
+      subtitleOffsets: withSubtitleOffset(
+        settings.settings.subtitleOffsets,
+        subtitleFile,
+        offsetSeconds,
+      ),
+    });
+    // Only the count: the offset and the file are read as they are at that
+    // moment, and a save is one adjustment finishing rather than a value
+    // changing.
+  }, [adjustments]);
+
   // Controls stay up while there is nothing to watch behind them: a paused
   // player, one still negotiating, or one with something to say.
   const controls = useIdleControls({
@@ -347,6 +480,8 @@ export function Player({
           itemId={plan.itemId}
           mediaSourceId={plan.mediaSourceId}
           {...(subtitleTrack === undefined ? {} : { track: subtitleTrack })}
+          offsetSeconds={offsetSeconds}
+          onCues={setCues}
           video={video}
           onUnavailable={() => setSubtitlesUnavailable(true)}
         />
@@ -460,7 +595,33 @@ export function Player({
           subtitlesUnavailable={subtitlesUnavailable}
           onChooseAudio={chooseAudio}
           onChooseSubtitle={chooseSubtitle}
+          {...(subtitleFile === undefined
+            ? {}
+            : {
+                onOpenTiming: () => {
+                  setPickerOpen(false);
+                  setTimingOpen(true);
+                },
+              })}
           onClose={() => setPickerOpen(false)}
+        />
+      ) : null}
+
+      {/*
+        The Subtitle timing panel (#28). It is drawn over the picture rather
+        than over the controls, anchored to the top so it covers neither the
+        subtitle line nor the controls (story 101) — and nothing in it touches
+        the media element, so the Title keeps playing (story 96).
+      */}
+      {timingOpen && subtitleFile !== undefined ? (
+        <SubtitleTiming
+          offsetSeconds={offsetSeconds}
+          device={device}
+          onShift={shiftSubtitles}
+          onReset={() => setOffsetSeconds(0)}
+          {...(lineOnScreen ? { onSyncToLine: syncToLine } : {})}
+          onSettled={() => setAdjustments((made) => made + 1)}
+          onClose={() => setTimingOpen(false)}
         />
       ) : null}
     </section>

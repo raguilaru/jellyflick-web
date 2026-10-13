@@ -263,6 +263,32 @@ describe('the settings the settings screen saves', () => {
     expect((await rafaelsStore().read()).settings.billboardSource).toBe('what-comes-next');
   });
 
+  it('has no Subtitle Offsets for a User who has never shifted a subtitle', async () => {
+    expect((await rafaelsStore().read()).settings.subtitleOffsets).toEqual([]);
+  });
+
+  it('reads back a Subtitle Offset, which follows the User to every device (#28)', async () => {
+    // Story 102: the offset is kept per subtitle file and stored on the Server,
+    // so the same shift applies on the laptop and on the phone.
+    await rafaelsStore().save({
+      subtitleOffsets: [{ file: 'stream:source-arrival:3', seconds: 0.8 }],
+    });
+
+    expect((await rafaelsStore().read()).settings.subtitleOffsets).toEqual([
+      { file: 'stream:source-arrival:3', seconds: 0.8 },
+    ]);
+  });
+
+  it('keeps the Home Layout when only a Subtitle Offset changes', async () => {
+    await rafaelsStore().save({ homeLayout: layout });
+
+    await rafaelsStore().save({ subtitleOffsets: [{ file: 'stream:a:3', seconds: -1.2 }] });
+
+    const read = await rafaelsStore().read();
+    expect(read.settings.homeLayout).toEqual(layout);
+    expect(read.settings.subtitleOffsets).toEqual([{ file: 'stream:a:3', seconds: -1.2 }]);
+  });
+
   it('keeps the Home Layout when only the colour changes', async () => {
     await rafaelsStore().save({ homeLayout: layout });
 

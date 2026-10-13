@@ -53,7 +53,10 @@ src/
                         own loader), `billboard.tsx` what a User sees, and
                         `use-billboard.ts` the pick the shell holds so a title
                         page cannot disturb it.
-  i18n/                 `en.ts` is the key set, `es.ts` is typed against it.
+  i18n/                 `en.ts` is the key set, `es.ts` is typed against it,
+                        and `format.ts` holds the formatting both of them use,
+                        so two dictionaries cannot disagree about how a number
+                        is written.
   jellyfin/             The gateway: the only module that talks HTTP to the Server.
   my-list/              My List, which is Jellyfin's Favorites: `my-list.ts` is
                         the store every screen reads, `use-my-list.ts` the
@@ -73,7 +76,11 @@ src/
                         `MediaStreams` as the two lists a User chooses from,
                         `track-picker.tsx` is the menu, `subtitle-cues.ts` is the
                         subtitle engine — parsing and timing, with no DOM — and
-                        `subtitles.tsx` draws its cues over the picture. Skip
+                        `subtitles.tsx` draws its cues over the picture. The
+                        Subtitle Offset (#28): `subtitle-offset.ts` is the
+                        arithmetic and which subtitle file an offset belongs to,
+                        also with no DOM, and `subtitle-timing.tsx` is the panel
+                        the subtitle menu opens. Skip
                         Intro/Credits and the next Episode (#31):
                         `media-segments.ts` reads the Server's markers and says
                         which skip a moment is inside, `skip-button.tsx` is the
@@ -441,7 +448,11 @@ settings have been read. See "The settings screen" below for why the language is
 ours rather than Jellyfin's, and why that provider is always in the tree.
 
 Formatting goes through `Intl.NumberFormat`, `Intl.DateTimeFormat` and
-`Intl.PluralRules`, which are native on the target. `Intl.RelativeTimeFormat`
+`Intl.PluralRules`, which are native on the target. **Formatting two locales
+have to agree on lives in `src/i18n/format.ts`** and is imported by both
+dictionaries, so "0.8 s" and "0,8 s" cannot drift apart: `formatSeconds` (#28)
+is the one there now, and anything a second locale would have to reimplement
+belongs beside it rather than inline in `en.ts`. `Intl.RelativeTimeFormat`
 (71), `Intl.ListFormat` (72) and `Intl.Locale` (74) are **not** — write the three
 lines by hand instead of adding a polyfill.
 
@@ -594,9 +605,9 @@ belongs to a screen rather than a person.
   reads no body.
 - **A new setting is three lines**: a `jf.` key, a field on `ClientSettings`
   with a default, and a line each in `settingsFrom` and `prefsFor`. There are
-  six keys today: `jf.homeLayout`, `jf.uiLanguage`, `jf.accentColour`,
-  `jf.hiddenSeries` (#12), `jf.billboardTrailerAutoplay` (#16) and
-  `jf.billboardSource` (#22). A
+  seven keys today: `jf.homeLayout`, `jf.uiLanguage`, `jf.accentColour`,
+  `jf.hiddenSeries` (#12), `jf.billboardTrailerAutoplay` (#16),
+  `jf.billboardSource` (#22) and `jf.subtitleOffsets` (#28). A
   **boolean** setting is stored as `'true'` or `'false'` and read back as "off
   only when it says `false`", so a half-written value leaves the User with the
   behaviour everybody else has rather than with the feature silently gone. A
@@ -1518,9 +1529,10 @@ tracks, #28 the Subtitle Offset, #33 Cast and #34 Play On.
 
 ### The sound and the subtitles (#27)
 
-The tracks a Title is watched with. #28 grows the Subtitle Offset, #29 styled
-(ASS/SSA) subtitles and #30 image ones, and the seams each of those needs are
-noted below rather than built.
+The tracks a Title is watched with. #28 has since grown the Subtitle Offset on
+the seams noted below — see "The Subtitle Offset" after this section — and #29
+(styled ASS/SSA subtitles) and #30 (image ones) are still to come, with the
+seams they need noted rather than built.
 
 - **The Server chooses the default tracks, and this app never matches a
   language.** `UserConfiguration` holds a User's `AudioLanguagePreference`,
@@ -1560,12 +1572,12 @@ noted below rather than built.
   stripped in `subtitle-cues.ts`, so no caller can turn one back into markup by
   reaching for the wrong property, and the overlay sets text rather than HTML on
   top of that. #29 is where a *known* tag set earns its way back in.
-- **The cue cursor is the seam #28 takes over.** `createCueCursor(cues).at(t)` is
+- **The cue cursor is the seam #28 took over.** `createCueCursor(cues).at(t)` is
   asked for a moment, keeps a moving index rather than filtering two thousand
   cues on every frame, and is correct for **any** position rather than only an
   increasing one — which is what a User dragging an offset back and forth needs.
-  An offset is one subtraction at the call site in `subtitles.tsx` and changes
-  nothing else.
+  An offset is one subtraction at the call site in `subtitles.tsx` and changed
+  nothing else, which is exactly what #28 did.
 - **A frame loop, not `timeupdate`.** `timeupdate` fires about four times a
   second, which is a visible quarter-second of lag on a cue, and #28 has to take
   effect while a button is held. So the overlay reads the element's position from
@@ -1632,6 +1644,105 @@ place a fake owes a client real data rather than a shape — and **the text name
 the track's language**, so "the User switched to Spanish" is read off the screen
 rather than inferred from a URL. `failSubtitleFetchWith` is a Server that holds a
 track it will not hand over.
+
+### The Subtitle Offset (#28)
+
+Story 96 to 102, and the thing the spec's problem statement names by hand:
+"fixing badly timed subtitles while watching". `src/playback/subtitle-offset.ts`
+is the arithmetic and `subtitle-timing.tsx` the panel; the player holds the
+offset in force and is the only thing that saves it.
+
+- **A positive offset means the subtitles are later**, which is what the readout
+  says out loud, and applying one is **one subtraction**:
+  `cursor.at(element.currentTime - offset)` in `subtitles.tsx`. That is the seam
+  #27 left for this, and nothing in `subtitle-cues.ts` knows an offset exists.
+  The cursor is correct for any position rather than only an increasing one, so
+  a User dragging the offset back and forth needs nothing of it.
+- **The offset is read through a ref, not a dependency of the frame loop.** A
+  held button steps it eight times a second, and a dependency would tear the
+  loop down and build it again on each one. It is in force on the next frame,
+  which is the whole of "see the result live".
+- **Everything is on the tenth-of-a-second grid.** `0.1` is not a tenth in
+  binary floating point and three of them added one at a time is
+  `0.30000000000000004`, which a readout built from that number says out loud —
+  so every function in `subtitle-offset.ts` rounds, including the one that reads
+  a stored value back. The offset is therefore always a number the readout can
+  print as it is.
+- **"Sync to this line" reads the element, not the position state.** A User
+  presses it on hearing a line, and `position` is the four-times-a-second
+  reading the seek bar draws with: a quarter of a second of staleness would be a
+  quarter of a second of error in the one number being measured. It answers
+  `undefined` when no line is on the screen, and the panel then offers the
+  button with `aria-disabled` and says why **when it is pressed** — a notice
+  that came and went with every pause in the dialogue would blink beside the
+  number being read.
+- **An offset belongs to a subtitle file**, which is `subtitleFileOf`:
+  `MediaStream.Path` where the Server gave one, and the media source plus the
+  stream index otherwise. `decisions.md` §16 is why, and what to check against a
+  real Server.
+- **It is saved when an adjustment finishes**, not when it changes
+  (`decisions.md` §17). The panel reports a button or key let go, or one press
+  of Reset or Sync; the player counts those and an **effect** does the save. The
+  effect rather than the callback is load-bearing: a press that both shifts the
+  offset and finishes the adjustment sets two pieces of state in one tick, so a
+  callback reading the offset would read the value from before its own press.
+  No timer is involved, so the player still has exactly the two #31 left it.
+- **The stored offset is adopted once per subtitle file**, not whenever the
+  settings change — the second would undo a User's adjustment with the value
+  they had just replaced, which is the hazard `settings-provider.tsx` guards its
+  own first read against. It waits for `loaded`, or a slow Server would hand
+  every file an offset of nothing and then adopt it.
+- **The panel is anchored to the top of the player**, and that is story 101
+  rather than a look: the cues sit at the bottom of the picture and the controls
+  are the row below that, so the top is the one place that covers neither. It is
+  `position: fixed` inside the player, which is also fixed, so focus stays in it
+  with no focus-trapping code — the rule the track picker and #17's pop-up lean
+  on — and it takes focus when it opens for the same reason the picker does.
+  Without that, Left and Right are still the navigator's and walk the controls
+  *behind* it.
+- **Left and Right are taken on the panel's own element**, not from `window`, so
+  they are the panel's only while focus is inside it; `preventDefault` is what
+  takes them off `src/navigation/`. Up and Down stay the navigator's, which is
+  how a remote reaches Reset, Sync and Done. The player's own `window` listener
+  runs first, in the capture phase, and declines Left and Right unless they
+  arrived on the seek bar.
+- **Nothing in the panel touches the media element**, so "it does not pause the
+  video" is true by construction. The player's keep-the-controls-up rule
+  deliberately does **not** list this panel: a paused player is the one thing it
+  must not look like.
+
+**Where #29 and #30 meet this.** The offset is deliberately not a feature of the
+text renderer. `Subtitles` hands its parsed cues **up** (`onCues`) and takes the
+offset **down** (`offsetSeconds`), and the player holds both — so a styled
+(#29) or image (#30) renderer drawn in the same place takes the same
+`offsetSeconds` and gives it to its own library: libass has `timeOffset` and
+`setCurrentTime`, and `libpgs` has `timeOffset`
+(`player-subtitles.md` §6a and §6b). Neither has to know how an offset is stored
+or adjusted, and nothing above has to know how a cue is drawn. The one case that
+has to say the offset cannot apply is **#30's burned-in** subtitles, where the
+Server has rendered the text into the picture: what it disables is the *panel*,
+and the honest shape for that is `track-picker.tsx`'s `onOpenTiming` — absent
+today when there is nothing to time, and for #30 the control offered with
+`aria-disabled` and the group saying why in words, which is the treatment an
+undrawable track already gets.
+
+Where each thing is tested: the arithmetic, "Sync to this line", the file key
+and the stored list in `test/unit/the-subtitle-offset.test.ts`, with literal
+expected values; the panel's readout, hold-to-repeat, arrow keys and when it
+says an adjustment has finished in `test/unit/the-subtitle-timing-panel.test.tsx`;
+the `jf.subtitleOffsets` key in `test/unit/client-settings.test.ts`; and the
+journey — opening it from the menu, a different line drawn as the offset moves,
+the Title never re-negotiated, and the offset reaching and coming back from the
+Server — in `test/unit/shifting-the-subtitles.test.tsx`. What only a browser can
+say is `test/e2e/the-subtitle-offset.spec.ts`: the panel's box measured against
+the cue's and the seek bar's at both widths, a remote reaching and adjusting it,
+and a button really held down.
+
+One hazard that journey had to learn: **a Client Settings save is written behind
+the User**, so one a test started can land *after* the next test has reseeded
+the Server and hand it an offset nobody in it ever made. It is the same shape as
+the stop report that outlives a browser context, two sections down. That file's
+`afterEach` waits for the writes to stop arriving before reseeding.
 
 ### Skipping, and the next Episode (#31)
 
