@@ -98,6 +98,8 @@ export type FakeItem = {
    * client that used a position in this array instead is caught.
    */
   MediaStreams?: FakeMediaStream[];
+  /** The embedded fonts a styled subtitle track is drawn with (#29). */
+  MediaAttachments?: FakeMediaAttachment[];
   /** One tag per backdrop. The array index is the image's `imageIndex`. */
   BackdropImageTags?: string[];
   /** Keyed by `MetadataProvider` member name: `Imdb`, `Tmdb`, … */
@@ -133,6 +135,23 @@ export type FakeMediaStream = {
   /** What the *file* was marked with, not what a User prefers. */
   IsDefault?: boolean;
   IsForced?: boolean;
+};
+
+/**
+ * One file muxed in beside the video, as `MediaAttachment` has it. For this
+ * app that means **a font a styled subtitle file is drawn with** (#29): an ASS
+ * file names its typefaces by name and the library's own file carries them.
+ *
+ * `MimeType` is deliberately left off one of the sample fonts, because a real
+ * Server leaves it off plenty of real attachments — a client that only looked
+ * at the MIME type would find no fonts at all on that file.
+ */
+export type FakeMediaAttachment = {
+  Index: number;
+  /** ffprobe's name for the attachment stream: `ttf`, `otf`, `mjpeg`, … */
+  Codec?: string;
+  MimeType?: string;
+  FileName?: string;
 };
 
 /** What the Server says a file is, in the terms a DeviceProfile is matched in. */
@@ -693,6 +712,20 @@ const SAMPLE_ITEMS: readonly FakeItem[] = [
       { Index: 2, Type: 'Audio', Codec: 'opus', Language: 'fra', DisplayTitle: 'French' },
       { Index: 3, Type: 'Subtitle', Codec: 'subrip', Language: 'eng', DisplayTitle: 'English' },
       { Index: 4, Type: 'Subtitle', Codec: 'subrip', Language: 'spa', DisplayTitle: 'Spanish' },
+      // A **styled** track (#29): ASS, which a capable device draws with its
+      // own fonts and positions and every other device reads as plain text.
+      // Arrival is the right Title for it — the film's whole subject is a
+      // written language, and its subtitled signs are typeset.
+      { Index: 5, Type: 'Subtitle', Codec: 'ass', Language: 'jpn', DisplayTitle: 'Japanese (Styled)' },
+    ],
+    // The fonts that styled track names, muxed in beside the video. The second
+    // one carries no `MimeType`, which is what a real Server often sends and
+    // what a client reading only that field would miss; the third is not a
+    // font at all and must not be handed to the renderer as one.
+    MediaAttachments: [
+      { Index: 0, Codec: 'ttf', MimeType: 'application/x-truetype-font', FileName: 'Heptapod-Sans.ttf' },
+      { Index: 1, Codec: 'otf', FileName: 'Heptapod-Display.otf' },
+      { Index: 2, Codec: 'mjpeg', MimeType: 'image/jpeg', FileName: 'cover.jpg' },
     ],
     ProviderIds: { Imdb: 'tt2543164', Tmdb: '329865' },
     // VP9 in WebM: what the committed test video really is, so a browser can

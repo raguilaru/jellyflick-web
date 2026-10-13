@@ -1,4 +1,5 @@
 import type { SubtitleCapabilities } from '../device/types';
+import type { MediaSourceInfo } from '../jellyfin/gateway';
 import { isStyledSubtitleCodec } from './ass';
 import type { SubtitleTrack } from './media-tracks';
 
@@ -65,4 +66,64 @@ export function subtitlePresentationFor(options: {
    *   verbatim. `flattenAss` is the only thing here that knows that language.
    */
   return { draw: capabilities.canRenderStyled ? 'styled' : 'cues', format: 'ass' };
+}
+
+/**
+ * One font a styled file is meant to be drawn with, muxed into the file beside
+ * the video. The index is what fetches it; the name is for diagnosis.
+ */
+export type EmbeddedFont = {
+  /** `MediaAttachment.Index`: what the Attachments URL is built from. */
+  readonly index: number;
+  readonly fileName?: string;
+};
+
+/**
+ * The font attachments of a media source (#29's "embedded fonts handled").
+ *
+ * An ASS file names its typefaces by name — `Style: Default,Gandhi Sans,…` —
+ * and the file itself is what carries them, muxed in as attachments beside the
+ * video. Without them libass falls back to whatever the device happens to
+ * have, which on a TV is approximately nothing, so a carefully typeset sign is
+ * drawn in the wrong face at the wrong size. Handing the renderer their URLs
+ * is the whole of handling them: it fetches them itself, in its worker.
+ *
+ * **What counts as a font is asked three ways**, because a real Server answers
+ * inconsistently: `Codec` is ffprobe's name for the attachment stream (`ttf`,
+ * `otf`), `MimeType` is often left null altogether, and a TrueType collection
+ * has no codec name at all — so the file's extension is the backstop. Being
+ * generous is the cheap direction: a non-font handed to libass is ignored,
+ * while a font left out is a sign drawn wrong.
+ */
+export function embeddedFontsOf(source: MediaSourceInfo): readonly EmbeddedFont[] {
+  const fonts: EmbeddedFont[] = [];
+  for (const attachment of source.MediaAttachments ?? []) {
+    // An attachment with no index cannot be addressed, so it cannot be offered.
+    if (typeof attachment.Index !== 'number') continue;
+    if (!looksLikeFont(attachment)) continue;
+    fonts.push({
+      index: attachment.Index,
+      ...(typeof attachment.FileName === 'string' && attachment.FileName !== ''
+        ? { fileName: attachment.FileName }
+        : {}),
+    });
+  }
+  return fonts;
+}
+
+const FONT_CODECS: readonly string[] = ['ttf', 'otf', 'woff', 'woff2', 'ttc', 'otc', 'pfb'];
+const FONT_EXTENSIONS = /\.(ttf|otf|ttc|otc|woff2?|pfb|pfm|fon)$/i;
+
+function looksLikeFont(attachment: {
+  Codec?: string | null;
+  MimeType?: string | null;
+  FileName?: string | null;
+}): boolean {
+  const codec = (attachment.Codec ?? '').toLowerCase();
+  if (FONT_CODECS.includes(codec)) return true;
+  const mime = (attachment.MimeType ?? '').toLowerCase();
+  // `font/sfnt`, `application/x-truetype-font`, `application/vnd.ms-opentype`:
+  // every spelling a Server has used has one of these two words in it.
+  if (mime.includes('font') || mime.includes('opentype')) return true;
+  return FONT_EXTENSIONS.test(attachment.FileName ?? '');
 }

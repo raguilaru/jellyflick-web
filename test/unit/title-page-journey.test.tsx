@@ -93,7 +93,9 @@ describe('a User opening a title page', () => {
     expect(screen.getByText('7.9 from the community')).toBeTruthy();
     // The languages there are to watch and read it in.
     expect(screen.getByText('English, French')).toBeTruthy();
-    expect(screen.getByText('English, Spanish')).toBeTruthy();
+    // Japanese is Arrival's styled ASS track (#29), which is a subtitle
+    // language like any other on this page.
+    expect(screen.getByText('English, Spanish, Japanese')).toBeTruthy();
     // The Collection it belongs to, which is `/Items/{id}/Collections`.
     expect(screen.getByText('Crime Classics')).toBeTruthy();
     // And a Play button, for the player tickets to wire up.

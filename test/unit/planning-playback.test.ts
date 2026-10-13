@@ -285,7 +285,14 @@ describe('planning how to play a Title', () => {
       expect(plan.outcome).toBe('play');
       if (plan.outcome !== 'play') return;
       expect(plan.plan.tracks.audio.map((track) => track.index)).toEqual([1, 2]);
-      expect(plan.plan.tracks.subtitles.map((track) => track.language)).toEqual(['eng', 'spa']);
+      // `jpn` is the styled ASS track (#29). It is offered like any other:
+      // which of them can be drawn *with their styling* is a question asked
+      // per device in `styled-subtitles.ts`, not one that filters this list.
+      expect(plan.plan.tracks.subtitles.map((track) => track.language)).toEqual([
+        'eng',
+        'spa',
+        'jpn',
+      ]);
     });
 
     /**

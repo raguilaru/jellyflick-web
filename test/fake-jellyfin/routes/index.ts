@@ -1,4 +1,5 @@
 import type { FakeRoute } from '../routing.ts';
+import { attachmentRoutes } from './attachments.ts';
 import { displayPreferencesRoutes } from './display-preferences.ts';
 import { genreRoutes } from './genres.ts';
 import { itemRoutes } from './items.ts';
@@ -41,6 +42,7 @@ export const jellyfinRoutes: readonly FakeRoute[] = [
   // Before the video routes: both live under `/Videos`, and keeping the more
   // specific family first means a later `/Videos/…` pattern cannot shadow it.
   ...subtitleRoutes,
+  ...attachmentRoutes,
   ...videoRoutes,
   ...genreRoutes,
   ...displayPreferencesRoutes,
