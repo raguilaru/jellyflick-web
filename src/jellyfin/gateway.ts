@@ -378,6 +378,26 @@ export type JellyfinGateway = {
    */
   getSubtitleText(options: SubtitleStreamOptions): Promise<string>;
   /**
+   * `GET /MediaSegments/{itemId}?includeSegmentTypes={csv}` — the intro and
+   * credits markers a player offers to skip (#31).
+   *
+   * The types are **narrowed in the request**, which is what the parameter is
+   * for: a Server whose intro-detection plugin also found `Recap`, `Preview`
+   * and `Commercial` segments would otherwise send markers this app draws no
+   * button for. There is no `Credits` type — the credits marker is `Outro`
+   * (`decisions.md` §5).
+   *
+   * It **fails for an item the Server holds nothing for**, which is a 404 on a
+   * real Server as well as on the fake, and that is deliberately left to the
+   * caller: `src/playback/media-segments.ts` is the one place a 404 and an
+   * empty answer are made the same thing, so nothing else has to know they
+   * are two spellings of "nothing to skip".
+   */
+  getMediaSegments(
+    itemId: string,
+    types?: readonly MediaSegmentType[],
+  ): Promise<MediaSegmentDto[]>;
+  /**
    * `POST /Sessions/Playing` — playback has started. 204, no body back.
    *
    * The three reports and the ping are how the Server knows anything is
@@ -519,6 +539,37 @@ export type MediaStream = {
   /** Set when the Server has a URL of its own for this stream. */
   DeliveryUrl?: string | null;
   IsExternalUrl?: boolean | null;
+};
+
+/**
+ * `MediaSegmentType` — the **whole** enum, in the Server's own order
+ * (`jellyfin-playback.md` §12).
+ *
+ * `Outro` is the credits marker and there is no `Credits` value at all
+ * (`decisions.md` §5). `Commercial` is a Live TV concern this app never shows.
+ */
+export type MediaSegmentType =
+  | 'Unknown'
+  | 'Commercial'
+  | 'Preview'
+  | 'Recap'
+  | 'Outro'
+  | 'Intro';
+
+/** One marker on an item. Ticks are 100 ns, as everywhere on this API. */
+export type MediaSegmentDto = {
+  Id?: string | null;
+  ItemId?: string | null;
+  Type?: MediaSegmentType | null;
+  StartTicks?: number | null;
+  EndTicks?: number | null;
+};
+
+/** `MediaSegmentDtoQueryResult`, which is the ordinary paged shape. */
+export type MediaSegmentsQueryResult = {
+  Items?: MediaSegmentDto[] | null;
+  TotalRecordCount?: number | null;
+  StartIndex?: number | null;
 };
 
 /** `PlayMethod`: which branch of the negotiation was taken. */
@@ -1259,6 +1310,18 @@ export function createJellyfinGateway(options: JellyfinGatewayOptions): Jellyfin
 
     subtitleStreamUrl: (options) => subtitleUrlFor(options),
     getSubtitleText: (options) => requestText(subtitleUrlFor(options)),
+
+    getMediaSegments: (itemId, types) =>
+      request<MediaSegmentsQueryResult>(
+        'GET',
+        `/MediaSegments/${encodeURIComponent(itemId)}${query({
+          // Left out altogether when the caller wants everything the Server
+          // holds: an empty parameter is not the same request.
+          ...(types === undefined || types.length === 0
+            ? {}
+            : { includeSegmentTypes: types.join(',') }),
+        })}`,
+      ).then((result) => result.Items ?? []),
 
     reportPlaybackStarted: (report) =>
       requestWithoutAnswer('POST', '/Sessions/Playing', report),

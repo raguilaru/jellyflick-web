@@ -1773,3 +1773,72 @@ html[data-input='pointer'] [tabindex]:focus {
 .settings-choices--stacked {
   grid-auto-flow: row;
 }
+
+/*
+ * Skip Intro and Skip Credits (#31).
+ *
+ * **It shares the picture's grid cell**, the way the subtitles above do and for
+ * the same reason: the player is `grid-template-rows: 1fr auto`, so pinning
+ * this to row 1 keeps it inside the picture's own area and never over the
+ * controls in row 2, which an overlay anchored to the player's bottom edge
+ * would be the moment they appeared.
+ *
+ * Bottom-right, which is where every streaming app puts it and so where a
+ * household looks for it. It is deliberately **not** inside `.player__buttons`:
+ * that row hides with the controls, and an offer good only for the length of an
+ * intro cannot be one a User has to summon the controls to find.
+ *
+ * `justify-self: end` rather than a width, so the button is as wide as its own
+ * words in any language — `es` says "Saltar créditos" — and nothing here can
+ * run off the side of a phone.
+ */
+.player__skip {
+  grid-row: 1;
+  grid-column: 1;
+  align-self: end;
+  justify-self: end;
+  padding: 0 var(--space-3) var(--space-3);
+}
+
+/*
+ * The next Episode (#31), over the bottom of the picture.
+ *
+ * Same cell as the picture, same reason again. It is centred rather than in a
+ * corner because it is the one thing on the screen worth reading at that
+ * moment, and it carries the two buttons in `.player__buttons`, which stacks
+ * on a narrow screen and goes into a line at 640px — the way round that cannot
+ * overflow.
+ *
+ * `max-width` with `calc` rather than a fixed width: an Episode's name is as
+ * long as the Server says it is, and "Next: Severance: Woe's Hollow" has to
+ * wrap on a phone rather than widen the panel past the screen.
+ */
+.player__next {
+  grid-row: 1;
+  grid-column: 1;
+  align-self: end;
+  justify-self: center;
+  max-width: calc(100% - var(--space-4));
+  display: grid;
+  justify-items: center;
+  gap: var(--space-2);
+  margin: 0 var(--space-3) var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius);
+  /* Opaque enough to read white text over a bright frame behind it. */
+  background: rgb(0 0 0 / 0.85);
+  text-align: center;
+}
+
+.player__next-name {
+  margin: 0;
+  font-size: 1.125rem;
+}
+
+/* Tabular, so the panel does not shuffle sideways as the digits change width. */
+.player__next-countdown {
+  margin: 0;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}

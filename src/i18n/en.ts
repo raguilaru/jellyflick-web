@@ -434,6 +434,42 @@ export const en = {
   'player.subtitlesImage': 'Jellyflick cannot draw picture subtitles yet.',
   'player.subtitlesUnavailable': 'Jellyflick could not read those subtitles from the Server.',
 
+  /*
+   * Skip Intro and Skip Credits (#31, story 87). The visible text is short
+   * because the offer sits over the picture and has to fit a phone; the name
+   * carries the Title, as every other control in the player does, so a screen
+   * reader hears what is being skipped.
+   *
+   * There is no "Skip Recap" or "Skip Preview" yet. The Server really holds
+   * those types (`jellyfin-playback.md` §12) and `SKIPPABLE_SEGMENT_TYPES` is
+   * where they would be turned on, a label each.
+   */
+  'player.skipLabel': 'Skip',
+  'player.skipIntro': 'Skip Intro',
+  'player.skipIntroFor': (p: { name: string }) => `Skip the intro of ${p.name}`,
+  'player.skipCredits': 'Skip Credits',
+  'player.skipCreditsFor': (p: { name: string }) => `Skip the credits of ${p.name}`,
+
+  /*
+   * The next Episode (#31, stories 88 and 89).
+   *
+   * Which of the two the User sees follows their Jellyfin account's
+   * `EnableNextEpisodeAutoPlay`, and the wording follows what the settings
+   * screen already promised for each: "Start the next one" counts down, and
+   * "Ask me each time" asks and waits.
+   *
+   * The countdown says no unit, which is not terseness: a number and a word
+   * that has to agree with it would need a plural rule in every locale, and
+   * the readout is beside a button that says what it will do.
+   */
+  'player.nextUpLabel': 'The next Episode',
+  'player.nextUp': (p: { name: string }) => `Next: ${p.name}`,
+  'player.nextUpCountdown': (p: { seconds: number }) => `Starting in ${String(p.seconds)}…`,
+  'player.playNow': 'Play now',
+  'player.playNowFor': (p: { name: string }) => `Play ${p.name} now`,
+  'player.cancelNext': 'Cancel',
+  'player.cancelNextFor': (p: { name: string }) => `Do not play ${p.name}`,
+
   'nav.sections': 'Sections',
   'nav.home': 'Home',
   'nav.movies': 'Movies',

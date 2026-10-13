@@ -2,6 +2,7 @@ import {
   DEFAULT_USER_CONFIGURATION,
   type FakeItem,
   type FakeMediaFile,
+  type FakeMediaSegment,
   type FakeMediaStream,
   type FakeUserConfiguration,
 } from '../data.ts';
@@ -103,7 +104,17 @@ export const mediaInfoRoutes: readonly FakeRoute[] = [
       return {
         status: 200,
         body: {
-          MediaSources: [sourceFor(item, media, profile, token, body, configuration)],
+          MediaSources: [
+            sourceFor(
+              item,
+              media,
+              profile,
+              token,
+              body,
+              configuration,
+              state.mediaSegments[item.Id] ?? [],
+            ),
+          ],
           PlaySessionId: playSessionFor(itemId),
           ErrorCode: null,
         },
@@ -129,6 +140,7 @@ function sourceFor(
   token: string,
   body: Record<string, unknown>,
   configuration: FakeUserConfiguration,
+  segments: readonly FakeMediaSegment[],
 ): Record<string, unknown> {
   const direct = directPlayAllowed(media, profile);
   const subProtocol = hlsWanted(profile) ? 'hls' : 'http';
@@ -157,7 +169,9 @@ function sourceFor(
     MediaStreams: item.MediaStreams ?? [],
     DefaultAudioStreamIndex: audioIndex,
     DefaultSubtitleStreamIndex: subtitleIndex,
-    HasSegments: false,
+    // #31: whether this Server's detection plugin found anything on this item.
+    // It is what tells a client it is worth asking `/MediaSegments` at all.
+    HasSegments: segments.length > 0,
     // Already parameterised and already carrying its own ApiKey, exactly as the
     // real Server's is, so a client that rebuilds it is doing it wrong.
     TranscodingUrl: direct

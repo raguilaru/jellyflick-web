@@ -2,8 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import type { DeviceLayer } from '../device/types';
 import { useTranslate } from '../i18n/index';
 import type { JellyfinGateway } from '../jellyfin/gateway';
+import { usePlaybackPreferences } from '../settings/playback-preferences-provider';
 import { useBackClaim } from '../shell/back';
+import type { PlayTarget } from '../title/play-target';
+import { resolveNextEpisode } from '../title/play-target';
 import { useIdleControls } from './controls-visibility';
+import { readMediaSegments, skipOffered, type MediaMarker } from './media-segments';
+import { NextEpisodeOffer } from './next-episode';
+import { SkipButton } from './skip-button';
 import { PlayerControls, SEEK_BAR_ATTRIBUTE } from './player-controls';
 import { planPlayback, type PlaybackAttempt, type PlaybackPlan } from './planning';
 import {
@@ -55,6 +61,23 @@ export type PlayerProps = {
   titleName: string;
   /** Where this User left off, in ticks. Absent starts at the beginning. */
   resumeTicks?: number;
+  /**
+   * Which Series this is an Episode of, for an Episode and only for one (#31).
+   * It is what lets the end of one Episode offer the next, and its absence is
+   * how a Movie says there is nothing after it. It comes off the `PlayTarget`
+   * the screen is playing, so the rule about what that means stays in
+   * `src/title/play-target.ts`.
+   */
+  seriesId?: string;
+  /**
+   * Play this instead, which is the next Episode (#31).
+   *
+   * The player asks the screen to re-target rather than swapping the Episode
+   * under itself, because the screen is where "what is playing" already lives
+   * — the title page's own Play set it, and the Billboard's did. A screen that
+   * does not offer this gets the old behaviour: the player closes at the end.
+   */
+  onPlayNext?: (target: PlayTarget) => void;
   onClose: () => void;
 };
 
@@ -65,9 +88,18 @@ export function Player({
   itemId,
   titleName,
   resumeTicks,
+  seriesId,
+  onPlayNext,
   onClose,
 }: PlayerProps) {
   const t = useTranslate();
+  /**
+   * This User's Jellyfin account (#35), which is where `EnableNextEpisodeAutoPlay`
+   * lives. The provider is above the router, so it is already in the player's
+   * tree and no second path to the Server is needed — `playback-preferences-provider.tsx`
+   * says so in as many words, and #31 is the reader it was waiting for.
+   */
+  const { preferences } = usePlaybackPreferences();
   const video = useRef<HTMLVideoElement | null>(null);
   const [attempt, setAttempt] = useState<PlaybackAttempt | undefined>(undefined);
   const [paused, setPaused] = useState(false);
@@ -100,6 +132,17 @@ export function Player({
    * means this is the first attempt, so the resume point stands.
    */
   const [restartTicks, setRestartTicks] = useState<number | undefined>(undefined);
+  /**
+   * The intro and credits markers this source has (#31), empty until the read
+   * answers and for every Server with no segment provider at all.
+   */
+  const [markers, setMarkers] = useState<readonly MediaMarker[]>([]);
+  /**
+   * What is offered now that the Episode has run out: the next Episode, or
+   * `'nothing'` once it is known there is none. `undefined` is "it has not
+   * run out", which is the state nearly all of playback is in.
+   */
+  const [atTheEnd, setAtTheEnd] = useState<PlayTarget | 'nothing' | undefined>(undefined);
 
   // Back closes the player, through the one Back handler rather than a key
   // listener of this screen's own. A layout effect, which is why #8 made it one.
@@ -137,8 +180,36 @@ export function Player({
     onDurationChange: setDuration,
     onFailure: () => setFailed(true),
     onUnreported: () => setUnreported(true),
-    onEnded: onClose,
+    onEnded: () => {
+      void reachedTheEnd();
+    },
   });
+
+  /**
+   * What the end of a file means (#31).
+   *
+   * A Movie, or an Episode with nothing after it, closes the player exactly as
+   * #25 did: the Title is over and the title page is where a User belongs. An
+   * Episode in the middle of a Series is the new case — the next one is read
+   * off the Server **here rather than beside every playback**, so an Episode
+   * somebody abandons half way through never costs the two calls.
+   *
+   * The read is awaited before anything is drawn, so a household never sees an
+   * empty panel fill in; until it answers the controls are up over a still
+   * frame, which is what a paused player looks like anyway.
+   */
+  const reachedTheEnd = async (): Promise<void> => {
+    if (seriesId === undefined || onPlayNext === undefined) {
+      onClose();
+      return;
+    }
+    const next = await resolveNextEpisode(gateway, seriesId, itemId, t);
+    if (next === undefined) {
+      onClose();
+      return;
+    }
+    setAtTheEnd(next);
+  };
 
   // Ask the Server how to play it. Once per (Title, Server, resume point), and
   // again whenever Retry asks or the User chooses a different sound track.
@@ -174,6 +245,33 @@ export function Player({
   }, []);
 
   /**
+   * The markers, read once per plan (#31).
+   *
+   * **Only where the Server said there are some.** `MediaSourceInfo.HasSegments`
+   * exists precisely to save this request (`jellyfin-playback.md` §12), and
+   * most households run a Server with no intro-detection plugin at all — so
+   * the common case is one boolean rather than a round trip per playback.
+   *
+   * It hangs off the plan rather than off the Title because a change of sound
+   * track is a new plan, and the markers belong to the source that plan names.
+   */
+  useEffect(() => {
+    setMarkers([]);
+    if (plan === undefined || !plan.hasSegments) return;
+    let abandoned = false;
+    void readMediaSegments(gateway, plan.itemId).then((read) => {
+      if (!abandoned) setMarkers(read);
+    });
+    return () => {
+      abandoned = true;
+    };
+    // The gateway is rebuilt on every render, so its address is the dependency.
+  }, [gateway.serverAddress, plan]);
+
+  /** Which skip is on the screen, if any: one reading of one moment. */
+  const skip = skipOffered(markers, position);
+
+  /**
    * Choosing the sound means asking the Server again, and that is not a
    * shortcut: a direct-played file is served with every track in it and a
    * browser gives no way to pick one, and a transcode carries only the track
@@ -206,7 +304,16 @@ export function Player({
     active: true,
     // The picker keeps them up too: it is opened from a control, so the
     // controls hiding under it would take away the way back out.
-    keepVisible: paused || plan === undefined || problem !== undefined || pickerOpen,
+    // So does an Episode that has run out (#31): there is nothing playing
+    // behind them, and whether the next Episode was offered or cancelled, a
+    // still frame with nothing to press and no sign there was anything is
+    // exactly what this rule exists to prevent.
+    keepVisible:
+      paused ||
+      plan === undefined ||
+      problem !== undefined ||
+      pickerOpen ||
+      atTheEnd !== undefined,
   });
 
   usePlayerKeys({
@@ -290,6 +397,34 @@ export function Player({
           {t('player.subtitlesUnavailable')}
         </p>
       ) : null}
+
+      {/*
+        Skip Intro and Skip Credits (#31). Deliberately **outside** the controls
+        and drawn whenever the Server says there is a marker here: the controls
+        get out of the way after a few seconds, and an offer good only for the
+        length of an intro cannot be one a User has to summon them to find. It
+        is gone once the Episode has run out, because the offer below is what
+        that moment is for.
+      */}
+      {skip === undefined || atTheEnd !== undefined ? null : (
+        <SkipButton offer={skip} titleName={titleName} onSkip={playing.seekTo} />
+      )}
+
+      {/*
+        The next Episode (#31). Its countdown follows this User's own Jellyfin
+        account, and cancelling leaves the player where it is — see
+        `next-episode.tsx`.
+      */}
+      {atTheEnd === undefined || atTheEnd === 'nothing' ? null : (
+        <NextEpisodeOffer
+          name={atTheEnd.name}
+          autoPlay={preferences.nextEpisodeAutoPlay}
+          onPlay={() => {
+            onPlayNext?.(atTheEnd);
+          }}
+          onCancel={() => setAtTheEnd('nothing')}
+        />
+      )}
 
       {/*
         Hidden rather than faded: a control a User cannot see is a control the

@@ -190,6 +190,9 @@ function FeaturedTitle({
 
       {playing === undefined ? null : (
         <Player
+          // Keyed on what is playing: see the note at the title page's own
+          // Player, which #31 put there for the next Episode's sake.
+          key={playing.itemId}
           gateway={gateway}
           device={device}
           userId={userId}
@@ -198,6 +201,11 @@ function FeaturedTitle({
           // Where this User left off: the Billboard's own query read it for a
           // Movie, and `play-target.ts` read the Episode's own for a Series.
           {...(playing.resumeTicks === undefined ? {} : { resumeTicks: playing.resumeTicks })}
+          // A Series the Billboard featured binges on from Home, the same as
+          // from its title page: `resolvePlayTarget` already answered an
+          // Episode, and an Episode knows its Series (#31).
+          {...(playing.seriesId === undefined ? {} : { seriesId: playing.seriesId })}
+          onPlayNext={setPlaying}
           onClose={() => setPlaying(undefined)}
         />
       )}
