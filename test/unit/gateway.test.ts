@@ -159,12 +159,14 @@ describe('the Jellyfin gateway', () => {
 
     const latest = await gateway.getLatestItems({ parentId: 'lib-kids' });
 
-    // The newest Episode first, then the other, then the Movie: the Series
-    // itself is not among them, which is why a client has to collapse Episodes.
+    // Newest first, and neither the Series nor its Seasons are among them —
+    // which is why a client has to collapse Episodes into their Series itself.
     expect(latest.map((item) => item.Id)).toEqual([
       'episode-bluey-s2e3',
       'episode-bluey-s2e2',
       'movie-paddington',
+      'episode-bluey-s1e2',
+      'episode-bluey-s1e1',
     ]);
   });
 

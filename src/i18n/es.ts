@@ -274,6 +274,13 @@ export const es: Messages = {
   'title.subtitles': 'Subtítulos',
   'title.collection': 'Colección',
   'title.moreLikeThis': 'Más como esto',
+  'title.seasons': 'Temporadas',
+  'title.episodes': 'Episodios',
+  'title.seasonNumber': (p) => `Temporada ${String(p.number)}`,
+  'title.otherEpisodes': 'Otros episodios',
+  'title.episodeName': (p) => (p.number === undefined ? p.name : `${String(p.number)}. ${p.name}`),
+  'title.episodePlaying': (p) => `${p.series}: ${p.episode}`,
+  'title.noEpisodes': 'El servidor no indicó ningún episodio de esta serie.',
   'title.language': (p) => LANGUAGE_NAMES_ES[p.code] ?? p.code.toUpperCase(),
 
   'player.label': (p) => `Reproduciendo ${p.name}`,

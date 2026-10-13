@@ -6,6 +6,7 @@ import {
 } from '../catalogue/catalogue';
 import { cardForTitle, type RowCard } from '../home/row';
 import type { JellyfinGateway } from '../jellyfin/gateway';
+import { loadSeries, NO_SERIES, type SeriesPage } from './series';
 
 /**
  * What a title page is, apart from how it looks: its address, and reading one
@@ -54,6 +55,12 @@ export type TitlePageExtras = {
   readonly similar: readonly RowCard[];
   /** The names of the Collections the Title is in. Empty when it is in none. */
   readonly collections: readonly string[];
+  /**
+   * The Seasons and Episodes under a Series (#18), and {@link NO_SERIES} for a
+   * Movie — a Movie has none, and asking the Server for the Seasons of one
+   * would be a question about a shape it is not.
+   */
+  readonly series: SeriesPage;
 };
 
 /**
@@ -85,10 +92,20 @@ export async function loadTitlePage(
   // the id is for something this app does not show, or for nothing at all.
   if (details === undefined) return { outcome: 'not-found' };
 
+  // The Seasons and Episodes are asked for **after** the Title and not beside
+  // it, because only the Title says whether this is a Series at all: asking a
+  // Server for the Seasons of a Movie is a question about a shape it is not,
+  // and it would answer every Movie's page with a 404 to swallow. One extra
+  // round trip on a Series' page is the price, and a Movie's page makes no
+  // request it has no use for.
+  const series =
+    details.title.kind === 'Series' ? await loadSeries(gateway, titleId) : NO_SERIES;
+
   return {
     outcome: 'title',
     details,
     page: {
+      series,
       similar: similar
         .map((item) => {
           const found = catalogueItemFrom(item);

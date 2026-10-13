@@ -547,9 +547,12 @@ const SAMPLE_ITEMS: readonly FakeItem[] = [
     ParentIndexNumber: 2,
     IndexNumber: 3,
     libraryId: 'lib-kids',
+    ImageTags: { Primary: 'tag-bluey-s2e3' },
+    Overview: 'Bingo wants to sleep in her own bed.',
     // The real Server always sends a runtime, and a progress bar is a
     // fraction of it (#12).
     RunTimeTicks: 7 * 60 * 10_000_000,
+    media: { Container: 'webm', VideoCodec: 'vp9', Height: 1080 },
   },
   {
     Id: 'episode-bluey-s2e2',
@@ -562,9 +565,12 @@ const SAMPLE_ITEMS: readonly FakeItem[] = [
     ParentIndexNumber: 2,
     IndexNumber: 2,
     libraryId: 'lib-kids',
+    ImageTags: { Primary: 'tag-bluey-s2e2' },
+    Overview: 'Dad forgets the floaties.',
     // The real Server always sends a runtime, and a progress bar is a
     // fraction of it (#12).
     RunTimeTicks: 7 * 60 * 10_000_000,
+    media: { Container: 'webm', VideoCodec: 'vp9', Height: 1080 },
   },
   {
     Id: 'episode-severance-s2e4',
@@ -776,6 +782,74 @@ const SAMPLE_ITEMS: readonly FakeItem[] = [
     libraryId: 'lib-movies',
   },
 
+  /*
+   * Bluey is the Series the title page's Seasons and Episodes (#18) are tested
+   * against: two Seasons the Server holds as items, four Episodes between them,
+   * and the one Episode in each state a list has to draw.
+   *
+   * Its Season 1 is deliberately **old** — older than anything else in the
+   * sample library — for two reasons. The newest addition in Bluey's library is
+   * still `episode-bluey-s2e3`, so the merged newest-first order is exactly
+   * what it was; and nothing is recent enough to earn a Title Label (#14).
+   */
+  {
+    Id: 'season-bluey-s1',
+    Name: 'Season 1',
+    Type: 'Season',
+    DateCreated: '2026-01-06T09:00:00Z',
+    SeriesId: 'series-bluey',
+    SeriesName: 'Bluey',
+    SeriesPrimaryImageTag: 'tag-bluey',
+    IndexNumber: 1,
+    libraryId: 'lib-kids',
+  },
+  {
+    Id: 'season-bluey-s2',
+    Name: 'Season 2',
+    Type: 'Season',
+    DateCreated: '2026-01-07T09:00:00Z',
+    SeriesId: 'series-bluey',
+    SeriesName: 'Bluey',
+    SeriesPrimaryImageTag: 'tag-bluey',
+    IndexNumber: 2,
+    libraryId: 'lib-kids',
+  },
+  // Everything an Episode list draws: a still of its own, a description, a
+  // length, and a file to play.
+  {
+    Id: 'episode-bluey-s1e1',
+    Name: 'The Magic Xylophone',
+    Type: 'Episode',
+    DateCreated: '2026-01-08T09:00:00Z',
+    SeriesId: 'series-bluey',
+    SeriesName: 'Bluey',
+    SeriesPrimaryImageTag: 'tag-bluey',
+    ParentIndexNumber: 1,
+    IndexNumber: 1,
+    // On an Episode the `Primary` image is the still from the programme, not a
+    // poster, and it is what the list shows.
+    ImageTags: { Primary: 'tag-bluey-s1e1' },
+    Overview: 'Bandit is frozen by a magic xylophone.',
+    RunTimeTicks: 7 * 60 * 10_000_000,
+    media: { Container: 'webm', VideoCodec: 'vp9', Height: 1080 },
+    libraryId: 'lib-kids',
+  },
+  // And an Episode the Server said almost nothing about: no still, no
+  // description and no length. A list has to draw it rather than skip it, which
+  // is `The Unfinished`'s part played by an Episode.
+  {
+    Id: 'episode-bluey-s1e2',
+    Name: 'Hotel',
+    Type: 'Episode',
+    DateCreated: '2026-01-09T09:00:00Z',
+    SeriesId: 'series-bluey',
+    SeriesName: 'Bluey',
+    SeriesPrimaryImageTag: 'tag-bluey',
+    ParentIndexNumber: 1,
+    IndexNumber: 2,
+    media: { Container: 'webm', VideoCodec: 'vp9', Height: 1080 },
+    libraryId: 'lib-kids',
+  },
   {
     Id: 'season-severance-s2',
     Name: 'Season 2',
