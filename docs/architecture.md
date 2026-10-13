@@ -167,6 +167,25 @@ Two boundaries are faked, and only these two: **the Jellyfin HTTP API** and
 Vitest runs test files one at a time (`fileParallelism: false`), because one fake
 Jellyfin holds mutable sample data for the whole run.
 
+**A green e2e run on your own machine is not evidence that it is green.** CI's
+hardware is about half the speed, and every timing bug this suite has had was
+green here and red there. `E2E_CPU_THROTTLE=4 npm run test:e2e` throttles the
+browser's main thread through CDP (`test/e2e/fixtures.ts`) and is the standing
+way to ask the question before CI does; `--repeat-each` is the other half, for
+anything intermittent. Both are off by default.
+
+Two traps that throttle has already caught, worth knowing before writing a test
+that waits for something:
+
+- **A readout drawn from a moving number is a window, not a state.** The seek
+  bar and the clock beside it are two readings of the `<video>`'s position, and
+  the test video is six seconds long: a string like `-0:01` is on the screen for
+  one frame of real playback. Pause before reading two things that have to agree.
+- **A layout that is still settling moves what a test is pointing at.** Hover
+  reveals a card's My List control, and adding a Title puts a new Row above the
+  card, so a pointer that has not moved is no longer on it. The Billboard's
+  artwork can shift the page again later. Re-establish the state, and retry.
+
 ## Adding an endpoint to the fake Jellyfin
 
 1. Add the sample data it serves to `FakeJellyfinState` in
