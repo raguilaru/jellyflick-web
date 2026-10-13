@@ -23,13 +23,14 @@ function fixed(): HTMLElement {
   return element;
 }
 
-function nest(...elements: HTMLElement[]): HTMLElement {
-  elements.reduce((parent, child) => {
+/** Nests each element in the one before it, attaches the lot, and answers the
+ * innermost — which is the one a test then asks about. */
+function nest(outermost: HTMLElement, ...rest: HTMLElement[]): HTMLElement {
+  document.body.append(outermost);
+  return rest.reduce((parent, child) => {
     parent.append(child);
     return child;
-  });
-  document.body.append(elements[0]);
-  return elements[elements.length - 1];
+  }, outermost);
 }
 
 afterEach(() => {
