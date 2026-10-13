@@ -25,6 +25,7 @@ function title(
     cast: [],
     audioLanguages: [],
     subtitleLanguages: [],
+    providerIds: {},
     watched: has.watched === true,
     ...(has.backdrop === false
       ? {}
