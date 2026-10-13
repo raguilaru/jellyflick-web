@@ -7,6 +7,7 @@ import { useTranslate, type Translate } from '../i18n/index';
 import type { JellyfinGateway } from '../jellyfin/gateway';
 import { MyListToggle } from '../my-list/my-list-toggle';
 import { Player } from '../playback/player';
+import { ExtraRatings } from '../ratings/extra-ratings-badges';
 import type { Session } from '../session/session';
 import { useWidePointer } from '../shell/layout';
 import { episodePlayTarget, playTargetFor, type PlayTarget } from './play-target';
@@ -195,6 +196,13 @@ function TitlePage({
           {t('title.watchedUnsaved')}
         </p>
       ) : null}
+
+      {/* The extra ratings an MDBList key buys (#20), under the facts line the
+          Server's own two ratings are in. Nothing is drawn when the host set no
+          key, when MDBList does not know the Title or when it failed, so a page
+          on a host without a key looks finished rather than short of something.
+          The compact form of this is what #21's hover card takes. */}
+      <ExtraRatings details={details} />
 
       {details.overview === undefined ? null : (
         <p class="title__overview">{details.overview}</p>

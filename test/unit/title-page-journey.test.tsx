@@ -118,6 +118,18 @@ describe('a User opening a title page', () => {
     expect(screen.getByText('Drama')).toBeTruthy();
   });
 
+  it('still shows the page when the extra ratings cannot be read at all', async () => {
+    // There is no container behind this test, so the ratings route (#20) is not
+    // there to answer: the page must come up with the Server's own two ratings
+    // and simply nothing extra. Story 80 treats MDBList as an optional extra,
+    // and story 81 leaves a missing rating out rather than saying anything.
+    await openArrival();
+
+    expect(screen.getByText('94% critics')).toBeTruthy();
+    expect(screen.getByText('7.9 from the community')).toBeTruthy();
+    expect(screen.queryByRole('list', { name: en['ratings.heading'] })).toBeNull();
+  });
+
   it('shows More like this, and opens another title page from it', async () => {
     await openArrival();
 
