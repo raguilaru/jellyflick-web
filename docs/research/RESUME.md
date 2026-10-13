@@ -4,73 +4,129 @@ State of the `/implement-spec` run on the integration branch `feat/jellyflick-v1
 (draft PR #38). Update this whenever a wave lands, so a fresh session can pick the work
 up without re-deriving anything.
 
-## START HERE — nothing is in flight; the whole frontier is open
+## START HERE — seventh session, two implementers in flight
 
-The sixth session merged **#25 and #9**, the two branches the fifth had finished but could
-not land. **Every ticket the task graph had reached is now merged and closed, nothing is
-half-merged, and no implementer is running.**
+The seventh session fixed the **last of the four e2e failures** and launched **#31 and
+#22**. CI's `e2e` job had failed on **every run of this branch since it began**; it passes
+now, confirmed on CI's own hardware, which is the only place the bug it was hiding ever
+showed itself.
 
-Integration tip **`7498792`**, pushed, draft PR #38 open (still draft). Gate verified on
-fresh ports `4263/8863`, each step's own exit code: `lint` 0, `typecheck` 0, `build` 0,
-**415 unit tests** in 38 files, **306 Playwright tests (286 passed, 20 skipped, 0 failed)**,
-main JS **106.57 kB / 33.32 kB gz**, a 10.99 kB / 3.80 kB gz Spanish chunk,
-11.73 kB / 2.81 kB gz CSS, and **hls.js in its own lazy 584.35 kB / 181.54 kB gz chunk that
-only a transcode fetches**.
+Integration tip **`0ba7c23`**, pushed, draft PR #38 open (still draft). Gate on this
+worktree, each step's own exit code: `lint` 0, `typecheck` 0, `build` 0, **690 unit
+tests** in 53 files, **384 Playwright tests (359 passed, 25 skipped, 0 failed)** under
+`E2E_CPU_THROTTLE=4`, main JS **147.05 kB / 44.54 kB gz**, a 13.97 kB / 4.60 kB gz Spanish
+chunk, 17.97 kB / 3.91 kB gz CSS, and hls.js still in its own lazy
+584.35 kB / 181.54 kB gz chunk that only a transcode fetches.
+
+**In flight — do not touch these areas:** `ticket/31-skip-intro-and-next-episode`
+(`src/playback/`, ports 4331/8331) and `ticket/22-remaining-billboard-sources`
+(`src/home/` and the Row registry, ports 4322/8322).
+
+### The last of the four e2e failures was an app bug, and it was in the navigator
+
+Closed as **#40**. Worth reading before touching `src/navigation/` or adding any overlay.
+
+The arrow keys keep focus inside an overlay by putting everything in one flow with it and
+offering no way out of that flow, and the flow is "the fixed thing this is inside". That
+read the **outermost** fixed ancestor — and overlays nest. The player is drawn inside
+whatever screen was showing, and the title page's pop-up shape is itself `position: fixed`
+**on purpose**, because that is what makes the pop-up a flow (#17). So on the one screen a
+Title is played from, the player's own controls and the cards on the page behind the
+picture shared a flow, and the rule that an overlay has no way out of it meant nothing
+there. With the subtitle menu open, Right from its Off button focused a card behind the
+player.
+
+Three things in it that generalise:
+
+- **It was green on this machine throughout.** The cards come out about 16px wider on CI's
+  Linux than on macOS, and that is the whole difference between the card winning the press
+  and the subtitle choice beside it winning. The throttle does not catch this class of bug;
+  only CI does. Where a rule is what you mean, **assert the rule, not the geometry that
+  exposed it.**
+- **The navigator's geometry had no unit coverage at all, and could not have had any.**
+  happy-dom gives every box a zero size, and `focusableItems()` drops zero-sized elements,
+  so in Vitest the arrow keys move nothing and every journey test passes regardless. The
+  flow rule now lives in `src/navigation/focusable.ts` beside `groupOf` and is pinned
+  directly in `test/unit/the-flow-an-overlay-belongs-to.test.ts` — both of its new cases
+  were checked to fail against the old reading.
+- **`npx vitest run` does not typecheck.** A new test file was green and still failed the
+  gate's `tsc` step. Run the steps separately, as trap 2 already says; this is the second
+  shape that trap takes.
 
 ### Run `npm ci` in your worktree before anything else
 
-**#25 added the project's first runtime dependency (`hls.js`).** Any worktree whose
-`node_modules` predates `35ca1f1` will fail `typecheck`, `test` **and** `build` — #9's merge
-showed **14 failing test files** from this one cause. The integration worktree has been
-reinstalled; a fresh one has not. This is trap 3 and it now has teeth it did not have before.
+A worktree whose `node_modules` is missing or stale fails `typecheck`, `test` **and**
+`build` at once — #9's merge showed **14 failing test files** from this one cause, when
+`hls.js` arrived as the project's first runtime dependency. This is trap 3.
 
-### The frontier — eleven open and unblocked, nothing taken
+### The frontier — twelve open, ten untaken
 
 | Ticket | Note |
 |---|---|
-| #26 Player controls | **the deepest chain**: gates #27 → #28 → #29/#30, plus #31, #32. #25 left it a minimum honest player |
-| #12 Continue Watching | adds a Row via #10's registry; **#25's `state.playbackPositions` is what makes it real** |
-| #15 More Row types | `HomeRow.parameter` is already round-tripped unread for its genre/Collection Rows |
-| #16 Billboard with Spotlight | the natural place for the leftover "Signed in as Rafael." line to disappear |
-| #14 Title Labels | touches `cardForTitle` in `src/home/row.tsx`, which #13 and #17 also touch |
-| #18 Series on the title page | touches `src/title/title-screen.tsx` |
 | #19 Trailers and Download File | touches `src/title/title-screen.tsx` |
-| #20 MDBList ratings | touches `src/title/title-screen.tsx`; **ADR 0004 forbids the key reaching the browser** |
-| #21 Desktop hover cards | takes `Row`'s `cardControl` render prop from #13; #8's "a Row is a line" was made for it |
+| #20 MDBList ratings | touches `src/title/title-screen.tsx`; **ADR 0004 forbids the key reaching the browser**. Its compact-for-cards half is what #21 wants |
+| #21 Desktop hover cards | takes `Row`'s `cardControl` render prop from #13; #8's "a Row is a line" was made for it. **Wants #20's compact ratings** — not a declared blocker, but real |
+| #22 Remaining Billboard Sources | **in flight.** Every source it adds must route Play through `resolvePlayTarget` |
+| #23 Movies and Series pages | **wants #22 merged first**: both compose Home, and #22 is in that file now |
+| #28 Subtitle Offset | `src/playback/`, and the one the spec's problem statement names by hand |
+| #29 Styled subtitles | `src/playback/`; #28's offset has to keep working through it |
+| #30 Image subtitles | `src/playback/`; **its first box is a research finding to record in the ticket**, before any code |
+| #31 Skip Intro/Credits and next Episode | **in flight** |
+| #32 Trickplay, speed, picture-in-picture and quality | `src/playback/` |
 | #33 Cast | `decisions.md` §8 says it must read `user.Configuration.CastReceiverId` at runtime — #35 made the fake serve that |
 | #34 Play On | — |
 
 **Conflict groups — do not launch two from the same group:**
-- **`src/home/home-rows.tsx` and the Row registry**: #12, #15, #16. Two at most.
-- **`src/title/title-screen.tsx`**: #18, #19, #20, #21. **One at a time**, and #25 has just
-  changed that file (it wired Play and gave `TitleScreen` a `device` prop).
-- **The player**: #26 alone owns `src/playback/`.
+- **`src/title/title-screen.tsx`**: #19, #20, #21. **One at a time.**
+- **`src/home/` and the Row registry**: #22, #23. **One at a time**, and #22 is in it now.
+- **`src/playback/`**: #28, #29, #30, #31, #32, and #33/#34 in part. **One at a time** is
+  the safe reading — #28 → #29/#30 is a real chain inside the subtitle code even though
+  the task graph does not declare it.
 
-#26 plus one Home ticket plus one title-page ticket is the clean shape for a wave of three.
+Six of the twelve are in the player. **That is the shape of the rest of this run**, and it
+is why the waves from here are small: there is no honest way to run three player tickets
+at once.
 
 ### Do these, in this order
 
-1. **Check both limits.** A wave of three implementers costs **most of a 5-hour window** —
-   see the corrected figures below. Hold back the integrator's own merge and gate budget.
-2. **`code-review` over the whole branch** — owed since the beginning and **still never
-   run.** Worth doing *before* the next wave, while nothing is in flight and the branch is
-   a coherent whole: eleven tickets have landed since anyone looked at it end to end.
-3. **The git history rewrite** in `decisions.md` §10 — **no implementer is in flight, so
-   this is the moment.** The host must then ask GitHub Support to purge the stale objects.
-4. Then launch the next wave, and merge each branch as it reports.
-5. **Mark PR #38 ready** when the tickets are done.
+1. **Check both limits before each wave.** Three implementers cost **most of a 5-hour
+   window** — see the measured figures below. Two is the default; hold back the
+   integrator's own merge and gate budget.
+2. Merge **#31** and **#22** as they report, gating each merge.
+3. Then, in order, the waves that fall out of the conflict groups above — a title-page
+   ticket plus a player ticket is the clean pair. **#20 before #21**, and **#23 after
+   #22**.
+4. **`code-review` over the whole branch again** once the tickets are done. The first run
+   found four real bugs; #40 shows the navigator is still the thinnest-covered part.
+5. **The git history rewrite** in `decisions.md` §10, when no implementer is in flight.
+   The host must then ask GitHub Support to purge the stale objects.
+6. **Mark PR #38 ready** when the tickets are done.
 
-### What a wave of three actually cost — the earlier estimate was wrong
+### What a wave costs — the earlier estimate was wrong
 
 The old "25–30 points of the 5-hour window" figure was for a wave of three. **It is wrong.**
 Measured over the fifth session: 5% at the start, 17% after merging two paused branches and
-launching three, then **95% once those three had run.** The subagents reported 211k, 318k and
-251k tokens — **780k between them.**
+launching three, then **95% once those three had run.** The subagents reported 211k, 318k
+and 251k tokens — **780k between them.**
 
-So: **three implementers cost most of a 5-hour window on their own.** Launch three only on a
-fresh window with nothing else planned; otherwise two. **Recovering a finished-but-unmerged
-branch is cheap** — the sixth session landed both of the fifth's leftovers, including two
-real conflict resolutions and two full gates, for well under a quarter of a window.
+So: **three implementers cost most of a 5-hour window on their own.** Launch three only on
+a fresh window with nothing else planned; otherwise two. **Recovering a
+finished-but-unmerged branch is cheap** — the sixth session landed both of the fifth's
+leftovers, including two real conflict resolutions and two full gates, for well under a
+quarter of a window.
+
+An integrator's own share is not free either. This session spent most of a window before
+launching anything: reading the CI trace down to the focus-by-focus sequence, reproducing
+under the throttle, probing the live DOM, and two full gates. **Diagnosing one app bug
+properly costs about what one implementer does.**
+
+### The bug record is kept in the tracker, not only in commit messages
+
+A user-facing defect found in already-closed work gets its own issue, filed after the fact
+and closed with a pointer to the fix. **#39** (Back did nothing on Search, so a TV User
+could not leave it — shipped in #24) and **#40** above are both filed that way. The host
+chose this over reopening the ticket that shipped the defect, so the closed ticket's own
+record stays the record of what it built.
 
 ### A design call made during #8's merge that a human may want to revisit
 
