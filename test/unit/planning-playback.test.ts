@@ -171,6 +171,35 @@ describe('planning how to play a Title', () => {
   });
 
   /**
+   * `MediaSourceInfo.HasSegments` (#31). §12: it "exists precisely to avoid a
+   * pointless request", so the plan carries it and the player asks for markers
+   * only where the Server says there are some. Every Title plays either way —
+   * what the flag saves is a round trip per playback on the Servers with no
+   * intro-detection plugin, which is most of them.
+   */
+  it('says whether the Server holds any markers for this source', async () => {
+    const without = await planPlayback(gatewayFor('no-segments'), {
+      itemId: 'movie-arrival',
+      userId: RAFAEL,
+      device: testDeviceLayer(),
+    });
+    expect(without.outcome === 'play' && without.plan.hasSegments).toBe(false);
+
+    await setFakeState({
+      mediaSegments: {
+        'movie-arrival': [{ Type: 'Intro', StartTicks: 0, EndTicks: 20_000_000 }],
+      },
+    });
+
+    const withMarkers = await planPlayback(gatewayFor('has-segments'), {
+      itemId: 'movie-arrival',
+      userId: RAFAEL,
+      device: testDeviceLayer(),
+    });
+    expect(withMarkers.outcome === 'play' && withMarkers.plan.hasSegments).toBe(true);
+  });
+
+  /**
    * Which tracks a Title starts with (#27).
    *
    * **The Server decides, not this app.** `UserConfiguration` holds the User's

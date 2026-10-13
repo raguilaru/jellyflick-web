@@ -145,6 +145,24 @@ export type FakeMediaFile = {
 };
 
 /**
+ * One media segment — an intro or a credits marker — as `MediaSegmentDto` has
+ * it (`jellyfin-playback.md` §12).
+ *
+ * `Type` is a `MediaSegmentType`, whose whole enum is `Unknown, Commercial,
+ * Preview, Recap, Outro, Intro`: **there is no `Credits`**, and `Outro` is the
+ * credits marker (`decisions.md` §5). Ticks are 100 ns, as everywhere on this
+ * API, so a client that read them as milliseconds is caught here.
+ *
+ * `Id` and `ItemId` are filled in by the route from the item they are seeded
+ * against, so a test writes only the three fields that say something.
+ */
+export type FakeMediaSegment = {
+  Type: 'Unknown' | 'Commercial' | 'Preview' | 'Recap' | 'Outro' | 'Intro';
+  StartTicks: number;
+  EndTicks: number;
+};
+
+/**
  * A Collection — Jellyfin's `BoxSet` — and the Titles in it. The real Server
  * answers `/Items/{itemId}/Collections` with the BoxSets an item belongs to, so
  * the membership is held here rather than on the item.
@@ -288,6 +306,21 @@ export type FakeJellyfinState = {
    * rather than being fixed whatever the household has watched.
    */
   movieRecommendations: Record<string, string[]>;
+  /**
+   * The intro and credits markers `GET /MediaSegments/{itemId}` answers, by
+   * item id (#31).
+   *
+   * **Seeded empty, deliberately**, as `movieRecommendations` is. Segment data
+   * is produced by a server-side provider — an intro-detection plugin — so a
+   * Server with none installed holds no markers at all, and that is the state
+   * most households are in. Seeding one would make "this Server has nothing to
+   * skip" unreachable without patching, and it is the case every Title has to
+   * cope with.
+   *
+   * A test that wants markers seeds them:
+   * `{ 'episode-bluey-s1e1': [{ Type: 'Intro', StartTicks: 0, EndTicks: 2e7 }] }`.
+   */
+  mediaSegments: Record<string, FakeMediaSegment[]>;
   /**
    * A status the `/UserPlayedItems` writes answer with, so a test can see what
    * marking a Title watched looks like when the Server refuses it. Null is the
@@ -477,6 +510,9 @@ export function createSampleData(): FakeJellyfinState {
     localTrailers: { ...SAMPLE_LOCAL_TRAILERS },
     similar: { ...SAMPLE_SIMILAR },
     movieRecommendations: { ...SAMPLE_MOVIE_RECOMMENDATIONS },
+    // No segment provider on this Server until a test seeds one: see the note
+    // on the field itself.
+    mediaSegments: {},
     users: [
       fakeUser({ Id: 'user-rafael', Name: 'Rafael', PrimaryImageTag: 'tag-rafael' }),
       fakeUser({ Id: 'user-marina', Name: 'Marina', PrimaryImageTag: 'tag-marina' }),

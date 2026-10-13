@@ -27,6 +27,9 @@ const FILE_PLAN: PlaybackPlan = {
   // Which tracks the file holds has nothing to do with how it is fed to the
   // element, so this file's plans carry none.
   tracks: { audio: [], subtitles: [] },
+  // This Server's detection plugin found nothing: #31's flag, and the state
+  // every Server with no intro-detection plugin is in.
+  hasSegments: false,
 };
 
 const HLS_PLAN: PlaybackPlan = {
