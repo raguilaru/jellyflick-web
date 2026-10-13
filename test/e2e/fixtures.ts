@@ -9,8 +9,31 @@ export type JellyflickOptions = {
   keyboardOnly: boolean;
 };
 
-export const test = base.extend<JellyflickOptions & { enforceKeyboardOnly: void }>({
+/**
+ * Slows the browser's main thread down to stand in for CI's hardware, which is
+ * roughly half the speed of a developer's machine.
+ *
+ * Every one of the timing bugs this suite has had passed locally and failed on
+ * CI, so "it is green here" is never the evidence that matters: the evidence is
+ * that it is green here *under a throttle*. `E2E_CPU_THROTTLE=4` is the knob,
+ * off by default so an ordinary run is not slowed down, and it is a CDP call
+ * because that is the only way Chromium will throttle on demand.
+ */
+const CPU_THROTTLE = Number(process.env.E2E_CPU_THROTTLE ?? 1);
+
+export const test = base.extend<JellyflickOptions & { enforceKeyboardOnly: void; throttleCpu: void }>({
   keyboardOnly: [false, { option: true }],
+
+  throttleCpu: [
+    async ({ page }, use) => {
+      if (CPU_THROTTLE > 1) {
+        const session = await page.context().newCDPSession(page);
+        await session.send('Emulation.setCPUThrottlingRate', { rate: CPU_THROTTLE });
+      }
+      await use();
+    },
+    { auto: true },
+  ],
 
   enforceKeyboardOnly: [
     async ({ page, keyboardOnly }, use) => {
