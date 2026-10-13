@@ -1574,7 +1574,7 @@ are `src/playback/media-segments.ts` and — for *which* Episode comes next —
 - **There is no `Credits` segment type.** The whole enum is `Unknown, Commercial,
   Preview, Recap, Outro, Intro` and the credits marker is **`Outro`**
   (`decisions.md` §5). `Recap` and `Preview` are real and deliberately not
-  offered yet (`decisions.md` §13); `Commercial` is Live TV and never will be.
+  offered yet (`decisions.md` §14); `Commercial` is Live TV and never will be.
 - **A 404 and an empty answer are the same thing, in one place.** §12 leaves
   which a Server with no provider gives open, so `readMediaSegments` makes both
   — and an unreachable Server — an empty list. Nothing downstream has to know
@@ -1607,10 +1607,10 @@ are `src/playback/media-segments.ts` and — for *which* Episode comes next —
   Server. Autoplay **off still offers** the next Episode, with nothing counting:
   #35's settings screen draws the two readings as "Start the next one" and "Ask
   me each time", and closing the player would make its own wording untrue
-  (`decisions.md` §12). Ten seconds is Jellyflick's own figure; Jellyfin stores
+  (`decisions.md` §13). Ten seconds is Jellyflick's own figure; Jellyfin stores
   no duration.
 - **Cancelling stays at the end**, which is the ticket's fourth box read the way
-  `decisions.md` §12 sets out. The controls stay up — an Episode that has run out
+  `decisions.md` §13 sets out. The controls stay up — an Episode that has run out
   is "nothing to watch behind them", the same rule a paused player follows.
 - **The player asks the screen to re-target rather than swapping the Episode
   under itself.** "What is playing" already lives on the screen: the title page's
