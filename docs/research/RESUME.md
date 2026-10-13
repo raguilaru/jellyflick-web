@@ -4,7 +4,7 @@ State of the `/implement-spec` run on the integration branch `feat/jellyflick-v1
 (draft PR #38). Update this whenever a wave lands, so a fresh session can pick the work
 up without re-deriving anything.
 
-## START HERE — seventh session, #22, #31 and #20 merged, #28 in flight
+## START HERE — seventh session, four merged, nothing in flight
 
 The seventh session fixed the **last of the four e2e failures** and launched **#31 and
 #22**. CI's `e2e` job had failed on **every run of this branch since it began**; it passes
@@ -18,24 +18,31 @@ tests** in 53 files, **384 Playwright tests (359 passed, 25 skipped, 0 failed)**
 chunk, 17.97 kB / 3.91 kB gz CSS, and hls.js still in its own lazy
 584.35 kB / 181.54 kB gz chunk that only a transcode fetches.
 
-**#22 merged at `a639c1d`, #31 at `c0b7298`, #20 at `6d6ca49`**, all closed. Integrator's own gate on the `6d6ca49` tip,
-each step its own exit code: `lint` 0, `typecheck` 0, `build` 0, **792 unit tests in 59
-files**, **392 Playwright passed, 25 skipped, 0 failed** under `E2E_CPU_THROTTLE=4`, main
-JS **155.95 kB / 47.20 kB gz**. All three implementers' numbers matched the integrator's
-exactly.
+**#22 merged at `a639c1d`, #31 at `c0b7298`, #20 at `6d6ca49`, #28 at `2bbe785`**, all
+closed. **Nothing is in flight and no implementer is running.** Integrator's own gate on the `2bbe785` tip,
+each step its own exit code: `lint` 0, `typecheck` 0, `build` 0, **851 unit tests in 62
+files**, **400 Playwright passed, 26 skipped, 0 failed** under `E2E_CPU_THROTTLE=4`, main
+JS **161.22 kB / 48.88 kB gz**. **All four implementers' numbers matched the integrator's
+exactly** — re-run rather than taken from their reports, every time.
 
-The #31 and #20 merges each got a **full** e2e re-run rather than a carried gate: #31
-changed a helper the whole suite leans on, and #20's own run had #42 fail. #22's merge tree
-was byte-identical to the branch tip it had gated, so only the fast steps were re-run
-there.
+The #31, #20 and #28 merges each got a **full** e2e re-run rather than a carried gate: #31
+changed a helper the whole suite leans on, #20's own run had #42 fail, and #28 moved the
+skip count. #22's merge tree was byte-identical to the branch tip it had gated, so only the
+fast steps were re-run there.
+
+**The skip count rose 25 → 26 at #28, and the rise is legitimate** — checked by reading
+all 26 names, as this doc has insisted since the fourth session. The new one is
+`[keyboard-only] the-subtitle-offset.spec.ts › repeats while a button is held`: that
+project disables pointer events outright and the test needs a held mouse button.
 
 **Bundle trend, which is the one gate number that moves every merge:** 147.05 → 149.46
-(#22) → 153.13 (#31) → 155.95 kB raw. #20 measured its own share at +2.82 kB raw before
-its merge, so most of each step is real feature code rather than noise.
+(#22) → 153.13 (#31) → 155.95 (#20) → 161.22 kB raw. Each implementer measured its own
+share before merging: #20 +2.82 kB, #28 +5.13 kB. The growth is feature code, not noise,
+and nothing new has been lazily split since hls.js.
 
-**In flight — do not touch these areas:** `ticket/28-subtitle-offset` (`src/playback/`,
-Client Settings, ports 4328/8328). It and #20 were both interrupted by a session limit once
-and resumed from pushed WIP commits — see below.
+All four ticket worktrees have been removed after checking each was a full ancestor of the
+integration branch with nothing uncommitted and nothing unpushed. Their branches remain on
+`origin`. No stray dev server, fake Jellyfin or browser process is left running.
 
 **CI is green and has stayed green.** Every run since `587eddb` has passed, through three
 merges. Before this session the `e2e` job had failed on every run of this branch since it
@@ -105,6 +112,18 @@ correctly declined to fix them inside their own scope:
   because Playwright scrolls into view before touching. Found by rendering it and looking.
   The fix added an assertion on the **document's scroll width at 375px** — the one shape
   of assertion that scrolling cannot paper over, and worth copying to other screens.
+- **#46** — a Client Settings write can outlive the test that started it. The app does
+  not wait for the save, so one a test starts can land **after** the next test has
+  reseeded the fake. The victim fails **only in sequence, never in isolation**, and need
+  not look like a settings bug at all: #28 met it as a subtitle that silently refused to
+  draw, and it cost an afternoon. #28 guarded its own journey; `settings-journey`,
+  `editing-the-home-layout`, `continue-watching-journey` and `billboard-journey` all have
+  the same exposure and no guard. Four remaining tickets write Client Settings.
+- **#47**, `needs-info` — a Subtitle Offset is keyed on `MediaStream.Path`, which is what
+  makes story 102's "every Episode that uses the same file" reachable at all, and it has
+  only ever been exercised against the fake. If a real Server withholds `Path` for
+  external subtitles the fallback key still works and **story 102's cross-Episode half is
+  lost quietly**. The ±30 s clamp and the 100-file cap are also nobody's figures but #28's.
 - **#45**, `needs-info` — MDBList's `ratings[]` element shape and the per-source scales
   are coded against an OpenAPI schema that types the elements as a bare object with no
   example, because no host key was available to make one real call. An unrecognised shape
@@ -139,6 +158,24 @@ checked identical apart from hunk offsets. But it cost about what an implementer
 **So: the integrator creates the worktree, runs `npm ci` in it, and hands over the path.**
 Brief the implementer to stay inside it and never to run `git checkout`, `switch` or
 `reset` on a branch that is not its own.
+
+### Assign Vitest's port too, not only Playwright's — 8787 is the default
+
+**An integrator bug, found by #28.** The port pairs handed to implementers
+(`APP_PORT`/`FAKE_JELLYFIN_PORT`) were described as covering their test runs, but they were
+only ever passed to **Playwright**. Vitest starts its own fake Jellyfin and **defaults to
+port 8787**, so two implementers running `npx vitest run` at the same time collide: #28's
+run died with `EADDRINUSE` before executing a single test, while another implementer's run
+held the port.
+
+It is not a silent failure, which is the only good thing about it — but the error names a
+port nobody had been told about, so it reads as broken rather than as contended.
+
+**So: give each implementer its ports and say they apply to both suites**, e.g.
+`FAKE_JELLYFIN_PORT=8328 npx vitest run` as well as to `npx playwright test`.
+`playwright.config.ts` already documents why these are overridable: `reuseExistingServer`
+would otherwise hand one worktree another's preview build and quietly make the run
+meaningless.
 
 ### `src/i18n/en.ts` and `es.ts` collide in every wave
 
@@ -183,17 +220,17 @@ A worktree whose `node_modules` is missing or stale fails `typecheck`, `test` **
 `build` at once — #9's merge showed **14 failing test files** from this one cause, when
 `hls.js` arrived as the project's first runtime dependency. This is trap 3.
 
-### The frontier — nine spec tickets open, eight untaken, plus the run's own findings
+### The frontier — eight spec tickets open, none taken, plus the run's own findings
 
 | Ticket | Note |
 |---|---|
 | #19 Trailers and Download File | touches `src/title/title-screen.tsx` |
 | #21 Desktop hover cards | takes `Row`'s `cardControl` render prop from #13; #8's "a Row is a line" was made for it. **#20 left it `<ExtraRatings details compact />`**, which reads on mount — so on a hover card, on hover rather than eagerly per card |
 | #23 Movies and Series pages | **unblocked now** — #22 is merged, so `src/home/` is free |
-| #41, #42, #43, #45 | found during the run, not in the spec's graph — see above. #45 needs the host |
-| #28 Subtitle Offset | **in flight.** The one the spec's problem statement names by hand, and the seam #29 and #30 both meet |
-| #29 Styled subtitles | `src/playback/`; #28's offset has to keep working through it |
-| #30 Image subtitles | `src/playback/`; **its first box is a research finding to record in the ticket**, before any code |
+| #41, #42, #43, #46 | found during the run, not in the spec's graph — see above |
+| #45, #47 | `needs-info` — **both need the host**, not an agent |
+| #29 Styled subtitles | `src/playback/`. #28 left the seam in `architecture.md`: the renderer takes `offsetSeconds` down and hands cues up, and libass's own knob is `timeOffset` |
+| #30 Image subtitles | `src/playback/`; **its first box is a research finding to record in the ticket**, before any code. #28 left it the burned-in path: disable the **panel** via `track-picker.tsx`'s `onOpenTiming`, not the engine |
 | #32 Trickplay, speed, picture-in-picture and quality | `src/playback/` |
 | #33 Cast | `decisions.md` §8 says it must read `user.Configuration.CastReceiverId` at runtime — #35 made the fake serve that |
 | #34 Play On | — |
@@ -202,11 +239,10 @@ A worktree whose `node_modules` is missing or stale fails `typecheck`, `test` **
 - **`src/title/title-screen.tsx`**: #19, #21. **One at a time.** #20 has just changed
   that file and `src/styles/base.css`'s title rows.
 - **`src/home/` and the Row registry**: #23, and #41 when it is taken. **One at a time.**
-- **`src/playback/`**: #29, #30, #32, and #33/#34 in part, with #28 in it now. **One at a
-  time** is the safe reading — #28 → #29/#30 is a real chain inside the subtitle code even
+- **`src/playback/`**: #29, #30, #32, and #33/#34 in part. **One at a time** is the safe reading — #28 → #29/#30 is a real chain inside the subtitle code even
   though the task graph does not declare it.
 
-Five of the nine are in the player. **That is the shape of the rest of this run**, and it
+Five of the eight are in the player. **That is the shape of the rest of this run**, and it
 is why the waves from here are small: there is no honest way to run three player tickets
 at once.
 
@@ -215,11 +251,9 @@ at once.
 1. **Check both limits before each wave.** Three implementers cost **most of a 5-hour
    window** — see the measured figures below. Two is the default; hold back the
    integrator's own merge and gate budget.
-2. Merge **#28** as it reports, gating the merge.
-3. Then, in order, the waves that fall out of the conflict groups above — a title-page
-   ticket plus a player ticket is the clean pair. **#21 after #20** (it wants #20's
-   compact ratings); **#29 and #30 after #28** (both have to keep its offset working, and
-   #30 has to disable its control with an explanation); **#23** is free whenever
+2. The waves that fall out of the conflict groups above — a title-page ticket plus a
+   player ticket is the clean pair. **#29 or #30** next in the player, both now unblocked
+   by #28; **#21** on the title page, which #20 left a seam for; **#23** is free whenever
    `src/home/` is.
 4. **#43 between waves, not inside one** — it is the one change that collides with
    everything.
