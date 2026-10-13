@@ -11,6 +11,11 @@ import {
   type HomeLayout,
 } from '../home/home-layout';
 import type { JellyfinGateway } from '../jellyfin/gateway';
+import {
+  parseSubtitleOffsets,
+  serialiseSubtitleOffsets,
+  type SubtitleOffset,
+} from '../playback/subtitle-offset';
 
 /**
  * The Client Settings store: a User's own settings, kept on the Server so they
@@ -69,6 +74,7 @@ export const ACCENT_COLOUR_KEY = `${SETTINGS_KEY_PREFIX}accentColour`;
 export const HIDDEN_SERIES_KEY = `${SETTINGS_KEY_PREFIX}hiddenSeries`;
 export const BILLBOARD_TRAILER_AUTOPLAY_KEY = `${SETTINGS_KEY_PREFIX}billboardTrailerAutoplay`;
 export const BILLBOARD_SOURCE_KEY = `${SETTINGS_KEY_PREFIX}billboardSource`;
+export const SUBTITLE_OFFSETS_KEY = `${SETTINGS_KEY_PREFIX}subtitleOffsets`;
 
 /**
  * A User's settings, typed, with a default for every one of them — a new User
@@ -137,12 +143,28 @@ export type ClientSettings = {
    * without rewriting what Users have.
    */
   readonly billboardSource?: string;
+  /**
+   * How far the subtitles are shifted, per subtitle file (#28, story 102).
+   *
+   * It is here rather than in device storage for the reason the story gives in
+   * as many words: a household that fixed a badly timed subtitle on the laptop
+   * must not have to fix it again on the phone. Jellyfin has nowhere of its own
+   * to put it — there is no offset parameter on any subtitle endpoint
+   * (`jellyfin-playback.md` §14), and the shift is applied by this app at
+   * render time — so it is one of ours, under `jf.`.
+   *
+   * A list rather than a map, and the newest write last, because that order is
+   * what `withSubtitleOffset` drops the oldest entry by: one `CustomPrefs`
+   * string cannot hold a line per file a household ever watched.
+   */
+  readonly subtitleOffsets: readonly SubtitleOffset[];
 };
 
 export const DEFAULT_CLIENT_SETTINGS: ClientSettings = {
   homeLayout: DEFAULT_HOME_LAYOUT,
   hiddenSeries: [],
   billboardTrailerAutoplay: true,
+  subtitleOffsets: [],
 };
 
 /**
@@ -244,6 +266,7 @@ function settingsFrom(prefs: Record<string, string | null>): ClientSettings {
   return {
     homeLayout: parseHomeLayout(prefs[HOME_LAYOUT_KEY]),
     hiddenSeries: parseHiddenSeries(prefs[HIDDEN_SERIES_KEY]),
+    subtitleOffsets: parseSubtitleOffsets(prefs[SUBTITLE_OFFSETS_KEY]),
     // Off only when the User said so in as many words. Nothing stored, and
     // anything unreadable, is the default the rest of Home has.
     billboardTrailerAutoplay: prefs[BILLBOARD_TRAILER_AUTOPLAY_KEY] !== 'false',
@@ -271,6 +294,9 @@ function prefsFor(changes: Partial<ClientSettings>): Record<string, string | nul
   }
   if (changes.hiddenSeries !== undefined) {
     prefs[HIDDEN_SERIES_KEY] = serialiseHiddenSeries(changes.hiddenSeries);
+  }
+  if (changes.subtitleOffsets !== undefined) {
+    prefs[SUBTITLE_OFFSETS_KEY] = serialiseSubtitleOffsets(changes.subtitleOffsets);
   }
   if ('uiLanguage' in changes) {
     // Chosen, or back to the browser's: an empty string is how "no choice" is
