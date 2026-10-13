@@ -29,6 +29,7 @@ import {
   subtitleOffsetFor,
   withSubtitleOffset,
 } from './subtitle-offset';
+import { subtitlePresentationFor } from './styled-subtitles';
 import { Subtitles } from './subtitles';
 import { SubtitleTiming } from './subtitle-timing';
 import { TrackPicker } from './track-picker';
@@ -201,6 +202,20 @@ export function Player({
   const subtitleTrack = plan?.tracks.subtitles.find((track) => track.index === subtitleIndex);
   /** Which sound is playing, the same way round. */
   const audioIndex = chosenAudio ?? plan?.audioStreamIndex;
+
+  /**
+   * **How** that track is going to be drawn on this device (#29): with its own
+   * styling, or flattened to the words and the timing. It is asked here rather
+   * than inside the overlay because the answer picks *which* thing draws it,
+   * and the file to fetch comes with it.
+   */
+  const presentation =
+    subtitleTrack === undefined
+      ? undefined
+      : subtitlePresentationFor({
+          track: subtitleTrack,
+          capabilities: device.subtitleCapabilities(),
+        });
 
   /**
    * Which **subtitle file** is being drawn, which is what an offset belongs to
@@ -480,6 +495,7 @@ export function Player({
           itemId={plan.itemId}
           mediaSourceId={plan.mediaSourceId}
           {...(subtitleTrack === undefined ? {} : { track: subtitleTrack })}
+          {...(presentation === undefined ? {} : { format: presentation.format })}
           offsetSeconds={offsetSeconds}
           onCues={setCues}
           video={video}

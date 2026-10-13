@@ -186,6 +186,10 @@ function linesFor(language: string | undefined): readonly [string, string] {
       return ['Hola', 'Adiós'];
     case 'fra':
       return ['Bonjour', 'Au revoir'];
+    // Arrival's styled ASS track (#29). Its own words, so a test can tell the
+    // styled track apart from the English one it would otherwise read alike.
+    case 'jpn':
+      return ['こんにちは', 'さようなら'];
     default:
       return ['Hello', 'Goodbye'];
   }
