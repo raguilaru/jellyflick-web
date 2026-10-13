@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import type { DeviceLayer } from '../device/types';
 import { useTranslate } from '../i18n/index';
 import { useBackClaim } from '../shell/back';
@@ -120,6 +120,24 @@ export function SubtitleTiming({
   // player's own claim exactly as the track picker's does.
   useBackClaim(true, onClose);
 
+  const held = useRef<HTMLDivElement | null>(null);
+
+  /**
+   * Focus comes in with the panel, for the reason `track-picker.tsx` gives
+   * about itself: the press that opened it was on a button the panel is now
+   * drawn over, and the "from inside something fixed, the fixed thing is the
+   * flow" rule only applies to focus that is already *inside* it. Without
+   * this, Left and Right would still be the navigator's and would walk the
+   * controls behind the panel — story 98 would not work at all.
+   *
+   * A layout effect, so no frame goes by with the panel drawn and focus behind
+   * it. The first button is the one the arrows arrive from, which is `−`.
+   */
+  useLayoutEffect(() => {
+    const first = held.current?.querySelector('button');
+    if (first instanceof HTMLElement) first.focus();
+  }, []);
+
   const hold = useRef<{ timer: number; repeats: number } | undefined>(undefined);
   /** Whether a pointer began this press, so the click that follows is not a second one. */
   const fromPointer = useRef(false);
@@ -191,6 +209,7 @@ export function SubtitleTiming({
       class="player__timing"
       role="dialog"
       aria-label={t('player.subtitleTiming')}
+      ref={held}
       onKeyDown={(event) => {
         const key = device.keyFor(event);
         if (key !== 'Left' && key !== 'Right') return;
@@ -205,25 +224,28 @@ export function SubtitleTiming({
       }}
     >
       {/*
-        The readout story 99 asks for. It is `role="status"`, so a screen reader
-        hears the number settle without the panel having to announce every
-        tenth of a held button — a polite region is coalesced, where a fresh
-        `aria-label` on each step would not be.
+        Earlier on the left, the readout between them, later on the right: Left
+        and Right then mean the same thing whether a User presses the key or
+        the button under it, and the readout is between the two things that
+        move it. The buttons are pinned to the panel's own edges rather than
+        sitting either side of a word that changes length, so stepping from
+        "in sync" to "0.1 s later" does not move what is under the thumb.
       */}
-      <p class="player__timing-readout" role="status">
-        {offsetSeconds === 0
-          ? t('player.subtitlesInSync')
-          : offsetSeconds > 0
-            ? t('player.subtitlesLater', { seconds: offsetSeconds })
-            : t('player.subtitlesEarlier', { seconds: -offsetSeconds })}
-      </p>
-
-      {/*
-        Earlier on the left and later on the right, so Left and Right mean the
-        same thing whether a User presses the key or the button beside it.
-      */}
-      <div class="player__timing-steps">
+      <div class="player__timing-adjust">
         {step(-1, t('player.subtitlesStepEarlier'), '−')}
+        {/*
+          The readout story 99 asks for. It is `role="status"`, so a screen
+          reader hears the number settle without the panel having to announce
+          every tenth of a held button — a polite region is coalesced, where a
+          fresh `aria-label` on each step would not be.
+        */}
+        <p class="player__timing-readout" role="status">
+          {offsetSeconds === 0
+            ? t('player.subtitlesInSync')
+            : offsetSeconds > 0
+              ? t('player.subtitlesLater', { seconds: offsetSeconds })
+              : t('player.subtitlesEarlier', { seconds: -offsetSeconds })}
+        </p>
         {step(1, t('player.subtitlesStepLater'), '+')}
       </div>
 

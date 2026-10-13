@@ -1812,30 +1812,34 @@ html[data-input='pointer'] [tabindex]:focus {
 }
 
 /*
+ * `−`, the readout, `+`, on one line at every width.
+ *
+ * `auto 1fr auto`, which is what the seek bar's own row uses and for the same
+ * reason: the two buttons take what they need and are pinned to the panel's
+ * edges, so a readout that goes from "Subtitles in sync" to "Subtitles 0.1 s
+ * later" never moves what is under a held thumb. `−` and `+` are two
+ * characters, so the wrapping the rest of the player's buttons need does not
+ * apply to these.
+ *
+ * Grid rather than flex, because `gap` in flex is Chrome 84 and silently does
+ * nothing on the floor (decisions.md §6).
+ */
+.player__timing-adjust {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/*
  * The readout. Tabular, so stepping from 0.9 to 1.0 under a held thumb does
- * not shuffle the panel sideways — the same reason the clock beside the seek
- * bar is tabular.
+ * not shuffle the digits — the same reason the clock beside the seek bar is
+ * tabular.
  */
 .player__timing-readout {
   margin: 0;
   font-size: 1.125rem;
   font-variant-numeric: tabular-nums;
-}
-
-/*
- * The two step buttons, side by side at every width: `−` and `+` are two
- * characters, so the wrapping the rest of the player's buttons need does not
- * apply, and keeping them in a line is what makes Left and Right mean the same
- * thing as the button under them.
- *
- * Grid rather than flex, because `gap` in flex is Chrome 84 and silently does
- * nothing on the floor (decisions.md §6).
- */
-.player__timing-steps {
-  display: grid;
-  grid-auto-flow: column;
-  justify-content: center;
-  gap: var(--space-3);
 }
 
 /*
