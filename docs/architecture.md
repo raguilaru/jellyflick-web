@@ -707,6 +707,15 @@ only in the question they ask the Server, and one `SuggestionRow` component in
 
 The editor, `src/settings/home-layout-screen.tsx`:
 
+- **What Play *means* is in `src/title/play-target.ts`, not in a screen.** A
+  Movie is its own file; a **Series holds no file at all**, so its Play means
+  the Episode the User is up to, and asking the Server to play a Series id
+  answers no `MediaSources` and fails. Two screens press Play on a Title the
+  User never opened a page for — the title page (#18) and the Billboard (#16) —
+  and when the rule lived only in `title-screen.tsx` the Billboard featured a
+  Series and could not play it. `playTargetFor` is for a caller that already
+  read the Episodes; `resolvePlayTarget` reads them itself, and only for a
+  Series, so featuring one costs nothing until its Play is pressed.
 - **Its address is not a section.** `/settings/home-layout` has its own `<Route>`
   in the shell and no place in either bar; `SECTIONS` is still the one list of
   sections. It is reached from Home and from the settings screen.

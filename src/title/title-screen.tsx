@@ -9,7 +9,8 @@ import { MyListToggle } from '../my-list/my-list-toggle';
 import { Player } from '../playback/player';
 import type { Session } from '../session/session';
 import { useWidePointer } from '../shell/layout';
-import { playingNameOf, SeriesEpisodes } from './series-episodes';
+import { episodePlayTarget, playTargetFor, type PlayTarget } from './play-target';
+import { SeriesEpisodes } from './series-episodes';
 import { loadTitlePage, titlePathFor, type TitlePageResult } from './title-page';
 
 /**
@@ -76,19 +77,6 @@ export function TitleScreen({ session, device }: TitleScreenProps) {
   );
 }
 
-/**
- * What the player over this page is playing: a Movie, or one Episode of a
- * Series (#18). It is a value rather than a flag because for a Series the page
- * and the Episode list both mean an Episode, and which one is the whole
- * question — see `series.ts`.
- */
-type PlayTarget = {
-  readonly itemId: string;
-  /** What the player is headed with, which for an Episode names its Series. */
-  readonly name: string;
-  /** Where to start, left out for anything nobody has part-watched. */
-  readonly resumeTicks?: number;
-};
 
 /** One Title, once the Server has said what it is. */
 function TitlePage({
@@ -130,16 +118,9 @@ function TitlePage({
     setPlaying(undefined);
   }
 
-  /** One Episode as something to play, resuming only where there is a point to. */
-  const episodeTarget = (detail: EpisodeDetails): PlayTarget => ({
-    itemId: detail.episode.itemId,
-    name: playingNameOf(title.name, detail, t),
-    // A finished Episode keeps the position playback ended at, which is not a
-    // place to start it from: that is the Title's rule too (#25).
-    ...(detail.playback.played || detail.playback.positionTicks === undefined
-      ? {}
-      : { resumeTicks: detail.playback.positionTicks }),
-  });
+  /** One Episode as something to play, by the rule in `play-target.ts`. */
+  const episodeTarget = (detail: EpisodeDetails): PlayTarget =>
+    episodePlayTarget(title.name, detail, t);
 
   /**
    * What the page's own Play button means: the Movie itself, or the Episode of
@@ -147,18 +128,7 @@ function TitlePage({
    * Episodes of — there is nothing to play, and a button that could only fail
    * is worse than no button.
    */
-  const playTarget: PlayTarget | undefined =
-    title.kind === 'Series'
-      ? page.series.upTo === undefined
-        ? undefined
-        : episodeTarget(page.series.upTo)
-      : {
-          itemId: title.itemId,
-          name: title.name,
-          ...(details.resumePositionTicks === undefined
-            ? {}
-            : { resumeTicks: details.resumePositionTicks }),
-        };
+  const playTarget: PlayTarget | undefined = playTargetFor(details, page.series.upTo, t);
 
   return (
     <article class="title__sheet">

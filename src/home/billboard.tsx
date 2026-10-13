@@ -7,6 +7,7 @@ import { planPlayback } from '../playback/planning';
 import { Player } from '../playback/player';
 import { attachPlaybackSource } from '../playback/video-source';
 import { useSettings } from '../settings/settings-provider';
+import { resolvePlayTarget, type PlayTarget } from '../title/play-target';
 import { loadBillboardTrailer } from './billboard-sources';
 import { useOpenTitle } from './open-title';
 import { useBillboard } from './use-billboard';
@@ -94,7 +95,15 @@ function FeaturedTitle({
 }: BillboardProps & { feature: TitleDetails }) {
   const t = useTranslate();
   const openTitle = useOpenTitle();
-  const [playing, setPlaying] = useState(false);
+  /**
+   * What the player over the Billboard is playing, and nothing when there is no
+   * player. A value rather than a flag for the reason `play-target.ts` gives: a
+   * featured Series holds no file, so its Play means an Episode (#18's rule,
+   * which this Billboard has to honour too).
+   */
+  const [playing, setPlaying] = useState<PlayTarget | undefined>(undefined);
+  /** Said when a featured Series turns out to have no Episode to play. */
+  const [nothingToPlay, setNothingToPlay] = useState(false);
   const { title, backdrop, logo, overview, ageRating } = feature;
 
   return (
@@ -151,7 +160,15 @@ function FeaturedTitle({
           <button
             type="button"
             class="button billboard__play"
-            onClick={() => setPlaying(true)}
+            onClick={() => {
+              setNothingToPlay(false);
+              // A Movie answers at once; only a Series costs a read, and only
+              // because its Play means the Episode the User is up to.
+              void resolvePlayTarget(gateway, feature, t).then((target) => {
+                if (target === undefined) setNothingToPlay(true);
+                else setPlaying(target);
+              });
+            }}
           >
             {t('billboard.play')}
           </button>
@@ -165,21 +182,25 @@ function FeaturedTitle({
         </p>
       </div>
 
-      {playing ? (
+      {nothingToPlay ? (
+        <p class="notice notice--problem" role="alert">
+          {t('billboard.nothingToPlay')}
+        </p>
+      ) : null}
+
+      {playing === undefined ? null : (
         <Player
           gateway={gateway}
           device={device}
           userId={userId}
-          itemId={title.itemId}
-          titleName={title.name}
-          // Where this User left off, which the Billboard's own query already
-          // read, so Play resumes without asking the Server again.
-          {...(feature.resumePositionTicks === undefined
-            ? {}
-            : { resumeTicks: feature.resumePositionTicks })}
-          onClose={() => setPlaying(false)}
+          itemId={playing.itemId}
+          titleName={playing.name}
+          // Where this User left off: the Billboard's own query read it for a
+          // Movie, and `play-target.ts` read the Episode's own for a Series.
+          {...(playing.resumeTicks === undefined ? {} : { resumeTicks: playing.resumeTicks })}
+          onClose={() => setPlaying(undefined)}
         />
-      ) : null}
+      )}
     </section>
   );
 }

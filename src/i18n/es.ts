@@ -107,6 +107,8 @@ export const es: Messages = {
   'billboard.moreInfo': 'Más información',
   'billboard.unavailable':
     'Jellyflick no pudo leer del servidor ningún título para destacar.',
+  'billboard.nothingToPlay':
+    'Jellyflick no encontró ningún episodio de esta serie para reproducir.',
   'billboard.unmute': 'Activar el sonido del tráiler',
   'billboard.mute': 'Silenciar el tráiler',
   'billboard.pauseTrailer': 'Pausar el tráiler',

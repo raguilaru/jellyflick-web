@@ -586,6 +586,9 @@ const SAMPLE_ITEMS: readonly FakeItem[] = [
     // The real Server always sends a runtime, and a progress bar is a
     // fraction of it (#12).
     RunTimeTicks: 45 * 60 * 10_000_000,
+    // Playable, like every other Episode in the library: the Billboard can
+    // feature a Series, and its Play has to reach a real file (#16).
+    media: { Container: 'webm', VideoCodec: 'vp9', Height: 1080 },
   },
   {
     Id: 'movie-paddington',
@@ -620,6 +623,7 @@ const SAMPLE_ITEMS: readonly FakeItem[] = [
     // The real Server always sends a runtime, and a progress bar is a
     // fraction of it (#12).
     RunTimeTicks: 45 * 60 * 10_000_000,
+    media: { Container: 'webm', VideoCodec: 'vp9', Height: 1080 },
   },
   // The richest Title on the Server: everything a title page can show is here,
   // so a missing field in the client is visible rather than indistinguishable

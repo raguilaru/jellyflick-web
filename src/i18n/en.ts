@@ -125,6 +125,7 @@ export const en = {
   'billboard.unavailable': 'Jellyflick could not read a Title to feature from the Server.',
   // The trailer's controls. Each says what pressing it will do, not what the
   // trailer is doing now, so a remote User hears the action rather than a state.
+  'billboard.nothingToPlay': 'Jellyflick could not find an Episode of this Series to play.',
   'billboard.unmute': 'Unmute the trailer',
   'billboard.mute': 'Mute the trailer',
   'billboard.pauseTrailer': 'Pause the trailer',

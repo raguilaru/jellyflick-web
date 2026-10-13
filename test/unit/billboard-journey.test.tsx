@@ -290,3 +290,42 @@ describe('the Billboard’s trailer', () => {
     expect(await featuredTitle()).toBe('Severance');
   });
 });
+
+describe('the Billboard’s Play', () => {
+  it('plays the Movie itself', async () => {
+    await signInAndLand(FEATURES_ARRIVAL);
+    await billboard();
+
+    fireEvent.click(screen.getByRole('button', { name: en['billboard.play'] }));
+
+    const video = await waitFor(() => {
+      const found = document.querySelector('.player__video') as HTMLVideoElement | null;
+      if (found === null || found.getAttribute('src') === null) throw new Error('Not playing yet.');
+      return found;
+    });
+    expect(video.getAttribute('src')).toContain('movie-arrival');
+  });
+
+  /**
+   * A featured Series' Play means the Episode the User is up to, exactly as the
+   * title page's own Play does (#18) — the Series itself holds no file, so
+   * negotiating for it could only ever fail. Severance is unwatched here, so
+   * the Episode to play is the first in the Server's aired order.
+   */
+  it('plays an Episode of a featured Series, not the Series itself', async () => {
+    await signInAndLand(FEATURES_SEVERANCE);
+    await billboard();
+    expect(await featuredTitle()).toBe('Severance');
+
+    fireEvent.click(screen.getByRole('button', { name: en['billboard.play'] }));
+
+    const video = await waitFor(() => {
+      const found = document.querySelector('.player__video') as HTMLVideoElement | null;
+      if (found === null || found.getAttribute('src') === null) throw new Error('Not playing yet.');
+      return found;
+    });
+    const src = video.getAttribute('src') ?? '';
+    expect(src).toContain('episode-severance-s2e3');
+    expect(src).not.toContain('series-severance');
+  });
+});
