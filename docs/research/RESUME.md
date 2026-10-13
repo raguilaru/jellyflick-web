@@ -4,6 +4,41 @@ State of the `/implement-spec` run on the integration branch `feat/jellyflick-v1
 (draft PR #38). Update this whenever a wave lands, so a fresh session can pick the work
 up without re-deriving anything.
 
+## EIGHTH SESSION, in progress — #43 landed, #29 and #21 in flight
+
+Read this first, then the seventh session's section below, which is still the standing
+guidance and has not been superseded.
+
+**#43 is merged and closed at `d99b590`**, done inline by the integrator before launching
+anything, which is where the seventh session said a `GLOSSARY.md` edit belongs. The sweep
+it asked for found **three** gaps rather than the one it suspected: the **Subtitle timing**
+panel (#28), kept as a separate entry from the Subtitle Offset it moves; **Extra Ratings**
+(#20); and **Trailer**, which the Billboard has shown since #16 and which no entry had ever
+defined. **Billboard Source was already in** — the suspicion in #43's body was wrong about
+that one. Docs-only, so no gate was re-run beyond the integration tip's own.
+
+**In flight, both based on `d99b590`:**
+
+| Ticket | Branch | Worktree | Ports (both suites) |
+|---|---|---|---|
+| #29 Styled subtitles | `ticket/29-styled-subtitles` | `.claude/worktrees/ticket-29-styled-subtitles` | `APP_PORT=8331` `FAKE_JELLYFIN_PORT=8332` |
+| #21 Desktop hover cards | `ticket/21-desktop-hover-cards` | `.claude/worktrees/ticket-21-desktop-hover-cards` | `APP_PORT=8341` `FAKE_JELLYFIN_PORT=8342` |
+
+A player ticket plus a title-page ticket: the clean pair the conflict groups below allow.
+Two, not three, for the reasons measured below. **Both worktrees were created by the
+integrator and `npm ci` run in each before either agent was briefed**, and each brief
+states its ports apply to Vitest as well as Playwright — the two corrections the seventh
+session paid for.
+
+**If you are picking up cold:** check both branches for commits before assuming anything
+(`git log --oneline d99b590..ticket/29-styled-subtitles`, same for #21), and read
+"Recovering an interrupted implementer" at the bottom. Their worktrees are the only place
+uncommitted work exists.
+
+**The frontier after this wave:** #19, #23, #30, #32, #33, #34 from the spec, plus #41,
+#42 and #46 from the run's own findings, plus #45 and #47 which need the host. #19 waits on
+#21 (both touch `src/title/title-screen.tsx`); #30 and #32 wait on #29 (`src/playback/`).
+
 ## START HERE — seventh session, four merged, nothing in flight
 
 The seventh session fixed the **last of the four e2e failures** and launched **#31 and
