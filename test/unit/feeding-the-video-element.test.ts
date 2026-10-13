@@ -24,6 +24,9 @@ const FILE_PLAN: PlaybackPlan = {
   playMethod: 'DirectPlay',
   delivery: 'file',
   startTicks: 0,
+  // Which tracks the file holds has nothing to do with how it is fed to the
+  // element, so this file's plans carry none.
+  tracks: { audio: [], subtitles: [] },
 };
 
 const HLS_PLAN: PlaybackPlan = {

@@ -333,6 +333,27 @@ export type JellyfinGateway = {
    */
   absoluteUrl(serverRelativeUrl: string): string;
   /**
+   * The URL of one subtitle stream, converted by the Server to the format
+   * asked for (#27).
+   *
+   * **Everything goes in the path**, which is the canonical form the Server
+   * generates for itself (`jellyfin-playback.md` §14): the same arguments
+   * exist as query parameters, and `format` among them is annotated
+   * `[ParameterObsolete]`. The format *is* the file extension.
+   */
+  subtitleStreamUrl(options: SubtitleStreamOptions): string;
+  /**
+   * One subtitle track as text, for `src/playback/subtitle-cues.ts` to parse.
+   *
+   * The one place in this app that fetches something which is not JSON, and
+   * the reason it is a gateway method rather than a `fetch` in the player: the
+   * Server is another origin, and nothing outside `src/jellyfin/` calls
+   * `fetch`. It also sidesteps `player-subtitles.md` §6c pitfall 4 — a
+   * cross-origin `<track src>` fails silently — because the text arrives here
+   * and is parsed rather than handed to an element.
+   */
+  getSubtitleText(options: SubtitleStreamOptions): Promise<string>;
+  /**
    * `POST /Sessions/Playing` — playback has started. 204, no body back.
    *
    * The three reports and the ping are how the Server knows anything is
@@ -401,6 +422,14 @@ export type PlaybackInfoOptions = {
   /** Where to start, in 100-nanosecond ticks: the resume point. */
   startTimeTicks?: number;
   maxStreamingBitrate?: number;
+  /**
+   * A track to use rather than the one the Server would choose (#27). Left out
+   * means "you decide", and the Server then applies the User's own
+   * `UserConfiguration` — which is how a Title starts with the right tracks
+   * without this app matching languages itself.
+   */
+  audioStreamIndex?: number;
+  subtitleStreamIndex?: number;
 };
 
 /**
@@ -431,6 +460,41 @@ export type MediaSourceInfo = {
   DefaultAudioStreamIndex?: number | null;
   DefaultSubtitleStreamIndex?: number | null;
   HasSegments?: boolean | null;
+  /** Every track in the file: what the picker offers (#27). */
+  MediaStreams?: MediaStream[] | null;
+};
+
+/**
+ * The fields of `MediaStream` this app reads, for the audio and subtitle
+ * pickers. `src/playback/media-tracks.ts` is the one place they are read.
+ *
+ * `Index` is the **stream's own** index, which is what `AudioStreamIndex` and
+ * `SubtitleStreamIndex` are set to — not its position in `MediaStreams`, which
+ * an appended external subtitle file makes a different number.
+ */
+export type MediaStream = {
+  Index?: number | null;
+  /** A `MediaStreamType`: `Video`, `Audio`, `Subtitle`, `EmbeddedImage`, … */
+  Type?: string | null;
+  /** The ffprobe codec name, which is what tells a bitmap from text. */
+  Codec?: string | null;
+  Language?: string | null;
+  /** The Server's own label: the language, the codec and the channel count. */
+  DisplayTitle?: string | null;
+  Title?: string | null;
+  /** What the *file* was marked with, not what this User prefers. */
+  IsDefault?: boolean | null;
+  IsForced?: boolean | null;
+  IsHearingImpaired?: boolean | null;
+  IsExternal?: boolean | null;
+  /** Serialised; its image-side siblings are `[JsonIgnore]` and are not. */
+  IsTextSubtitleStream?: boolean | null;
+  SupportsExternalStream?: boolean | null;
+  /** A `SubtitleDeliveryMethod`: `External` is the only shiftable one. */
+  DeliveryMethod?: string | null;
+  /** Set when the Server has a URL of its own for this stream. */
+  DeliveryUrl?: string | null;
+  IsExternalUrl?: boolean | null;
 };
 
 /** `PlayMethod`: which branch of the negotiation was taken. */
@@ -572,6 +636,27 @@ export type VideoStreamOptions = {
   container?: string;
 };
 
+export type SubtitleStreamOptions = {
+  itemId: string;
+  mediaSourceId: string;
+  /** `MediaStream.Index`: the stream's own index, not its place in the list. */
+  index: number;
+  /** The file extension, which is how the Server is asked to convert: `vtt`. */
+  format: string;
+  /**
+   * Windows the output. `0` — the default — is the whole file, which is what
+   * an app applying its own offset (#28) wants: `startPositionTicks` is not an
+   * offset and shifting with it would cut the file instead.
+   */
+  startPositionTicks?: number;
+  /**
+   * `MediaStream.DeliveryUrl`, when the Server populated it. Preferred over a
+   * URL built here: `jellyfin-playback.md` §14 shows the Server hands back an
+   * address of its own for an external stream already at an absolute one.
+   */
+  deliveryUrl?: string;
+};
+
 export type JellyfinGatewayOptions = ServerIdentity & {
   serverAddress: string;
   /** Defaults to the global `fetch`. */
@@ -674,6 +759,29 @@ export function createJellyfinGateway(options: JellyfinGatewayOptions): Jellyfin
       throw new JellyfinHttpError(method, path, response.status);
     }
     return (await response.json()) as T;
+  }
+
+  /**
+   * A request whose answer is text rather than JSON: a subtitle file. Its own
+   * shape because `Accept` has to say so and the answer is not parsed — the
+   * Server converts by file extension and a graphical track comes back as the
+   * raw file whatever was asked for (`jellyfin-playback.md` §14), so the
+   * caller is what decides whether there was anything in it.
+   */
+  async function requestText(url: string): Promise<string> {
+    let response: Response;
+    try {
+      response = await doFetch(url, {
+        method: 'GET',
+        headers: { Accept: 'text/plain, */*', Authorization: authorization },
+      });
+    } catch (reason) {
+      throw new JellyfinUnreachableError(serverAddress, reason);
+    }
+    if (!response.ok) {
+      throw new JellyfinHttpError('GET', url, response.status);
+    }
+    return await response.text();
   }
 
   /**
@@ -1059,6 +1167,12 @@ export function createJellyfinGateway(options: JellyfinGatewayOptions): Jellyfin
           ...(options.maxStreamingBitrate === undefined
             ? {}
             : { MaxStreamingBitrate: options.maxStreamingBitrate }),
+          ...(options.audioStreamIndex === undefined
+            ? {}
+            : { AudioStreamIndex: options.audioStreamIndex }),
+          ...(options.subtitleStreamIndex === undefined
+            ? {}
+            : { SubtitleStreamIndex: options.subtitleStreamIndex }),
           // The app can take any of the three, and which one it gets is the
           // Server's to decide from the profile.
           EnableDirectPlay: true,
@@ -1086,6 +1200,9 @@ export function createJellyfinGateway(options: JellyfinGatewayOptions): Jellyfin
       serverRelativeUrl.startsWith('/')
         ? `${serverAddress}${serverRelativeUrl}`
         : `${serverAddress}/${serverRelativeUrl}`,
+
+    subtitleStreamUrl: (options) => subtitleUrlFor(options),
+    getSubtitleText: (options) => requestText(subtitleUrlFor(options)),
 
     reportPlaybackStarted: (report) =>
       requestWithoutAnswer('POST', '/Sessions/Playing', report),
@@ -1122,6 +1239,36 @@ export function createJellyfinGateway(options: JellyfinGatewayOptions): Jellyfin
         ...(options.maxWidth === undefined ? {} : { maxWidth: options.maxWidth }),
       })}`,
   };
+
+  /**
+   * The Server's own address for a subtitle stream where it gave one, and the
+   * canonical path otherwise. Shared by the URL and the fetch so the two can
+   * never disagree about which it is.
+   *
+   * The token goes in the query as `ApiKey`, as it does for the video: it is
+   * the form the Server's own generated URLs take, and `StreamInfo.cs` appends
+   * exactly this to an external subtitle URL too.
+   */
+  function subtitleUrlFor(options: SubtitleStreamOptions): string {
+    const apiKey: Record<string, string> =
+      accessToken === undefined || accessToken === '' ? {} : { ApiKey: accessToken };
+
+    if (options.deliveryUrl !== undefined && options.deliveryUrl !== '') {
+      const given = options.deliveryUrl;
+      // An absolute one is the Server pointing at somewhere else entirely, and
+      // is used untouched; a server-relative one is only made absolute.
+      return /^https?:\/\//i.test(given)
+        ? given
+        : `${serverAddress}${given.startsWith('/') ? '' : '/'}${given}`;
+    }
+
+    const startTicks = options.startPositionTicks ?? 0;
+    return `${serverAddress}/Videos/${encodeURIComponent(options.itemId)}/${encodeURIComponent(
+      options.mediaSourceId,
+    )}/Subtitles/${String(options.index)}/${String(startTicks)}/Stream.${encodeURIComponent(
+      options.format,
+    )}${query(apiKey)}`;
+  }
 }
 
 /** The path and query both `/DisplayPreferences` calls share. */

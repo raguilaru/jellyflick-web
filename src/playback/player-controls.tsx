@@ -42,6 +42,12 @@ export type PlayerControlsProps = {
   /** Seek to this position, in seconds. The player clamps it. */
   onSeek: (seconds: number) => void;
   onClose: () => void;
+  /**
+   * Opens the track picker (#27). Absent when the Title has nothing to choose
+   * between — one sound track and no subtitles — because a control that opens
+   * an empty menu is a stop the arrow keys have to step through for nothing.
+   */
+  onOpenTracks?: () => void;
 };
 
 export function PlayerControls({
@@ -53,6 +59,7 @@ export function PlayerControls({
   onToggle,
   onSeek,
   onClose,
+  onOpenTracks,
 }: PlayerControlsProps) {
   const t = useTranslate();
   const toggle = useRef<HTMLButtonElement | null>(null);
@@ -147,6 +154,29 @@ export function PlayerControls({
         >
           {paused ? t('player.play', { name: titleName }) : t('player.pause', { name: titleName })}
         </button>
+        {/*
+          The sound and the subtitles (#27). Named with the Title like every
+          other control here, and only drawn when the Title has something to
+          choose between — see the note on `onOpenTracks`.
+        */}
+        {onOpenTracks === undefined ? null : (
+          <button
+            type="button"
+            class="button button--quiet"
+            disabled={!ready}
+            /*
+              The *name* carries the Title, as every control here does, but the
+              visible text does not: "Audio and subtitles for The Unfinished"
+              on a button is wider than a phone, and this row has three buttons
+              in it now. A screen reader still hears which Title's tracks are
+              being changed.
+            */
+            aria-label={t('player.tracks', { name: titleName })}
+            onClick={onOpenTracks}
+          >
+            {t('player.tracksLabel')}
+          </button>
+        )}
         <button type="button" class="button button--quiet" onClick={onClose}>
           {t('player.close')}
         </button>

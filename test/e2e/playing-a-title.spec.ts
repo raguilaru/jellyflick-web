@@ -242,3 +242,168 @@ test('is driven from the keyboard alone: the bar, the length and the controls co
   await page.getByRole('button', { name: 'Pause Arrival' }).press('Enter');
   await expect(page.getByRole('button', { name: 'Play Arrival' })).toBeVisible();
 });
+
+/**
+ * The sound and the subtitles (#27), driven by nothing but keys.
+ *
+ * This test is in a browser for the two things happy-dom cannot have: **where
+ * an arrow key really sends focus** — every element there has a zero-sized box,
+ * so the unit journey can only say each choice is a named focus stop — and a
+ * cue **really painted over the picture**, which needs a layout to be true of.
+ *
+ * It pauses before opening the menu. The test video is six seconds long, so a
+ * Title left running would end — and close the player — somewhere in the middle
+ * of walking a menu with arrow keys. A paused player also keeps its controls
+ * up, which is the behaviour #26 already promises.
+ */
+test('chooses the subtitles with the arrow keys, and draws them over the picture', async ({
+  page,
+  request,
+}) => {
+  /*
+   * Reseeded **here** rather than left to `afterEach`, and that is not
+   * belt-and-braces. Closing a player reports where it stopped, and a report
+   * from the test before this one can land *after* its `afterEach` has already
+   * reseeded — the browser context outlives the hook. The resume point that
+   * leaves behind would start Arrival near the end of its six seconds, and this
+   * test would then run the film out while walking the menu and find the player
+   * gone. Reseeding once the previous context is really closed is what makes
+   * "Arrival starts at the beginning" true rather than likely.
+   */
+  await request.delete(`${FAKE_JELLYFIN_URL}/__fake/state`);
+
+  await signIn(page);
+  await playArrival(page);
+  await expect(page.getByRole('slider', { name: 'Seek through Arrival' })).toBeVisible();
+
+  // Really playing before it is paused. The button reads "Pause" from the
+  // moment the controls appear, so pressing it while the browser has not
+  // started yet would *start* the Title rather than stop it, and the rest of
+  // this test would then be racing the six seconds it runs for.
+  await expect.poll(() => positionIn(page), { timeout: 10_000 }).toBeGreaterThan(0.4);
+  await page.getByRole('button', { name: 'Pause Arrival' }).press('Enter');
+  await expect(page.getByRole('button', { name: 'Play Arrival' })).toBeVisible();
+
+  // Paused just under a second in, which is inside the first cue's window —
+  // and it stays there however long walking the menu takes, which is why this
+  // test pauses rather than seeking back afterwards.
+
+  /*
+   * The arrow keys cannot leave the player, in any direction, however little
+   * there is that way inside it. The player covers the screen, so a press that
+   * escaped would focus something the User cannot see — and on a phone the
+   * buttons sit in a column, so Right really does have nothing beside it.
+   * Before #27 narrowed the rule in `src/navigation/spatial-navigation.ts`,
+   * this landed on a card on the title page behind the picture.
+   */
+  for (const key of ['ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown']) {
+    await page.keyboard.press(key);
+    expect(
+      await page.evaluate(() => document.activeElement?.closest('.player') !== null),
+      `${key} left the player`,
+    ).toBe(true);
+  }
+
+  // The control is reached from the one focus is already on, by direction.
+  const open = page.getByRole('button', { name: 'Audio and subtitles for Arrival' });
+  await reachByArrowKeys(page, open);
+  await open.press('Enter');
+
+  const picker = page.getByRole('dialog', { name: 'Audio and subtitles' });
+  await expect(picker).toBeVisible();
+  // Focus came in with the menu: until it does, the arrow keys are walking the
+  // controls *behind* it, for the reason `track-picker.tsx` sets out.
+  await expect(picker.locator(':focus')).toBeVisible();
+
+  // Every track is reachable by direction alone, which is the whole criterion.
+  const spanish = picker
+    .getByRole('group', { name: 'Subtitles' })
+    .getByRole('button', { name: 'Spanish' });
+  await reachByArrowKeys(page, spanish);
+  await spanish.press('Enter');
+
+  // Choosing closes the menu and leaves the player where it was.
+  await expect(picker).toBeHidden();
+  await page.getByRole('button', { name: 'Play Arrival' }).press('Enter');
+
+  // The Spanish file the Server converted, parsed here and drawn by the app.
+  // Its first cue runs from half a second to three seconds.
+  const cue = page.locator('.player__subtitles');
+  await expect(cue).toContainText('Hola', { timeout: 10_000 });
+
+  // Really over the picture: inside the element that goes full-screen, and
+  // sitting within the video's own box rather than beside it.
+  const cueBox = await cue.boundingBox();
+  const videoBox = await page.locator('video').boundingBox();
+  expect(cueBox).not.toBeNull();
+  expect(videoBox).not.toBeNull();
+  expect(cueBox?.y ?? 0).toBeGreaterThanOrEqual(videoBox?.y ?? 0);
+  expect((cueBox?.y ?? 0) + (cueBox?.height ?? 0)).toBeLessThanOrEqual(
+    (videoBox?.y ?? 0) + (videoBox?.height ?? 0) + 1,
+  );
+  // And it is never something a User can press, or that swallows a press.
+  expect(await cue.evaluate((node) => getComputedStyle(node).pointerEvents)).toBe('none');
+
+  // The second cue replaces the first, which is the engine's timing in a real
+  // browser rather than against a `currentTime` a test set by hand.
+  await expect(cue).toContainText('Adiós', { timeout: 10_000 });
+});
+
+/**
+ * Walks focus to one control with the arrow keys alone, and fails if it cannot
+ * be reached that way.
+ *
+ * A **search** rather than a fixed sequence of presses, because what the ticket
+ * asks for is that every choice is *reachable* by direction. Asserting one
+ * exact route would be asserting this stylesheet's column count instead, and
+ * that differs between the projects this suite runs in: the track picker is
+ * three columns wide on the desktop viewport and two on the phone one.
+ *
+ * The route it takes is a row-by-row sweep — along until focus stops moving,
+ * then down and back the other way — which is what reaches every cell of a grid
+ * whatever its width. An earlier version simply alternated Right and Down and
+ * could not reach the second row's first column at all on a phone, which looked
+ * like a broken picker and was a broken test.
+ *
+ * **Left and Right are not pressed while the seek bar has focus.** There they
+ * are a ten-second seek rather than a move of focus — #26's rule, and the
+ * player takes those keys before the navigator sees them — so pressing one
+ * would scrub the Title instead of moving along. An even earlier version of
+ * this did exactly that and quietly ran the film to its end.
+ */
+async function reachByArrowKeys(page: Page, target: ReturnType<Page['getByRole']>): Promise<void> {
+  let along: 'ArrowRight' | 'ArrowLeft' = 'ArrowRight';
+
+  for (let press = 0; press < 40; press += 1) {
+    if (await target.evaluate((node) => node === document.activeElement)) return;
+
+    if (await page.evaluate(() => document.activeElement?.hasAttribute('data-player-seek') === true)) {
+      await page.keyboard.press('ArrowDown');
+      continue;
+    }
+
+    const before = await focusedIndex(page);
+    await page.keyboard.press(along);
+    if ((await focusedIndex(page)) === before) {
+      // The end of this row: drop to the next and sweep back the other way.
+      await page.keyboard.press('ArrowDown');
+      along = along === 'ArrowRight' ? 'ArrowLeft' : 'ArrowRight';
+    }
+  }
+
+  await expect(target).toBeFocused();
+}
+
+/**
+ * Where focus is, as a number, so the sweep above can tell "that press moved
+ * nothing" from "that press moved somewhere that looks the same". Two buttons
+ * really can be identical in every other way — the sound and the subtitles both
+ * offer one named "English".
+ */
+function focusedIndex(page: Page): Promise<number> {
+  return page.evaluate(() =>
+    Array.from(document.querySelectorAll('button, a[href], input, [tabindex]')).indexOf(
+      document.activeElement as Element,
+    ),
+  );
+}

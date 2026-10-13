@@ -169,4 +169,116 @@ describe('planning how to play a Title', () => {
     expect(plan.outcome === 'play' && plan.plan.playSessionId).toBe('play-session-movie-arrival');
     expect(plan.outcome === 'play' && plan.plan.mediaSourceId).toBe('source-movie-arrival');
   });
+
+  /**
+   * Which tracks a Title starts with (#27).
+   *
+   * **The Server decides, not this app.** `UserConfiguration` holds the User's
+   * audio and subtitle language and their `SubtitleMode`, and a Jellyfin
+   * server applies all three when it answers `PlaybackInfo` with
+   * `DefaultAudioStreamIndex` and `DefaultSubtitleStreamIndex`. Matching
+   * languages again here would be a second implementation of a rule that lives
+   * on the Server and that every other Jellyfin app already follows, and it
+   * would disagree with them the moment a `SubtitleMode` was involved.
+   *
+   * So what is tested is that the plan **carries** the Server's answer and that
+   * the answer really moves with the User's account. Arrival's streams are
+   * English audio at index 1, French at 2, English subtitles at 3 and Spanish
+   * at 4.
+   */
+  describe('the tracks a Title starts with, which are the Server’s choice', () => {
+    it('starts with the file’s own default tracks for a User who has chosen nothing', async () => {
+      const plan = await planPlayback(gatewayFor('default-tracks'), {
+        itemId: 'movie-arrival',
+        userId: RAFAEL,
+        device: testDeviceLayer(),
+      });
+
+      expect(plan.outcome === 'play' && plan.plan.audioStreamIndex).toBe(1);
+      // `SubtitleMode` defaults to `Default`, which is "whatever the file was
+      // marked with" — and neither of Arrival's subtitle tracks is.
+      expect(plan.outcome === 'play' && plan.plan.subtitleStreamIndex).toBeUndefined();
+    });
+
+    it('starts with the audio language the User’s Jellyfin account asks for', async () => {
+      await setFakeState({
+        userConfiguration: { [RAFAEL]: { AudioLanguagePreference: 'fra' } },
+      });
+
+      const plan = await planPlayback(gatewayFor('french-audio'), {
+        itemId: 'movie-arrival',
+        userId: RAFAEL,
+        device: testDeviceLayer(),
+      });
+
+      expect(plan.outcome === 'play' && plan.plan.audioStreamIndex).toBe(2);
+    });
+
+    it('starts with subtitles in the User’s language when their account says always', async () => {
+      await setFakeState({
+        userConfiguration: {
+          [RAFAEL]: { SubtitleLanguagePreference: 'spa', SubtitleMode: 'Always' },
+        },
+      });
+
+      const plan = await planPlayback(gatewayFor('spanish-subs'), {
+        itemId: 'movie-arrival',
+        userId: RAFAEL,
+        device: testDeviceLayer(),
+      });
+
+      expect(plan.outcome === 'play' && plan.plan.subtitleStreamIndex).toBe(4);
+    });
+
+    it('starts with no subtitles at all when the User’s account says never', async () => {
+      await setFakeState({
+        userConfiguration: {
+          [RAFAEL]: { SubtitleLanguagePreference: 'spa', SubtitleMode: 'None' },
+        },
+      });
+
+      const plan = await planPlayback(gatewayFor('no-subs'), {
+        itemId: 'movie-arrival',
+        userId: RAFAEL,
+        device: testDeviceLayer(),
+      });
+
+      expect(plan.outcome === 'play' && plan.plan.subtitleStreamIndex).toBeUndefined();
+    });
+
+    it('offers every track the Server said the file holds, so a User can change its mind', async () => {
+      const plan = await planPlayback(gatewayFor('every-track'), {
+        itemId: 'movie-arrival',
+        userId: RAFAEL,
+        device: testDeviceLayer(),
+      });
+
+      expect(plan.outcome).toBe('play');
+      if (plan.outcome !== 'play') return;
+      expect(plan.plan.tracks.audio.map((track) => track.index)).toEqual([1, 2]);
+      expect(plan.plan.tracks.subtitles.map((track) => track.language)).toEqual(['eng', 'spa']);
+    });
+
+    /**
+     * A track the Server chose has to be asked for, or a direct-played file is
+     * served with every track in it and the browser picks the first — which is
+     * not what the User's account said.
+     */
+    it('asks the Server for the tracks it was told to use', async () => {
+      await planPlayback(gatewayFor('asks-for-tracks'), {
+        itemId: 'movie-arrival',
+        userId: RAFAEL,
+        device: testDeviceLayer(),
+        audioStreamIndex: 2,
+        subtitleStreamIndex: 4,
+      });
+
+      const asked = (await fakeRequests()).find(
+        (entry) =>
+          entry.path.startsWith('/Items/movie-arrival/PlaybackInfo') &&
+          (entry.headers.authorization ?? '').includes('asks-for-tracks'),
+      );
+      expect(asked?.body).toMatchObject({ AudioStreamIndex: 2, SubtitleStreamIndex: 4 });
+    });
+  });
 });
