@@ -1,4 +1,9 @@
 import type { DeviceLayer } from '../device/types';
+import {
+  BILLBOARD_SOURCE_IDS,
+  DEFAULT_BILLBOARD_SOURCE,
+  type BillboardSourceId,
+} from '../home/billboard-sources';
 import { useTranslate, type MessageKey } from '../i18n/index';
 import { ACCENT_COLOURS, accentColourFor } from './accent-colours';
 import { HOME_LAYOUT_PATH } from './home-layout-screen';
@@ -54,6 +59,21 @@ export type SettingsScreenProps = {
   device: DeviceLayer;
 };
 
+/**
+ * What a User calls each Billboard Source (#22).
+ *
+ * They are the **Sources'** own names, which are what `GLOSSARY.md` calls them
+ * — and deliberately not their Rows': the Row that Resume features from is
+ * called Continue Watching, and the glossary's "avoid" list says so. The
+ * sentence under the heading is what joins the two up for a User.
+ */
+const BILLBOARD_SOURCE_NAME_KEYS: Readonly<Record<BillboardSourceId, MessageKey>> = {
+  spotlight: 'settings.billboardSource.spotlight',
+  resume: 'settings.billboardSource.resume',
+  'newest-addition': 'settings.billboardSource.newestAddition',
+  'because-you-watched': 'settings.billboardSource.becauseYouWatched',
+};
+
 /** A locale's name, written in that language, as a User reads it. */
 const LANGUAGE_NAME_KEYS: Readonly<Record<'en' | 'es', MessageKey>> = {
   en: 'settings.language.en',
@@ -75,6 +95,24 @@ export function SettingsScreen({ device }: SettingsScreenProps) {
   const ready = loaded && playback.loaded;
 
   const accent = accentColourFor(settings.accentColour);
+  /**
+   * Whether one Billboard Source is the one in force (#22).
+   *
+   * Three cases, and the third is why this is not simply an equality:
+   *
+   * - **Nothing stored** is Spotlight, which is what Home really does, so that
+   *   is the button that reads as pressed — as the language row presses "match
+   *   my device" rather than nothing.
+   * - **A Source this version offers** presses itself.
+   * - **A Source it does not** — one a newer Jellyflick added — presses
+   *   *none* of them, rather than pressing Spotlight and telling the User they
+   *   chose something they did not. Their real choice is carried on the Server
+   *   untouched, the treatment an unknown Accent Colour preset gets.
+   */
+  const sourceChosen = (source: BillboardSourceId): boolean =>
+    settings.billboardSource === undefined
+      ? source === DEFAULT_BILLBOARD_SOURCE
+      : settings.billboardSource === source;
   const deviceLocale = deviceLocaleFor(device);
   /** Which language button is pressed: the device's, or the chosen one. */
   const chosenLanguage =
@@ -173,6 +211,31 @@ export function SettingsScreen({ device }: SettingsScreenProps) {
                       ? 'settings.billboardTrailer.autoPlay'
                       : 'settings.billboardTrailer.off',
                   )}
+                </button>
+              ))}
+            </p>
+          </section>
+
+          <section class="settings-group">
+            <h2 class="settings-group__heading">{t('settings.billboardSourceHeading')}</h2>
+            <p class="notice">{t('settings.billboardSourceExplanation')}</p>
+            {/* `--wrap`, because four Sources with names this long do not sit
+                on a phone's line — and a choice that runs off the side of the
+                screen is one the arrow keys can reach and a User cannot see. */}
+            <p
+              class="settings-choices settings-choices--wrap"
+              role="group"
+              aria-label={t('settings.billboardSourceHeading')}
+            >
+              {BILLBOARD_SOURCE_IDS.map((source) => (
+                <button
+                  key={source}
+                  type="button"
+                  class="button button--quiet"
+                  aria-pressed={sourceChosen(source)}
+                  onClick={() => change({ billboardSource: source })}
+                >
+                  {t(BILLBOARD_SOURCE_NAME_KEYS[source])}
                 </button>
               ))}
             </p>

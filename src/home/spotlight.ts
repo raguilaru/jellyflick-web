@@ -54,7 +54,7 @@ export function spotlightPick(
   candidates: readonly TitleDetails[],
   draw: number,
 ): TitleDetails | undefined {
-  const drawable = candidates.filter(hasABackdrop);
+  const drawable = candidates.filter(canBeABillboard);
   // Unfinished first, and only then anything at all: the fallback is a second
   // pool rather than a weaker weight, because "I have not seen this" is the
   // promise the Billboard makes and not merely a preference.
@@ -111,7 +111,12 @@ function weightOf(candidate: TitleDetails): number {
  * the backdrop out when the Server sent none, so this is the one check — an
  * inherited `ParentBackdropImageTags` belongs to an Episode, and the Billboard
  * only ever features a Title.
+ *
+ * Exported because it is a fact about **the Billboard** rather than about
+ * Spotlight: every Source in `billboard-sources.ts` has to pass over a Title
+ * the Server has no backdrop for, since the Billboard *is* a backdrop with
+ * words over it. One rule, read in one place (#22).
  */
-function hasABackdrop(candidate: TitleDetails): boolean {
+export function canBeABillboard(candidate: TitleDetails): boolean {
   return candidate.backdrop !== undefined;
 }

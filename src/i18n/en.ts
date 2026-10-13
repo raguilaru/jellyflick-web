@@ -283,6 +283,17 @@ export const en = {
   'settings.billboardTrailer.autoPlay': 'Play it automatically',
   'settings.billboardTrailer.off': 'Just show the backdrop',
 
+  // The Billboard Source (#22). The names are the Sources' own, which is what
+  // GLOSSARY.md calls them — note that Resume's Row is called Continue
+  // Watching, so the explanation is what joins the two up for a User.
+  'settings.billboardSourceHeading': 'What the Billboard features',
+  'settings.billboardSourceExplanation':
+    'Home features one Title at the top. Choose how it is picked — each one is also a Row you can add to your Home.',
+  'settings.billboardSource.spotlight': 'Spotlight',
+  'settings.billboardSource.resume': 'Resume',
+  'settings.billboardSource.newestAddition': 'Newest Addition',
+  'settings.billboardSource.becauseYouWatched': 'Because You Watched',
+
   'settings.homeHeading': 'Home',
   'settings.homeExplanation': 'Choose the Rows on your Home and the order they come in.',
 
