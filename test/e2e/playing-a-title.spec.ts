@@ -214,6 +214,23 @@ test('is driven from the keyboard alone: the bar, the length and the controls co
   // are taken from it before it can.
   await page.keyboard.press('ArrowUp');
   await expect(bar).toBeFocused();
+
+  /*
+   * Held still before the seek, because the bar and the clock beside it are
+   * two readings of **one** number — the element's position — and a
+   * six-second film moves that number on between them. A seek lands exactly a
+   * second short of the end, so the readout says `-0:01` for as long as the
+   * position stays where the seek put it and `-0:00` from the first frame
+   * after: running, that is a window a few milliseconds wide, which is why
+   * this passed on a developer's machine and never once on CI. Paused, the
+   * position is exactly the clamp and both readings are exact.
+   *
+   * `PlayPause` rather than the Pause button, so focus stays on the bar —
+   * which is where the seek below has to arrive.
+   */
+  await page.keyboard.press('Space');
+  await expect(page.getByRole('button', { name: 'Play Arrival' })).toBeVisible();
+
   await page.keyboard.press('ArrowRight');
 
   // Ten seconds into a six-second file lands a second short of the end:
@@ -225,6 +242,11 @@ test('is driven from the keyboard alone: the bar, the length and the controls co
 
   await page.keyboard.press('ArrowLeft');
   await expect(bar).toHaveAttribute('aria-valuenow', '0');
+
+  // Playing again, because a paused player keeps its controls up on purpose
+  // (#26) and the wait below is for them going away.
+  await page.keyboard.press('Space');
+  await expect(page.getByRole('button', { name: 'Pause Arrival' })).toBeVisible();
 
   // Now nothing is pressed, and the controls get out of the way. The press
   // above put the Title back at the beginning, so there are six seconds of it
@@ -359,11 +381,25 @@ test('chooses the subtitles with the arrow keys, and draws them over the picture
  * that differs between the projects this suite runs in: the track picker is
  * three columns wide on the desktop viewport and two on the phone one.
  *
- * The route it takes is a row-by-row sweep — along until focus stops moving,
- * then down and back the other way — which is what reaches every cell of a grid
- * whatever its width. An earlier version simply alternated Right and Down and
- * could not reach the second row's first column at all on a phone, which looked
- * like a broken picker and was a broken test.
+ * The route it takes is the one a User takes: **it presses towards the thing it
+ * wants**. Down when the target is on a line below, along when it is on this
+ * one, and the other axis when the first press finds nothing that way. That is
+ * what "reachable by direction" means to a person holding a remote, and it is
+ * the only route that does not quietly assume a shape for the menu.
+ *
+ * It replaces a row-by-row sweep — along until focus stops moving, then down
+ * and back the other way — which read as if it reached every cell of a grid and
+ * did not. A sweep only covers a row if it *enters* that row at one end, and
+ * `Down` lands wherever the geometry says, which is often the middle; the sweep
+ * then turned and walked away from the half it had not seen. It also assumed
+ * `Right` stays on its row, and in the one-column layout the menu falls into on
+ * a narrow screen `Right` from a track jumps to the Done button centred below
+ * it, because that really is the only thing to the right. Both holes depend on
+ * how many columns the menu has, which depends on how wide its buttons are,
+ * which depends on the **fonts the machine has** — so this passed on every
+ * developer's macOS and never once on CI's Linux, where the choices are a
+ * hair's width wider. Measured across fourteen viewport widths, the sweep could
+ * not reach Spanish at 340, 360 or 375 and this reaches it at all fourteen.
  *
  * **Left and Right are not pressed while the seek bar has focus.** There they
  * are a ten-second seek rather than a move of focus — #26's rule, and the
@@ -372,38 +408,102 @@ test('chooses the subtitles with the arrow keys, and draws them over the picture
  * this did exactly that and quietly ran the film to its end.
  */
 async function reachByArrowKeys(page: Page, target: ReturnType<Page['getByRole']>): Promise<void> {
-  let along: 'ArrowRight' | 'ArrowLeft' = 'ArrowRight';
-
   for (let press = 0; press < 40; press += 1) {
     if (await target.evaluate((node) => node === document.activeElement)) return;
 
     if (await page.evaluate(() => document.activeElement?.hasAttribute('data-player-seek') === true)) {
-      await page.keyboard.press('ArrowDown');
+      await pressAndSettle(page, 'ArrowDown');
       continue;
     }
 
-    const before = await focusedIndex(page);
-    await page.keyboard.press(along);
-    if ((await focusedIndex(page)) === before) {
-      // The end of this row: drop to the next and sweep back the other way.
-      await page.keyboard.press('ArrowDown');
-      along = along === 'ArrowRight' ? 'ArrowLeft' : 'ArrowRight';
+    let moved = false;
+    for (const key of await keysTowards(page, target)) {
+      if (await pressAndSettle(page, key)) {
+        moved = true;
+        break;
+      }
     }
+    // Nothing in any direction: pressing on cannot help, and the assertion
+    // below is the one that should say so.
+    if (!moved) break;
   }
 
   await expect(target).toBeFocused();
 }
 
 /**
- * Where focus is, as a number, so the sweep above can tell "that press moved
- * nothing" from "that press moved somewhere that looks the same". Two buttons
- * really can be identical in every other way — the sound and the subtitles both
- * offer one named "English".
+ * Presses a key and answers whether focus really moved.
+ *
+ * It **waits** for the answer rather than taking one reading straight after the
+ * press. The navigator moves focus synchronously inside its own `keydown`
+ * handler today (`src/navigation/spatial-navigation.ts` calls `focus()` there),
+ * so one reading is right — but a single sample is only right for as long as
+ * that stays true, and a screen that moved focus from an effect instead would
+ * turn this helper's every press into "that moved nothing" on slow hardware and
+ * nowhere else. Waiting for it to settle costs nothing when it already has.
+ *
+ * Focus is compared **by identity**, not by position in the document: the old
+ * reading was an index into a live `querySelectorAll` over the whole page, and
+ * the title page behind the player is still filling its Rows in while this
+ * runs, so an element arriving ahead of the focused one shifted that index and
+ * read as a move that never happened. Identity cannot be fooled that way, and
+ * it still tells apart two buttons that are identical in every other respect —
+ * the sound and the subtitles both offer one named "English".
  */
-function focusedIndex(page: Page): Promise<number> {
-  return page.evaluate(() =>
-    Array.from(document.querySelectorAll('button, a[href], input, [tabindex]')).indexOf(
-      document.activeElement as Element,
-    ),
-  );
+async function pressAndSettle(page: Page, key: string): Promise<boolean> {
+  const before = await focusToken(page);
+  await page.keyboard.press(key);
+  for (let wait = 0; wait < 10; wait += 1) {
+    if ((await focusToken(page)) !== before) return true;
+    await page.waitForTimeout(25);
+  }
+  return false;
+}
+
+/** What focus is on, as a token that is stable for as long as that element is. */
+function focusToken(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const scope = window as unknown as { __focusIds?: WeakMap<Element, string>; __focusN?: number };
+    if (scope.__focusIds === undefined) {
+      scope.__focusIds = new WeakMap();
+      scope.__focusN = 0;
+    }
+    const active = document.activeElement;
+    if (!(active instanceof HTMLElement) || active === document.body) return 'nothing';
+    let token = scope.__focusIds.get(active);
+    if (token === undefined) {
+      scope.__focusN = (scope.__focusN ?? 0) + 1;
+      token = `focus-${String(scope.__focusN)}`;
+      scope.__focusIds.set(active, token);
+    }
+    return token;
+  });
+}
+
+/**
+ * The arrow keys that go towards the target, the most useful first.
+ *
+ * Whether the target shares a line with what focus is on is read off the boxes
+ * rather than assumed: two things on one line is exactly what the navigator's
+ * own geometry means by a row, and it is the fact that decides whether the
+ * useful press is along the line or across it. The two keys that lead away come
+ * last, so a corner the first two cannot leave still has somewhere to go.
+ */
+async function keysTowards(page: Page, target: ReturnType<Page['getByRole']>): Promise<string[]> {
+  const here = await page.evaluate(() => {
+    const active = document.activeElement;
+    if (!(active instanceof HTMLElement)) return null;
+    const box = active.getBoundingClientRect();
+    return { y: box.top, height: box.height, middleX: box.left + box.width / 2, middleY: box.top + box.height / 2 };
+  });
+  const there = await target.boundingBox();
+  if (here === null || there === null) return ['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp'];
+
+  const onOneLine = there.y < here.y + here.height && here.y < there.y + there.height;
+  const across = there.y + there.height / 2 > here.middleY ? 'ArrowDown' : 'ArrowUp';
+  const along = there.x + there.width / 2 > here.middleX ? 'ArrowRight' : 'ArrowLeft';
+  const backAcross = across === 'ArrowDown' ? 'ArrowUp' : 'ArrowDown';
+  const backAlong = along === 'ArrowRight' ? 'ArrowLeft' : 'ArrowRight';
+
+  return onOneLine ? [along, across, backAlong, backAcross] : [across, along, backAcross, backAlong];
 }

@@ -98,7 +98,16 @@ export function useBackHandler(device: DeviceLayer): void {
       if (device.keyFor(event) !== 'Back') return;
       // Backspace is a Back key on a remote and an edit in a text field, and
       // the field has to win: Search is a field a User types into.
-      if (isTyping(event.target)) return;
+      //
+      // **Only Backspace**, and that is the whole of it. This guard used to
+      // turn away every key that means Back while a field had focus, which
+      // took Back away from the one screen that gives a field focus by itself:
+      // Search puts the caret in its field as it opens (#24), so Escape on a
+      // keyboard, `BrowserBack`, and a webOS remote's own Back key all did
+      // nothing at all there and a User had no way out of the section but the
+      // browser's own button — which a TV does not have. None of those three
+      // is an edit in a field, so none of them is the field's to keep.
+      if (isAnEditInAField(event) && isTyping(event.target)) return;
       event.preventDefault();
       handler.current();
     };
@@ -112,6 +121,21 @@ export function useBackHandler(device: DeviceLayer): void {
 function isOnRootEntry(): boolean {
   const state: unknown = window.history.state;
   return typeof state === 'object' && state !== null && ROOT_ENTRY in state;
+}
+
+/**
+ * Whether this key would be an edit if a field had it. Backspace is the only
+ * key that both means Back on a remote and deletes a character in a field, so
+ * it is the only one a field can take off this handler.
+ *
+ * It reads `event.key` rather than asking the device layer, deliberately: the
+ * device layer's job is to say which *logical* key a press is, and it rightly
+ * answers `Back` for all four of Escape, Backspace, `BrowserBack` and webOS's
+ * keycode 461. Which of them is also a text edit is a fact about keyboards, not
+ * about the device, and this is the one place that needs it.
+ */
+function isAnEditInAField(event: Pick<KeyboardEvent, 'key'>): boolean {
+  return event.key === 'Backspace';
 }
 
 function isTyping(target: EventTarget | null): boolean {

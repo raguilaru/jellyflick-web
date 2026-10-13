@@ -82,8 +82,27 @@ test.describe('with a pointer', () => {
 
     const row = page.getByRole('list', { name: 'My List' });
     await expect(row.locator('.card__name')).toHaveText(['Arrival']);
-    // The same card now offers the other half of the toggle, without a reload.
-    await expect(card.getByRole('button', { name: 'Remove Arrival from My List' })).toBeVisible();
+
+    /*
+     * The same card now offers the other half of the toggle, without a reload.
+     *
+     * Hovered again first, and that is the point rather than belt-and-braces:
+     * the control is drawn only while the pointer is over the card
+     * (`.card:hover > .card__control`), and the press above has just put a
+     * whole new Row on Home **above** this one — My List comes before New on
+     * Jellyflick in the default Home Layout. The card slides down out from
+     * under a pointer that has not moved, `:hover` stops matching, and the
+     * button leaves the page entirely. Whether that happened before or after
+     * this assertion was a race, and it is what made this test fail in two CI
+     * runs out of five. Retried, because the Billboard's artwork can land
+     * later still and shift the page a second time.
+     */
+    await expect(async () => {
+      await card.hover();
+      await expect(card.getByRole('button', { name: 'Remove Arrival from My List' })).toBeVisible({
+        timeout: 1_000,
+      });
+    }).toPass({ timeout: 15_000 });
 
     // And the Server really holds it: the page reads the list afresh.
     await openMyList(page);
