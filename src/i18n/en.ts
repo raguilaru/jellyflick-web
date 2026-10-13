@@ -384,6 +384,26 @@ export const en = {
     LANGUAGE_NAMES_EN[p.code] ?? p.code.toUpperCase(),
 
   /*
+   * The extra ratings an MDBList key buys (#20, stories 80–82). They sit beside
+   * the Rotten Tomatoes critic score and the community score the Server sends,
+   * which are `title.criticRating` and `title.communityRating` above.
+   *
+   * Three of the four sources are products and keep their names in every
+   * language; the Rotten Tomatoes audience score is "the audience", which does
+   * not. The scales are the sources' own — a percentage for three of them and
+   * stars out of five for Letterboxd, which read as a percentage would be wrong
+   * by a factor of twenty.
+   */
+  'ratings.heading': 'Ratings',
+  'ratings.audience': 'Audience',
+  'ratings.metacritic': 'Metacritic',
+  'ratings.letterboxd': 'Letterboxd',
+  'ratings.trakt': 'Trakt',
+  'ratings.percent': (p: { score: number }) => `${String(Math.round(p.score))}%`,
+  'ratings.outOfFive': (p: { score: number }) =>
+    `${new Intl.NumberFormat('en', { maximumFractionDigits: 1 }).format(p.score)}/5`,
+
+  /*
    * The player (#25). The two controls carry the Title's name, as a card's My
    * List toggle does: a screen reader hears what is being paused, and the
    * player's Play is never confused with the title page's underneath it.

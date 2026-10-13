@@ -338,3 +338,44 @@ Growing the offer is one entry in that list and one translated label each; it is
 written down here so the next person reads it as a line that was drawn rather
 than as a case that was missed. `Commercial` stays out regardless: it is a Live
 TV concern and this app shows no Live TV.
+
+## 15. MDBList's `ratings[]` shape is a guess, and so is every scale in it
+
+Decided in #20, which is the client side of ADR 0004. Three things nobody could
+settle from the research, because MDBList documents none of them.
+
+- **The shape of a `ratings[]` item is not published.** MDBList's own OpenAPI
+  schema types the array elements as a bare `{"type": "object"}` and no example
+  anywhere in its docs shows one (`ratings-mdblist.md` §19, which says in as
+  many words: do not code against a guessed shape). There was no host key to
+  make a real call with, so the adapter reads `{ source, value }` — the shape
+  the container's own fixture already assumed in #5 — and **skips anything it
+  does not recognise** rather than trusting it. That is also what story 81
+  wants: a rating that cannot be read is a rating left out, not a zero.
+- **The scales are a guess too, and are checked rather than trusted.** The app
+  shows `audience`, `metacritic` and `trakt` as percentages and `letterboxd` as
+  stars out of five. A value outside its source's range is treated as absent, so
+  a scale that turns out to be wrong **omits** a rating instead of showing one
+  that is wrong by a factor of twenty. `SOURCE_SCALES` in
+  `src/ratings/extra-ratings.ts` is the one place to correct.
+- **What would settle both**: one real `GET /{imdb}/{movie}/{id}/` with the
+  host's key, and the item shape written into `ratings-mdblist.md` §19 where it
+  says "to verify in implementation". Until then this is the project's one
+  piece of coded-against-unverified-shape, and it is deliberately the piece
+  that degrades to nothing.
+
+Two smaller calls, both of which extend the spec rather than contradict it:
+
+- **"Nothing is requested when no key is configured" is one request, not
+  none.** ADR 0004 deliberately leaves the browser no capability flag to check,
+  so the route's 503 is the only way to learn there is no key. It is remembered
+  per origin, so a host without a key pays one request for a whole visit instead
+  of one per Title. A flag in the runtime config would cost a round trip less
+  and is not worth reopening ADR 0004 for.
+- **The title page's facts and actions lines now wrap.** They were one grid row
+  of `max-content` columns, which made the sheet 635px wide on a 375px screen
+  and pushed the Mark watched button and the new ratings off the side. Found by
+  looking at the page, not by a test: Playwright scrolls an element into view
+  before touching it, so every assertion passed throughout. #17's CSS, changed
+  here because #20's own feature was among what ran off the screen, and now
+  guarded by a scroll-width assertion at 375px.

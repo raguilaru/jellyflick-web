@@ -293,6 +293,20 @@ export const es: Messages = {
   'title.noEpisodes': 'El servidor no indicó ningún episodio de esta serie.',
   'title.language': (p) => LANGUAGE_NAMES_ES[p.code] ?? p.code.toUpperCase(),
 
+  // Las valoraciones extra de MDBList (#20). Metacritic, Letterboxd y Trakt son
+  // nombres propios; la de Rotten Tomatoes es la del público, que sí se traduce.
+  'ratings.heading': 'Valoraciones',
+  'ratings.audience': 'Público',
+  'ratings.metacritic': 'Metacritic',
+  'ratings.letterboxd': 'Letterboxd',
+  'ratings.trakt': 'Trakt',
+  // Sin espacio antes del signo, como en `title.criticRating`: las dos cifras
+  // se leen en la misma pantalla y no pueden escribirse de dos maneras.
+  'ratings.percent': (p) => `${String(Math.round(p.score))}%`,
+  // La coma es el separador decimal en español, así que lo pone `Intl`.
+  'ratings.outOfFive': (p) =>
+    `${new Intl.NumberFormat('es', { maximumFractionDigits: 1 }).format(p.score)}/5`,
+
   'player.label': (p) => `Reproduciendo ${p.name}`,
   'player.play': (p) => `Reproducir ${p.name}`,
   'player.pause': (p) => `Pausar ${p.name}`,
