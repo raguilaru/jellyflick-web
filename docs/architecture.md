@@ -73,7 +73,14 @@ src/
                         `MediaStreams` as the two lists a User chooses from,
                         `track-picker.tsx` is the menu, `subtitle-cues.ts` is the
                         subtitle engine — parsing and timing, with no DOM — and
-                        `subtitles.tsx` draws its cues over the picture.
+                        `subtitles.tsx` draws its cues over the picture. Skip
+                        Intro/Credits and the next Episode (#31):
+                        `media-segments.ts` reads the Server's markers and says
+                        which skip a moment is inside, `skip-button.tsx` is the
+                        offer over the picture, and `next-episode.tsx` is what
+                        the end of an Episode shows and the second between each
+                        tick — which Episode that is lives in
+                        `src/title/play-target.ts`.
   navigation/           Arrow keys and focus: `nearest.ts` the geometry,
                         `reveal.ts` how far a scroller must move, `focusable.ts`
                         what the arrows reach, `spatial-navigation.ts` the
@@ -126,7 +133,9 @@ src/
 test/
   setup.ts              Vitest: unmounts components after each test.
   unit/                 Vitest specs. One file per behaviour, not per source file.
-  e2e/                  Playwright specs and fixtures.
+  e2e/                  Playwright specs and fixtures. `arrow-keys.ts` is not
+                        a spec: it is the shared "reach this control by
+                        direction alone" search two of them lean on.
   device/profiles.ts    Fixed device layers: fixed clock, fixed randomness,
                         one capability profile per device class.
   fake-jellyfin/        The fake Jellyfin. See below.
@@ -391,6 +400,18 @@ The route copies the real controller's three awkward behaviours — `client`
 required, the Server's own keys injected on the way out and consumed on the way
 in, and a **500** for a `homesection…` key whose suffix is not a number, which
 is what the real Server does when a client sends one.
+
+`state.mediaSegments` is the intro and credits markers `GET /MediaSegments/{itemId}`
+answers, by item id (#31), and it is **seeded empty** the way
+`movieRecommendations` is: segment data is plugin-fed, so a Server with no
+intro-detection plugin holds none, and that is the state most households are
+in. A test that wants markers seeds them, in ticks — and one that wants a
+browser to really reach a marker seeds it inside the **six seconds** the fake
+serves, not inside the seven minutes the library claims an Episode is. The
+route models two habits #31 hangs off: `includeSegmentTypes` really narrows,
+and an item the fake holds nothing for answers **404** rather than an empty
+result, which is the harder of the two answers `jellyfin-playback.md` §12
+allows. `HasSegments` on the media source follows from the same field.
 
 Vitest uses the helpers in `test/fake-jellyfin/control.ts`; Playwright calls the
 same endpoints through its `request` fixture.
@@ -1294,7 +1315,8 @@ file, as a pure function of what the Server said.
 - **#31 reads `SeriesPage.episodes`.** Skip Intro/Credits and the next Episode
   needs to know what follows the Episode now playing, and that is a position in
   this one aired-order list. It is kept beside the Seasons for exactly that,
-  and nothing of #31 is built here.
+  and nothing of #31 is built here — `nextEpisodeIn` is in `play-target.ts`,
+  beside what pressing Play means, and reads this list.
 
 ## The extra ratings
 
@@ -1610,6 +1632,83 @@ place a fake owes a client real data rather than a shape — and **the text name
 the track's language**, so "the User switched to Spanish" is read off the screen
 rather than inferred from a URL. `failSubtitleFetchWith` is a Server that holds a
 track it will not hand over.
+
+### Skipping, and the next Episode (#31)
+
+The intro and credits markers, and what the end of an Episode offers. The rules
+are `src/playback/media-segments.ts` and — for *which* Episode comes next —
+`src/title/play-target.ts`; the player draws their answers and decides nothing.
+
+- **The markers come from the Server, and only where it says there are any.**
+  `GET /MediaSegments/{itemId}?includeSegmentTypes=Intro,Outro` is the read, and
+  `MediaSourceInfo.HasSegments` on the plan is what decides whether to make it at
+  all — `jellyfin-playback.md` §12 says that flag "exists precisely to avoid a
+  pointless request", and segment data is plugin-fed, so most households run a
+  Server that holds none. The read hangs off the **plan** rather than the Title,
+  because a change of sound track is a new plan and the markers belong to the
+  source it names.
+- **There is no `Credits` segment type.** The whole enum is `Unknown, Commercial,
+  Preview, Recap, Outro, Intro` and the credits marker is **`Outro`**
+  (`decisions.md` §5). `Recap` and `Preview` are real and deliberately not
+  offered yet (`decisions.md` §14); `Commercial` is Live TV and never will be.
+- **A 404 and an empty answer are the same thing, in one place.** §12 leaves
+  which a Server with no provider gives open, so `readMediaSegments` makes both
+  — and an unreachable Server — an empty list. Nothing downstream has to know
+  there were ever two spellings of "nothing to skip", and no User is shown an
+  error for the ordinary case.
+- **The Skip button is not in the controls**, and that is the whole of why it is
+  its own component. The controls get out of the way after a few seconds, and an
+  offer good only for the length of an intro cannot be one a household has to
+  summon them to find. It shares the picture's grid cell the way the subtitles do
+  (`grid-row: 1`), so it can never sit over the controls, and being a `<button>`
+  inside the player is all the arrow keys need — from inside something fixed, the
+  fixed thing is the flow (#7, and #40's innermost-ancestor fix is what keeps
+  that true on a title page). The press goes through the player's **one seek
+  path**, so it reports to the Server and is clamped: a credits marker that runs
+  to the last frame lands at the end rather than firing `ended` under the finger.
+- **Which Episode comes next is `play-target.ts`'s**, beside what pressing Play
+  means, because a Series holds no file and both are the same class of rule. It
+  is a position in `SeriesPage.episodes`, which spans Seasons, so a Season finale
+  offers the next Season's first Episode. A `PlayTarget` carries `seriesId` for
+  an Episode and only for one: that is both how the question is asked and how a
+  Movie says there is nothing after it.
+- **The next Episode is not the next *unwatched* one.** The Server's order is the
+  order a Series is watched in. That is deliberately different from `episodeToPlay`
+  (#18), which does resume where somebody left off: Play is "take me where I am",
+  and this is "what comes after this one".
+- **The countdown follows the User's Jellyfin account, and nothing else.**
+  `EnableNextEpisodeAutoPlay` is already in the tree through
+  `usePlaybackPreferences()` — #35's provider sits above the router and says the
+  player is the reader it was waiting for — so there is no second path to the
+  Server. Autoplay **off still offers** the next Episode, with nothing counting:
+  #35's settings screen draws the two readings as "Start the next one" and "Ask
+  me each time", and closing the player would make its own wording untrue
+  (`decisions.md` §13). Ten seconds is Jellyflick's own figure; Jellyfin stores
+  no duration.
+- **Cancelling stays at the end**, which is the ticket's fourth box read the way
+  `decisions.md` §13 sets out. The controls stay up — an Episode that has run out
+  is "nothing to watch behind them", the same rule a paused player follows.
+- **The player asks the screen to re-target rather than swapping the Episode
+  under itself.** "What is playing" already lives on the screen: the title page's
+  Play set it and the Billboard's did, so both pass `onPlayNext`. Both also
+  **key the player on the item**, which is load-bearing rather than tidy — the
+  player holds the state of one playback, and carrying `restartTicks` or a chosen
+  sound track into a different Episode would start the next one at the moment the
+  last one ended.
+- **The countdown is the player's second timer**, and the only other one. The
+  reporter deliberately has none because it has the video's own events to go on;
+  a countdown has nothing else to read a clock off.
+
+Where each thing is tested: the marker arithmetic and the 404/empty equivalence
+in `test/unit/skipping-intros-and-credits.test.ts`, which Episode follows in
+`test/unit/the-next-episode.test.ts`, the endpoint and its narrowing in
+`test/unit/gateway.test.ts`, `HasSegments` reaching the plan in
+`test/unit/planning-playback.test.ts`, and what a User sees — the offers, the
+account's two readings, cancelling, and the Server hearing one session per
+Episode — in `test/unit/skipping-and-the-next-episode.test.tsx`. What only a
+browser can say is `test/e2e/skipping-and-the-next-episode.spec.ts`: the picture
+really moving, an Episode really running out, a remote reaching every new button
+by direction, and the two offers measured against the viewport.
 
 ## The fake Jellyfin serves real video
 

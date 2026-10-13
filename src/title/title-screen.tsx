@@ -231,12 +231,23 @@ function TitlePage({
 
       {playing === undefined ? null : (
         <Player
+          /*
+            Keyed on what is playing, so the next Episode (#31) really is a new
+            player rather than the old one handed a different id. The player
+            holds the state of **one** playback — the sound track the User
+            chose, and where the next negotiation has to restart from — and
+            carrying either into a different Episode would start Hotel at the
+            moment The Magic Xylophone ended.
+          */
+          key={playing.itemId}
           gateway={gateway}
           device={device}
           userId={session.activeUser()?.userId ?? ''}
           itemId={playing.itemId}
           titleName={playing.name}
           {...(playing.resumeTicks === undefined ? {} : { resumeTicks: playing.resumeTicks })}
+          {...(playing.seriesId === undefined ? {} : { seriesId: playing.seriesId })}
+          onPlayNext={setPlaying}
           onClose={() => {
             setPlaying(undefined);
             // The Server now holds a newer resume point than the one this

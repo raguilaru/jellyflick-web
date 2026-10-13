@@ -734,6 +734,90 @@ describe('the Jellyfin gateway', () => {
       ).rejects.toMatchObject({ status: 404 });
     });
   });
+
+  /**
+   * The intro and credits markers (#31), from `jellyfin-playback.md` §12:
+   *
+   *     GET /MediaSegments/{itemId}?includeSegmentTypes={csv of MediaSegmentType}
+   *
+   * The types go in the query because the endpoint's own purpose is to narrow:
+   * a Server with an intro-detection plugin may hold `Recap` and `Preview`
+   * segments this app offers nothing for, and asking for them would be asking
+   * the Server to send what nobody reads.
+   */
+  describe('reading the intro and credits markers', () => {
+    const segmentGateway = () =>
+      createJellyfinGateway({
+        serverAddress: fakeJellyfinUrl(),
+        deviceId: 'reads-segments',
+        ...identity,
+        token: tokenFor('reads-segments'),
+      });
+
+    it('reads an item’s segments, asking only for the types this app offers', async () => {
+      await setFakeState({
+        mediaSegments: {
+          'episode-bluey-s1e1': [
+            { Type: 'Intro', StartTicks: 0, EndTicks: 20_000_000 },
+            { Type: 'Outro', StartTicks: 40_000_000, EndTicks: 60_000_000 },
+          ],
+        },
+      });
+
+      const segments = await segmentGateway().getMediaSegments('episode-bluey-s1e1', [
+        'Intro',
+        'Outro',
+      ]);
+
+      // Ticks are what the wire carries; turning them into seconds is
+      // `src/playback/media-segments.ts`'s job, not the gateway's.
+      expect(segments).toMatchObject([
+        { Type: 'Intro', StartTicks: 0, EndTicks: 20_000_000 },
+        { Type: 'Outro', StartTicks: 40_000_000, EndTicks: 60_000_000 },
+      ]);
+
+      const asked = (await fakeRequests()).find((request) =>
+        request.path.startsWith('/MediaSegments/episode-bluey-s1e1'),
+      );
+      expect(asked?.path).toContain('includeSegmentTypes=Intro%2COutro');
+    });
+
+    /**
+     * `decisions.md` §5: there is no `Credits` value in `MediaSegmentType`, so
+     * a Server that holds a credits marker holds it as `Outro`. The enum is
+     * `Unknown, Commercial, Preview, Recap, Outro, Intro`, and the two types
+     * this app asks for are the only two it draws a button for.
+     */
+    it('leaves out the types it did not ask for, as the Server does', async () => {
+      await setFakeState({
+        mediaSegments: {
+          'episode-bluey-s1e1': [
+            { Type: 'Recap', StartTicks: 0, EndTicks: 10_000_000 },
+            { Type: 'Intro', StartTicks: 10_000_000, EndTicks: 20_000_000 },
+          ],
+        },
+      });
+
+      const segments = await segmentGateway().getMediaSegments('episode-bluey-s1e1', [
+        'Intro',
+        'Outro',
+      ]);
+
+      expect(segments.map((segment) => segment.Type)).toEqual(['Intro']);
+    });
+
+    /**
+     * §12: a Server with no segment provider installed may answer either an
+     * empty result or a 404, and both mean "no markers". The gateway reports
+     * the 404 as the failure it is; `media-segments.ts` is the one place the
+     * two are made the same thing, so every caller gets one answer.
+     */
+    it('fails for an item the Server holds no segments for at all', async () => {
+      await expect(segmentGateway().getMediaSegments('movie-heat')).rejects.toMatchObject({
+        status: 404,
+      });
+    });
+  });
 });
 
 /**

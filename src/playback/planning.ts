@@ -52,6 +52,14 @@ export type PlaybackPlan = {
   readonly subtitleStreamIndex?: number;
   /** Every track the file holds, which is what the picker offers (#27). */
   readonly tracks: MediaTracks;
+  /**
+   * Whether the Server holds any intro or credits markers for this source
+   * (#31). `jellyfin-playback.md` §12: the flag "exists precisely to avoid a
+   * pointless request", so `media-segments.ts` is asked only when it is true.
+   * A Server with no intro-detection plugin — which is most of them — then
+   * costs no round trip per playback.
+   */
+  readonly hasSegments: boolean;
 };
 
 /**
@@ -140,6 +148,7 @@ export async function planPlayback(
       ...numberIf('audioStreamIndex', source.DefaultAudioStreamIndex),
       ...numberIf('subtitleStreamIndex', source.DefaultSubtitleStreamIndex),
       tracks: tracksOf(source),
+      hasSegments: source.HasSegments === true,
     },
   };
 }

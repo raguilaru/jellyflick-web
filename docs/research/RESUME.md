@@ -4,7 +4,7 @@ State of the `/implement-spec` run on the integration branch `feat/jellyflick-v1
 (draft PR #38). Update this whenever a wave lands, so a fresh session can pick the work
 up without re-deriving anything.
 
-## START HERE — seventh session, two implementers in flight
+## START HERE — seventh session, #22 and #31 merged, #20 and #28 in flight
 
 The seventh session fixed the **last of the four e2e failures** and launched **#31 and
 #22**. CI's `e2e` job had failed on **every run of this branch since it began**; it passes
@@ -18,9 +18,81 @@ tests** in 53 files, **384 Playwright tests (359 passed, 25 skipped, 0 failed)**
 chunk, 17.97 kB / 3.91 kB gz CSS, and hls.js still in its own lazy
 584.35 kB / 181.54 kB gz chunk that only a transcode fetches.
 
-**In flight — do not touch these areas:** `ticket/31-skip-intro-and-next-episode`
-(`src/playback/`, ports 4331/8331) and `ticket/22-remaining-billboard-sources`
-(`src/home/` and the Row registry, ports 4322/8322).
+**#22 merged at `a639c1d`, #31 at `c0b7298`**, both closed. Integrator's own gate on the
+`c0b7298` tip, each step its own exit code: `lint` 0, `typecheck` 0, `build` 0, **762 unit
+tests in 57 files**, **380 Playwright passed, 25 skipped, 0 failed** under
+`E2E_CPU_THROTTLE=4`, main JS **153.13 kB / 46.17 kB gz**. Both implementers' numbers
+matched the integrator's exactly.
+
+The #31 merge got a **full** e2e re-run rather than a carried gate, because it changed a
+helper the whole suite leans on — see below. #22's merge tree was byte-identical to the
+branch tip it had gated, so only the fast steps were re-run there.
+
+**In flight — do not touch these areas:** `ticket/20-mdblist-ratings` (`src/title/`,
+`server/`, ports 4320/8320) and `ticket/28-subtitle-offset` (`src/playback/`, Client
+Settings, ports 4328/8328).
+
+### #31 fixed the shared arrow-key search — know this before writing an e2e that reaches a control
+
+`reachByArrowKeys` and its helpers moved out of `playing-a-title.spec.ts` into
+**`test/e2e/arrow-keys.ts`**, and off the seek bar the search now steps in whichever
+vertical direction the target lies instead of always Down. Down is correct for #27's track
+picker, which sits below the bar, and walks *away* from #31's Skip button above it: the
+search ping-ponged between the bar and play/pause until its 40 presses ran out, and
+reported a button a remote reaches in two presses as unreachable.
+
+Any later ticket adding a focusable control **over the picture** uses this helper and
+inherits that fix. #40's in-menu pin came through the move verbatim.
+
+### The run's own open findings, filed rather than carried in reports
+
+Three issues exist that are not in the spec's task graph, all found by implementers who
+correctly declined to fix them inside their own scope:
+
+- **#41** — Home reads the same Row twice when a Billboard Source shares it. Resume costs
+  four library reads on Home, six if Continue Watching is also there. Found by #22.
+- **#42** — a phone Row-scroll assertion reads a scroller that is still settling. Seen
+  **once**, in a full run; 10/10 in isolation under throttle, and clean in two later full
+  runs and the integrator's own. The assertion is a bare `expect` where every other scroll
+  assertion in that test is an `expect.poll`. Found by #31. **If it fails under you, do
+  not chase it** — confirm it passes on `--repeat-each` and say so.
+- **#43** — the glossary is missing Skip Intro, Skip Credits, next Episode and probably
+  Billboard Source. Deliberately left: a `GLOSSARY.md` edit collides with every ticket in
+  flight, so it is cheaper done once between waves.
+
+### Create an implementer's worktree yourself; do not ask it to
+
+**The single most expensive thing that went wrong in this run.** Both of the seventh
+session's first two implementers were told to `git worktree add` their own worktree. For
+both, it did not take effect — silently — and both then worked **in the integrator's
+worktree, on the integration branch, at the same time as each other and as the
+integrator.**
+
+What that cost, and what it looked like:
+
+- Both tickets' commits stacked on one branch, in the order the agents happened to commit.
+- The integrator's own two commits were made on a **detached HEAD**, so
+  `git push origin feat/jellyflick-v1` pushed the branch — still two commits behind — and
+  reported success for a no-op. With `-q` the "Everything up-to-date" line was hidden and a
+  `&& echo pushed` printed anyway. **Origin sat two commits behind while the integrator
+  believed it was current.** Never trust a quiet push; verify with `git ls-remote`.
+- One implementer briefly had the other's `player.*` i18n keys inside its own commit and
+  rebuilt its commits to remove them.
+- A scratch debug test file was left in the shared tree failing `lint` and `typecheck`.
+
+Recovery was complete and nothing was lost — the commits were contiguous, so each branch
+was reset to its own and the later one rebased off the other, with the rebased diff
+checked identical apart from hunk offsets. But it cost about what an implementer costs.
+
+**So: the integrator creates the worktree, runs `npm ci` in it, and hands over the path.**
+Brief the implementer to stay inside it and never to run `git checkout`, `switch` or
+`reset` on a branch that is not its own.
+
+### `src/i18n/en.ts` and `es.ts` collide in every wave
+
+Every implementer adds strings, so these two files conflict between any two branches in a
+wave. Harmless and quick — the hunks are additions in different places — but expect it on
+every merge, and expect a rebase to show offset-only diffs in them.
 
 ### The last of the four e2e failures was an app bug, and it was in the navigator
 
@@ -59,31 +131,30 @@ A worktree whose `node_modules` is missing or stale fails `typecheck`, `test` **
 `build` at once — #9's merge showed **14 failing test files** from this one cause, when
 `hls.js` arrived as the project's first runtime dependency. This is trap 3.
 
-### The frontier — twelve open, ten untaken
+### The frontier — ten spec tickets open, eight untaken, plus three found findings
 
 | Ticket | Note |
 |---|---|
 | #19 Trailers and Download File | touches `src/title/title-screen.tsx` |
-| #20 MDBList ratings | touches `src/title/title-screen.tsx`; **ADR 0004 forbids the key reaching the browser**. Its compact-for-cards half is what #21 wants |
+| #20 MDBList ratings | **in flight.** **ADR 0004 forbids the key reaching the browser**. Its compact-for-cards half is what #21 wants |
 | #21 Desktop hover cards | takes `Row`'s `cardControl` render prop from #13; #8's "a Row is a line" was made for it. **Wants #20's compact ratings** — not a declared blocker, but real |
-| #22 Remaining Billboard Sources | **in flight.** Every source it adds must route Play through `resolvePlayTarget` |
-| #23 Movies and Series pages | **wants #22 merged first**: both compose Home, and #22 is in that file now |
-| #28 Subtitle Offset | `src/playback/`, and the one the spec's problem statement names by hand |
+| #23 Movies and Series pages | **unblocked now** — #22 is merged, so `src/home/` is free |
+| #41, #42, #43 | found during the run, not in the spec's graph — see above |
+| #28 Subtitle Offset | **in flight.** The one the spec's problem statement names by hand, and the seam #29 and #30 both meet |
 | #29 Styled subtitles | `src/playback/`; #28's offset has to keep working through it |
 | #30 Image subtitles | `src/playback/`; **its first box is a research finding to record in the ticket**, before any code |
-| #31 Skip Intro/Credits and next Episode | **in flight** |
 | #32 Trickplay, speed, picture-in-picture and quality | `src/playback/` |
 | #33 Cast | `decisions.md` §8 says it must read `user.Configuration.CastReceiverId` at runtime — #35 made the fake serve that |
 | #34 Play On | — |
 
 **Conflict groups — do not launch two from the same group:**
 - **`src/title/title-screen.tsx`**: #19, #20, #21. **One at a time.**
-- **`src/home/` and the Row registry**: #22, #23. **One at a time**, and #22 is in it now.
-- **`src/playback/`**: #28, #29, #30, #31, #32, and #33/#34 in part. **One at a time** is
-  the safe reading — #28 → #29/#30 is a real chain inside the subtitle code even though
-  the task graph does not declare it.
+- **`src/home/` and the Row registry**: #23, and #41 when it is taken. **One at a time.**
+- **`src/playback/`**: #29, #30, #32, and #33/#34 in part, with #28 in it now. **One at a
+  time** is the safe reading — #28 → #29/#30 is a real chain inside the subtitle code even
+  though the task graph does not declare it.
 
-Six of the twelve are in the player. **That is the shape of the rest of this run**, and it
+Five of the ten are in the player. **That is the shape of the rest of this run**, and it
 is why the waves from here are small: there is no honest way to run three player tickets
 at once.
 
@@ -92,10 +163,14 @@ at once.
 1. **Check both limits before each wave.** Three implementers cost **most of a 5-hour
    window** — see the measured figures below. Two is the default; hold back the
    integrator's own merge and gate budget.
-2. Merge **#31** and **#22** as they report, gating each merge.
+2. Merge **#20** and **#28** as they report, gating each merge.
 3. Then, in order, the waves that fall out of the conflict groups above — a title-page
-   ticket plus a player ticket is the clean pair. **#20 before #21**, and **#23 after
-   #22**.
+   ticket plus a player ticket is the clean pair. **#21 after #20** (it wants #20's
+   compact ratings); **#29 and #30 after #28** (both have to keep its offset working, and
+   #30 has to disable its control with an explanation); **#23** is free whenever
+   `src/home/` is.
+4. **#43 between waves, not inside one** — it is the one change that collides with
+   everything.
 4. **`code-review` over the whole branch again** once the tickets are done. The first run
    found four real bugs; #40 shows the navigator is still the thinnest-covered part.
 5. **The git history rewrite** in `decisions.md` §10, when no implementer is in flight.
