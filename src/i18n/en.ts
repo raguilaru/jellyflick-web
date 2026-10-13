@@ -5,7 +5,10 @@
  * A message is either a string or a function of a parameters object. Use
  * `Intl.NumberFormat` / `Intl.DateTimeFormat` / `Intl.PluralRules` inside the
  * function for anything formatted — all three are native on Chromium 68.
+ * Formatting two locales have to agree on lives in `format.ts`.
  */
+import { formatSeconds } from './format';
+
 /**
  * The languages a household's media is most likely to be in, by the ISO 639-2
  * code Jellyfin puts on a stream. Not exhaustive on purpose: a code that is not
@@ -433,6 +436,42 @@ export const en = {
    */
   'player.subtitlesImage': 'Jellyflick cannot draw picture subtitles yet.',
   'player.subtitlesUnavailable': 'Jellyflick could not read those subtitles from the Server.',
+
+  /*
+   * The Subtitle Offset (#28, stories 96–102).
+   *
+   * The readout is three messages rather than one with a sign in it, because
+   * "later" and "earlier" are the words a User thinks in and a leading `-` is
+   * not. The number is formatted with `Intl.NumberFormat` to one decimal
+   * place, so `es` reads "0,8 s" — the panel passes the size of the shift and
+   * the message carries the direction.
+   *
+   * A unit and a number that has to agree with it would need a plural rule in
+   * every locale; "s" is the symbol for a second in all of them, and the
+   * readout is beside the buttons that moved it.
+   *
+   * The two step buttons show a glyph and are **named** in words: `−` and `+`
+   * on their own are not something a screen reader can say usefully, and the
+   * panel is the screen most likely to be driven with a remote.
+   */
+  'player.subtitleTiming': 'Subtitle timing',
+  'player.subtitlesInSync': 'Subtitles in sync',
+  'player.subtitlesLater': (p: { seconds: number }) =>
+    `Subtitles ${formatSeconds(p.seconds, 'en')} s later`,
+  'player.subtitlesEarlier': (p: { seconds: number }) =>
+    `Subtitles ${formatSeconds(p.seconds, 'en')} s earlier`,
+  'player.subtitlesStepLater': 'Shift the subtitles later',
+  'player.subtitlesStepEarlier': 'Shift the subtitles earlier',
+  'player.subtitleSyncToLine': 'Sync to this line',
+  /*
+   * Why the button is there but cannot be pressed, which is the treatment a
+   * picture subtitle track gets in the menu: `aria-disabled` keeps it a focus
+   * stop a remote can reach and read, where `disabled` would make it vanish
+   * from the arrow keys with no way to find out why.
+   */
+  'player.subtitleSyncUnavailable': 'There is no subtitle on the screen to sync to.',
+  'player.subtitleTimingReset': 'Reset',
+  'player.subtitleTimingDone': 'Done',
 
   /*
    * Skip Intro and Skip Credits (#31, story 87). The visible text is short

@@ -1,4 +1,5 @@
 import type { Messages } from './en';
+import { formatSeconds } from './format';
 
 /** Los idiomas más probables, por el código ISO 639-2 que envía el servidor. */
 const LANGUAGE_NAMES_ES: Readonly<Record<string, string>> = {
@@ -317,6 +318,18 @@ export const es: Messages = {
   'player.subtitlesLabel': 'Subtítulos',
   'player.subtitlesImage': 'Jellyflick todavía no puede dibujar subtítulos de imagen.',
   'player.subtitlesUnavailable': 'Jellyflick no pudo leer esos subtítulos del servidor.',
+
+  /* El desfase de subtítulos (#28). «0,8 s» en español, por `Intl.NumberFormat`. */
+  'player.subtitleTiming': 'Sincronía de subtítulos',
+  'player.subtitlesInSync': 'Subtítulos sincronizados',
+  'player.subtitlesLater': (p) => `Subtítulos ${formatSeconds(p.seconds, 'es')} s más tarde`,
+  'player.subtitlesEarlier': (p) => `Subtítulos ${formatSeconds(p.seconds, 'es')} s antes`,
+  'player.subtitlesStepLater': 'Retrasar los subtítulos',
+  'player.subtitlesStepEarlier': 'Adelantar los subtítulos',
+  'player.subtitleSyncToLine': 'Sincronizar con esta línea',
+  'player.subtitleSyncUnavailable': 'No hay ningún subtítulo en pantalla con el que sincronizar.',
+  'player.subtitleTimingReset': 'Restablecer',
+  'player.subtitleTimingDone': 'Hecho',
 
   'player.skipLabel': 'Saltar',
   'player.skipIntro': 'Saltar intro',
