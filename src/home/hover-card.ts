@@ -1,4 +1,6 @@
+import type { TitleDetails } from '../catalogue/catalogue';
 import type { DeviceForm } from '../device/types';
+import type { Translate } from '../i18n/index';
 
 /**
  * The rules behind the enlarged hover card (#21, stories 52 and 53): which
@@ -33,4 +35,29 @@ import type { DeviceForm } from '../device/types';
  */
 export function hoverCardsAvailable(form: DeviceForm, pointerCanHover: boolean): boolean {
   return form === 'computer' && pointerCanHover;
+}
+
+/**
+ * The one line of facts on an enlarged card: the age rating, the length and
+ * the genres, which is exactly what story 52 asks for.
+ *
+ * Deliberately **narrower than the title page's own facts line**
+ * (`factsOf` in `src/title/title-screen.tsx`), and not shared with it. That
+ * one opens with the year and closes with the Server's two ratings, because a
+ * title page is where a Title is read about; a card is something a User is
+ * skimming past, and the scores on it are the *extra* ratings underneath —
+ * four more numbers beside them would be a wall of them.
+ *
+ * Every fact the Server left out is simply not in the line, which is story 81
+ * past the ratings as well as in them: a Series has no running time at all,
+ * and a label with nothing after it says less than no label.
+ */
+export function hoverCardFactsOf(details: TitleDetails, t: Translate): readonly string[] {
+  const facts: string[] = [];
+  if (details.ageRating !== undefined) facts.push(details.ageRating);
+  if (details.runtimeMinutes !== undefined) {
+    facts.push(t('title.runtime', { minutes: details.runtimeMinutes }));
+  }
+  if (details.genres.length > 0) facts.push(details.genres.join(', '));
+  return facts;
 }
