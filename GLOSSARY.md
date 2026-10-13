@@ -40,6 +40,14 @@ One playable instalment of a Series, belonging to one Season.
 A Jellyfin grouping of related Titles, such as a movie franchise.
 _Avoid_: Box set, franchise
 
+**Trailer**:
+A short preview video the Server holds alongside a Title. Only the trailers stored on the Server itself are used, never one fetched from the web.
+_Avoid_: Preview, teaser, clip
+
+**Extra Ratings**:
+The Audience, Metacritic, Letterboxd and Trakt scores for a Title, shown beside the critic and community scores the Server sends. They need an MDBList key, and a Title without one shows none.
+_Avoid_: MDBList ratings (that's where they come from), reviews, scores
+
 **My List**:
 The Titles a User has marked as favorite in Jellyfin. It's the same list other Jellyfin apps show as Favorites.
 _Avoid_: Watchlist, saved, favorites (in the UI)
@@ -100,6 +108,22 @@ _Avoid_: Badge, tag, ribbon
 **Subtitle Offset**:
 How far the subtitles are shifted earlier or later than the video, adjusted by the User while watching.
 _Avoid_: Subtitle delay, sync
+
+**Subtitle timing**:
+The panel the User opens while watching to change the Subtitle Offset. The panel is what is opened; the Offset is the number it moves.
+_Avoid_: Subtitle settings, delay panel
+
+**Skip Intro**:
+The button over the picture that jumps past the opening of what's playing. It appears only while the intro is on screen, because the Server is what says where the intro is.
+_Avoid_: Skip ahead, skip recap, intro skipper
+
+**Skip Credits**:
+The same button for the closing credits of what's playing, appearing only while they're on screen.
+_Avoid_: Skip outro, skip end
+
+**next Episode**:
+The Episode that follows the one playing. It is offered as the Episode ends, and either starts on its own after a countdown or waits to be asked for, following the User's playback preference.
+_Avoid_: Next Up, up next, autoplay, binge
 
 **Cast**:
 Sending playback to a Chromecast or AirPlay receiver, with this app acting as the remote.
