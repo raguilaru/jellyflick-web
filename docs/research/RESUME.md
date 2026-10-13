@@ -4,7 +4,7 @@ State of the `/implement-spec` run on the integration branch `feat/jellyflick-v1
 (draft PR #38). Update this whenever a wave lands, so a fresh session can pick the work
 up without re-deriving anything.
 
-## START HERE — seventh session, #22 and #31 merged, #20 and #28 in flight
+## START HERE — seventh session, #22, #31 and #20 merged, #28 in flight
 
 The seventh session fixed the **last of the four e2e failures** and launched **#31 and
 #22**. CI's `e2e` job had failed on **every run of this branch since it began**; it passes
@@ -18,24 +18,28 @@ tests** in 53 files, **384 Playwright tests (359 passed, 25 skipped, 0 failed)**
 chunk, 17.97 kB / 3.91 kB gz CSS, and hls.js still in its own lazy
 584.35 kB / 181.54 kB gz chunk that only a transcode fetches.
 
-**#22 merged at `a639c1d`, #31 at `c0b7298`**, both closed. Integrator's own gate on the
-`c0b7298` tip, each step its own exit code: `lint` 0, `typecheck` 0, `build` 0, **762 unit
-tests in 57 files**, **380 Playwright passed, 25 skipped, 0 failed** under
-`E2E_CPU_THROTTLE=4`, main JS **153.13 kB / 46.17 kB gz**. Both implementers' numbers
-matched the integrator's exactly.
+**#22 merged at `a639c1d`, #31 at `c0b7298`, #20 at `6d6ca49`**, all closed. Integrator's own gate on the `6d6ca49` tip,
+each step its own exit code: `lint` 0, `typecheck` 0, `build` 0, **792 unit tests in 59
+files**, **392 Playwright passed, 25 skipped, 0 failed** under `E2E_CPU_THROTTLE=4`, main
+JS **155.95 kB / 47.20 kB gz**. All three implementers' numbers matched the integrator's
+exactly.
 
-The #31 merge got a **full** e2e re-run rather than a carried gate, because it changed a
-helper the whole suite leans on — see below. #22's merge tree was byte-identical to the
-branch tip it had gated, so only the fast steps were re-run there.
+The #31 and #20 merges each got a **full** e2e re-run rather than a carried gate: #31
+changed a helper the whole suite leans on, and #20's own run had #42 fail. #22's merge tree
+was byte-identical to the branch tip it had gated, so only the fast steps were re-run
+there.
 
-**In flight — do not touch these areas:** `ticket/20-mdblist-ratings` (`src/title/`,
-`server/`, ports 4320/8320) and `ticket/28-subtitle-offset` (`src/playback/`, Client
-Settings, ports 4328/8328). Both were interrupted by a session limit once and resumed from
-pushed WIP commits — see below.
+**Bundle trend, which is the one gate number that moves every merge:** 147.05 → 149.46
+(#22) → 153.13 (#31) → 155.95 kB raw. #20 measured its own share at +2.82 kB raw before
+its merge, so most of each step is real feature code rather than noise.
 
-**CI is green and has stayed green.** Five consecutive successful runs: `587eddb`,
-`a639c1d`, `1211a60`, `c0b7298`, `bb2a797`. Before this session the `e2e` job had failed
-on every run of this branch since it began.
+**In flight — do not touch these areas:** `ticket/28-subtitle-offset` (`src/playback/`,
+Client Settings, ports 4328/8328). It and #20 were both interrupted by a session limit once
+and resumed from pushed WIP commits — see below.
+
+**CI is green and has stayed green.** Every run since `587eddb` has passed, through three
+merges. Before this session the `e2e` job had failed on every run of this branch since it
+began.
 
 ### #31 fixed the shared arrow-key search — know this before writing an e2e that reaches a control
 
@@ -92,8 +96,21 @@ correctly declined to fix them inside their own scope:
   assertion in that test is an `expect.poll`. Found by #31. **If it fails under you, do
   not chase it** — confirm it passes on `--repeat-each` and say so.
 - **#43** — the glossary is missing Skip Intro, Skip Credits, next Episode and probably
-  Billboard Source. Deliberately left: a `GLOSSARY.md` edit collides with every ticket in
-  flight, so it is cheaper done once between waves.
+  Billboard Source, and now Billboard Source plus the extra-ratings vocabulary too.
+  Deliberately left: a `GLOSSARY.md` edit collides with every ticket in flight, so it is
+  cheaper done once between waves.
+- **#44**, closed — #20 found that the title page's facts and actions rows did not wrap,
+  so the sheet came out **635px wide on a 375px screen** and Mark watched sat off the
+  right edge. Shipped in #17, live since, and **every e2e assertion passed throughout**,
+  because Playwright scrolls into view before touching. Found by rendering it and looking.
+  The fix added an assertion on the **document's scroll width at 375px** — the one shape
+  of assertion that scrolling cannot paper over, and worth copying to other screens.
+- **#45**, `needs-info` — MDBList's `ratings[]` element shape and the per-source scales
+  are coded against an OpenAPI schema that types the elements as a bare object with no
+  example, because no host key was available to make one real call. An unrecognised shape
+  is skipped and an out-of-range value treated as absent, so a wrong guess omits a rating
+  rather than drawing one wrong by 20× — quiet by design, and therefore quiet about being
+  wrong. **This one needs the host, not an agent.**
 
 ### Create an implementer's worktree yourself; do not ask it to
 
@@ -166,15 +183,14 @@ A worktree whose `node_modules` is missing or stale fails `typecheck`, `test` **
 `build` at once — #9's merge showed **14 failing test files** from this one cause, when
 `hls.js` arrived as the project's first runtime dependency. This is trap 3.
 
-### The frontier — ten spec tickets open, eight untaken, plus three found findings
+### The frontier — nine spec tickets open, eight untaken, plus the run's own findings
 
 | Ticket | Note |
 |---|---|
 | #19 Trailers and Download File | touches `src/title/title-screen.tsx` |
-| #20 MDBList ratings | **in flight.** **ADR 0004 forbids the key reaching the browser**. Its compact-for-cards half is what #21 wants |
-| #21 Desktop hover cards | takes `Row`'s `cardControl` render prop from #13; #8's "a Row is a line" was made for it. **Wants #20's compact ratings** — not a declared blocker, but real |
+| #21 Desktop hover cards | takes `Row`'s `cardControl` render prop from #13; #8's "a Row is a line" was made for it. **#20 left it `<ExtraRatings details compact />`**, which reads on mount — so on a hover card, on hover rather than eagerly per card |
 | #23 Movies and Series pages | **unblocked now** — #22 is merged, so `src/home/` is free |
-| #41, #42, #43 | found during the run, not in the spec's graph — see above |
+| #41, #42, #43, #45 | found during the run, not in the spec's graph — see above. #45 needs the host |
 | #28 Subtitle Offset | **in flight.** The one the spec's problem statement names by hand, and the seam #29 and #30 both meet |
 | #29 Styled subtitles | `src/playback/`; #28's offset has to keep working through it |
 | #30 Image subtitles | `src/playback/`; **its first box is a research finding to record in the ticket**, before any code |
@@ -183,13 +199,14 @@ A worktree whose `node_modules` is missing or stale fails `typecheck`, `test` **
 | #34 Play On | — |
 
 **Conflict groups — do not launch two from the same group:**
-- **`src/title/title-screen.tsx`**: #19, #20, #21. **One at a time.**
+- **`src/title/title-screen.tsx`**: #19, #21. **One at a time.** #20 has just changed
+  that file and `src/styles/base.css`'s title rows.
 - **`src/home/` and the Row registry**: #23, and #41 when it is taken. **One at a time.**
 - **`src/playback/`**: #29, #30, #32, and #33/#34 in part, with #28 in it now. **One at a
   time** is the safe reading — #28 → #29/#30 is a real chain inside the subtitle code even
   though the task graph does not declare it.
 
-Five of the ten are in the player. **That is the shape of the rest of this run**, and it
+Five of the nine are in the player. **That is the shape of the rest of this run**, and it
 is why the waves from here are small: there is no honest way to run three player tickets
 at once.
 
@@ -198,7 +215,7 @@ at once.
 1. **Check both limits before each wave.** Three implementers cost **most of a 5-hour
    window** — see the measured figures below. Two is the default; hold back the
    integrator's own merge and gate budget.
-2. Merge **#20** and **#28** as they report, gating each merge.
+2. Merge **#28** as it reports, gating the merge.
 3. Then, in order, the waves that fall out of the conflict groups above — a title-page
    ticket plus a player ticket is the clean pair. **#21 after #20** (it wants #20's
    compact ratings); **#29 and #30 after #28** (both have to keep its offset working, and
