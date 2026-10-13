@@ -21,6 +21,16 @@ export type PlayTarget = {
   readonly name: string;
   /** Where to start, left out for anything nobody has part-watched. */
   readonly resumeTicks?: number;
+  /**
+   * Which Series this belongs to, for an Episode and only for one (#31).
+   *
+   * It is what lets the player ask what comes **after** what it is playing:
+   * the answer is a position in that Series' own aired order, and nothing else
+   * the player holds says which Series an Episode is from. A Movie has none,
+   * which is also how "there is nothing after this" is said without asking the
+   * Server a question about a shape a Movie is not.
+   */
+  readonly seriesId?: string;
 };
 
 /**
@@ -37,6 +47,7 @@ export function episodePlayTarget(
   return {
     itemId: detail.episode.itemId,
     name: playingNameOf(seriesName, detail, t),
+    seriesId: detail.episode.series.itemId,
     ...(detail.playback.played || detail.playback.positionTicks === undefined
       ? {}
       : { resumeTicks: detail.playback.positionTicks }),
@@ -88,4 +99,59 @@ export async function resolvePlayTarget(
   if (details.title.kind !== 'Series') return moviePlayTarget(details);
   const series = await loadSeries(gateway, details.title.itemId);
   return playTargetFor(details, series.upTo, t);
+}
+
+/**
+ * Which Episode follows the one playing, out of every Episode of the Series in
+ * the Server's aired order (#31, story 88).
+ *
+ * It is a **position in that one list**, which is why `SeriesPage` keeps the
+ * Episodes beside the Seasons: the question spans Seasons, so a household that
+ * has just watched a Season finale is offered the next Season's first Episode
+ * rather than nothing.
+ *
+ * Two things it deliberately does not do:
+ *
+ * - **It does not skip an Episode the User has already watched.** The Server's
+ *   order is the order a Series is watched in, and deciding that a household
+ *   has finished with something is not this rule's to make — a rewatch is as
+ *   ordinary as a first watch.
+ * - **It answers nothing for an item that is not in the list.** A Movie, or an
+ *   Episode of another Series, has nothing after it here, and starting this
+ *   list's first Episode instead would begin a programme nobody asked for.
+ */
+export function nextEpisodeIn(
+  episodes: readonly EpisodeDetails[],
+  playingItemId: string,
+): EpisodeDetails | undefined {
+  const playing = episodes.findIndex((detail) => detail.episode.itemId === playingItemId);
+  if (playing === -1) return undefined;
+  return episodes[playing + 1];
+}
+
+/**
+ * What the player offers at the end of an Episode: the next one, read off the
+ * Server, or nothing.
+ *
+ * The read is `loadSeries`' own two calls, which is the same pair the title
+ * page made — so this is the Billboard's bargain in reverse. It happens once
+ * per Episode and only as that Episode nears its end, rather than beside every
+ * playback: an Episode somebody abandons half way through never costs it.
+ *
+ * A Server that will not say what the Series holds comes to `undefined` rather
+ * than to a message, because `loadSeries` already turns a refused read into an
+ * empty Series. To a User the two are the same thing — the Episode they were
+ * watching has finished and there is nothing being offered — and an Episode
+ * that ran out is not the moment to explain a failed library query.
+ */
+export async function resolveNextEpisode(
+  gateway: JellyfinGateway,
+  seriesId: string,
+  playingItemId: string,
+  t: Translate,
+): Promise<PlayTarget | undefined> {
+  const series = await loadSeries(gateway, seriesId);
+  const next = nextEpisodeIn(series.episodes, playingItemId);
+  if (next === undefined) return undefined;
+  return episodePlayTarget(next.episode.series.name, next, t);
 }
