@@ -81,6 +81,16 @@ export type CastMember = {
  * but `CriticRating` and `OfficialRating` are unguarded, so a null and an empty
  * string are handled here.
  */
+/**
+ * The ids other databases know a Title by, as far as this app uses them: the
+ * join key for MDBList's extra ratings (#20). Each is absent when the Server
+ * has no id of that kind, which plenty of Titles in a household library are.
+ */
+export type TitleProviderIds = {
+  readonly imdb?: string;
+  readonly tmdb?: string;
+};
+
 export type TitleDetails = {
   readonly title: Title;
   /** `ProductionYear`. */
@@ -96,6 +106,15 @@ export type TitleDetails = {
   /** `CommunityRating`: Jellyfin's community score, 0–10. */
   readonly communityRating?: number;
   readonly cast: readonly CastMember[];
+  /**
+   * `ProviderIds`, narrowed to the two MDBList can be asked about (#20). It is
+   * here rather than on `Title` because the Server only sends it when the page
+   * asks for the detail fields, so a Row's Titles never carry one.
+   *
+   * Jellyfin's own spellings are `Imdb` and `Tmdb`; they are lower-cased here
+   * so the one place a `BaseItemDto` is read stays the one place that knows.
+   */
+  readonly providerIds: TitleProviderIds;
   /** The first `BackdropImageTags` entry, which is the one the page shows. */
   readonly backdrop?: Artwork;
   /** `ImageTags.Logo`, shown in place of the name when the Title has one. */
@@ -267,6 +286,10 @@ export function titleDetailsFrom(dto: BaseItemDto): TitleDetails | undefined {
         name: person.Name as string,
         ...textOf('role', person.Role),
       })),
+    providerIds: {
+      ...textOf('imdb', dto.ProviderIds?.Imdb),
+      ...textOf('tmdb', dto.ProviderIds?.Tmdb),
+    },
     // Jellyfin serves several backdrops; the page shows one, so it takes the
     // first rather than making every screen choose.
     ...prefixed('backdrop', artworkOf(item.itemId, dto.BackdropImageTags?.[0])),

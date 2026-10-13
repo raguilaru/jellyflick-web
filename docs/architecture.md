@@ -92,6 +92,15 @@ src/
                         `reveal.ts` how far a scroller must move, `focusable.ts`
                         what the arrows reach, `spatial-navigation.ts` the
                         wiring, `input-modality.ts` the focus highlight.
+  ratings/              The extra ratings an MDBList key buys (#20):
+                        `extra-ratings.ts` is the reading and the model — which
+                        Title is looked up, what comes out of MDBList's answer,
+                        and the cache per Title — and
+                        `extra-ratings-badges.tsx` what a User sees, in a full
+                        and a compact form. The one module outside
+                        `src/jellyfin/` that calls `fetch`, because the
+                        container is not the Server. See "The extra ratings"
+                        below.
   search/               Search: `search-screen.tsx` the field and the live
                         results, `genres.tsx` browsing by genre, `search.ts`
                         what the Server is asked.
@@ -142,7 +151,11 @@ test/
 Where new code belongs:
 
 - **A new Jellyfin endpoint** → one method on the gateway in `src/jellyfin/gateway.ts`,
-  and nowhere else. Nothing outside `src/jellyfin/` calls `fetch`.
+  and nowhere else. Nothing outside `src/jellyfin/` calls `fetch` **for the
+  Server**. `src/ratings/` is the one other module that calls `fetch` at all,
+  and it calls the *container's* own route on the app's own origin — a different
+  host, with no Jellyfin authorization header and nothing the gateway knows how
+  to build. See "The extra ratings" below.
 - **Anything device-specific** — a key code, a codec probe, the clock, randomness,
   a renderer capability, storage, the languages the device prefers, *what shape
   of device this is* → `src/device/`. Nothing else reads `navigator`,
@@ -1316,6 +1329,69 @@ file, as a pure function of what the Server said.
   and nothing of #31 is built here — `nextEpisodeIn` is in `play-target.ts`,
   beside what pressing Play means, and reads this list.
 
+## The extra ratings
+
+`src/ratings/` is #20, stories 80–82: Rotten Tomatoes' audience score,
+Metacritic, Letterboxd and Trakt, beside the Rotten Tomatoes critic score and
+the community score the Server already sends. It is the whole of the client
+side; the container's route under it is "The ratings route" below.
+
+- **It never talks to MDBList, and it never asks whether there is a key.**
+  ADR 0004 keeps the host's key inside the container, so this reads
+  `GET /api/ratings/:provider/:type/:id` on the app's own origin. There is no
+  capability flag in the runtime config to check first, by design — the config
+  carries the Server address and the app version and nothing else. The route's
+  **503 is how the app learns there is no key**, and that answer is remembered
+  per origin, so a host with no key costs one request for the whole visit
+  rather than one per Title. Everything else the route can answer means "no
+  extra ratings": story 80 makes them an optional extra and story 81 leaves a
+  missing one out, so there is nothing to tell a User about.
+- **The join key is `TitleDetails.providerIds`**, which `catalogue.ts` reads
+  from `ProviderIds` and narrows to the two MDBList is asked by. It is on
+  `TitleDetails` and not on `Title` because the Server only sends `ProviderIds`
+  with the title page's detail fields, so a Row's Titles never carry one. IMDb
+  is preferred and TMDb is the fallback; `Movie` is MDBList's `movie` and
+  `Series` its `show`. A Title with neither id is never asked about at all.
+- **The shape of MDBList's `ratings[]` is undocumented** — its own OpenAPI
+  schema types the elements as a bare object (`docs/research/ratings-mdblist.md`
+  §19) — so `extraRatingsFrom` reads `{ source, value }` defensively and
+  **skips** anything it does not recognise: an unknown source, a missing or
+  non-numeric value, and a number off its source's own scale. Three sources
+  publish a percentage and Letterboxd publishes stars out of five, which is why
+  the scale is part of the model and not part of the message. `decisions.md`
+  §13 records what this cost and what would confirm it.
+- **The cache is per Title and holds promises**, so a Row of cards appearing at
+  once shares one request rather than starting one each. A *failure* is
+  forgotten rather than remembered, so a blip does not switch a Title's ratings
+  off for the rest of a visit — the container draws the same line, for the same
+  reason.
+- **#21's enlarged hover card should use `<ExtraRatings details compact />`**,
+  and nothing else. It takes the Title's `TitleDetails` and needs no wiring:
+  the read happens when it mounts, which on a card means on hover rather than
+  eagerly for every card in a Row — `ratings-mdblist.md` is explicit that eager
+  reads would burn the free tier's 1,000 requests a day. `<ExtraRatingBadges
+  ratings compact />` is the drawing alone, for a screen that already holds its
+  ratings, and `useExtraRatings(details)` the reading alone.
+- **The badges wrap, and so does the facts line above them now.** A row of four
+  source names and four scores is exactly the shape that runs off the side of a
+  375px screen, and the title page's facts and actions lines were already doing
+  it: they were one grid row of `max-content` columns, which made the whole
+  sheet 635px wide on a phone. No end-to-end test could see it, because
+  Playwright scrolls an element into view before touching it, so everything was
+  "visible" throughout. All three are wrapped flex with margins on the children
+  now (flex `gap` is Chrome 84 and silently does nothing on the floor), and
+  `test/e2e/extra-ratings-on-the-title-page.spec.ts` asserts the document's own
+  scroll width at 375px, which is the check that would have caught it.
+
+Where it is tested:
+
+| Where | What it covers |
+| --- | --- |
+| `test/unit/extra-ratings.test.ts` | The reading, over HTTP, through the container's **real** ratings route with MDBList faked at the `fetch` seam: which Title is asked about, what comes out of the answer, the cache, no key, a Title MDBList does not know, and every way of failing. `@vitest-environment node`, because happy-dom applies the Same Origin Policy and the container sends no CORS headers — in the image it is the app's own origin. |
+| `test/unit/extra-ratings-on-a-screen.test.tsx` | What the badges say, and that a Title with none adds nothing to the page. |
+| `test/unit/title-page-journey.test.tsx` | That a title page with no container behind it at all still comes up, with the Server's own ratings and nothing extra. |
+| `test/e2e/extra-ratings-on-the-title-page.spec.ts` | The whole chain in a browser — real container, real build — plus the layout at 375px and the key being nowhere the browser can read it. |
+
 ## Playing a Title
 
 `src/playback/` is #25: Play on a title page, through Jellyfin's negotiation,
@@ -1602,10 +1678,10 @@ offset in force and is the only thing that saves it.
   number being read.
 - **An offset belongs to a subtitle file**, which is `subtitleFileOf`:
   `MediaStream.Path` where the Server gave one, and the media source plus the
-  stream index otherwise. `decisions.md` §15 is why, and what to check against a
+  stream index otherwise. `decisions.md` §16 is why, and what to check against a
   real Server.
 - **It is saved when an adjustment finishes**, not when it changes
-  (`decisions.md` §16). The panel reports a button or key let go, or one press
+  (`decisions.md` §17). The panel reports a button or key let go, or one press
   of Reset or Sync; the player counts those and an **effect** does the save. The
   effect rather than the callback is load-bearing: a press that both shifts the
   offset and finishes the adjustment sets two pieces of state in one tick, so a
@@ -2101,16 +2177,8 @@ else, so it never reaches a browser.
 | 502 | `{ "error": "mdblist-unavailable" }` | MDBList failed or could not be reached. **Not** cached, so a blip does not switch ratings off for a day. |
 | 503 | `{ "error": "mdblist-not-configured" }` | The host left `MDBLIST_API_KEY` empty, so extra ratings are off. |
 
-**For whoever builds the client-side ratings feature (#20):** call this route,
-never `api.mdblist.com`. Treat anything but a 200 as "no extra ratings" and omit
-them — story 81 says a missing rating is left out, not shown as zero. There is no
-capability flag in the runtime config to check first, by design: the config
-carries `serverAddress` and `appVersion` and nothing else, so no secret can leak
-into it.
-
-Prefer `imdb` with `ProviderIds.Imdb` and fall back to `tmdb` with
-`ProviderIds.Tmdb`; map `BaseItemKind` to the type, `Movie` → `movie` and
-`Series` → `show`.
+**The client side of this is `src/ratings/`** — see "The extra ratings" above.
+Nothing else calls this route, and nothing anywhere calls `api.mdblist.com`.
 
 Two properties the route already gives you, so do not rebuild them client-side:
 

@@ -1155,27 +1155,44 @@ html[data-input='pointer'] [tabindex]:focus {
 }
 
 /*
- * The facts line. Grid rather than flex, because flex `gap` is Chrome 84 and
- * silently does nothing on the floor, while grid `gap` is 66 (ADR 0002).
+ * The facts line and the actions under it. **Both wrap**, and that is not a
+ * nicety: a single grid row of `max-content` columns is as wide as its content,
+ * so a Movie with a year, an age rating, a runtime, two genres and two ratings
+ * made the whole sheet 635px wide and ran off the side of a 375px screen —
+ * taking the extra ratings (#20) and the Mark watched button with it. No
+ * end-to-end test saw it, because Playwright scrolls an element into view
+ * before touching it, so everything was "visible" the whole time.
+ *
+ * Wrapped flex with margins on the children rather than grid `gap`: flex `gap`
+ * is Chrome 84 and silently does nothing on the floor (`decisions.md` §6), and
+ * `grid-auto-flow: row` with `auto-fill` tracks would make even columns of
+ * things whose widths have nothing to do with each other. This is the same
+ * shape `.genres__list` and `.ratings` use.
  */
 .title__facts {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: max-content;
-  justify-content: start;
-  gap: var(--space-3);
-  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  /* Cancels the children's own side margins at both edges of the line. */
+  margin: 0 calc(var(--space-3) * -0.5);
   color: var(--text-muted);
+  min-width: 0;
+}
+
+.title__fact {
+  margin: 0 calc(var(--space-3) * 0.5);
 }
 
 .title__actions {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: max-content;
-  justify-content: start;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2);
-  margin: 0;
+  margin: 0 calc(var(--space-1) * -1);
+  min-width: 0;
+}
+
+.title__actions > * {
+  margin: var(--space-1);
 }
 
 /*
@@ -1189,7 +1206,9 @@ html[data-input='pointer'] [tabindex]:focus {
   position: static;
   top: auto;
   right: auto;
-  margin-top: var(--space-2);
+  /* The line's own spacing, so the three controls sit on one baseline however
+     the line wraps. */
+  margin: var(--space-1);
 }
 
 .title__overview {
@@ -1923,4 +1942,58 @@ html[data-input='pointer'] [tabindex]:focus {
   margin: 0;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
+}
+
+/*
+ * The extra ratings an MDBList key buys (#20, story 82): a wrapping row of
+ * badges on the title page, and the same row tighter on a card (#21).
+ *
+ * **It wraps**, as the facts line and the actions above it now do: four source
+ * names and four scores on one unbreakable line run off the side of a 375px
+ * screen, and no end-to-end test would see it, because Playwright scrolls an
+ * element into view before touching it. Wrapped flex with margins on the
+ * children rather than grid `gap`, the way `.genres__list` does it: flex `gap`
+ * is Chrome 84 and silently does nothing on the floor (`decisions.md` §6), and
+ * a wrapping run of items whose widths differ is what flex wrap is for.
+ */
+.ratings {
+  display: flex;
+  flex-wrap: wrap;
+  /* Cancels the children's own side margins at both edges of the row. */
+  margin: 0 calc(var(--space-2) * -1);
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.ratings__rating {
+  margin: var(--space-1) var(--space-2);
+  padding: 2px var(--space-2);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  /* A source and its score are read as one thing, so they never break apart. */
+  white-space: nowrap;
+}
+
+.ratings__source {
+  color: var(--text-muted);
+}
+
+.ratings__score {
+  color: var(--text-strong);
+}
+
+/*
+ * On a card: the same words, smaller and closer together. A card is narrower
+ * than the page, so the row wraps sooner — which the rule above already does.
+ */
+.ratings--compact {
+  margin: 0 calc(var(--space-1) * -1);
+  font-size: 12px;
+}
+
+.ratings--compact > .ratings__rating {
+  margin: 2px var(--space-1);
+  padding: 1px var(--space-1);
 }

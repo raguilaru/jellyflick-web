@@ -119,6 +119,8 @@ describe('a Title’s details', () => {
         { Type: 'Subtitle', Language: 'eng', DisplayTitle: 'English' },
         { Type: 'Video', Language: 'und' },
       ],
+      // The join key MDBList is asked by (#20). Jellyfin's own spellings.
+      ProviderIds: { Imdb: 'tt2543164', Tmdb: '329865', Tvdb: 'ignored' },
       UserData: { Key: 'movie-arrival', Played: true },
     });
 
@@ -144,8 +146,18 @@ describe('a Title’s details', () => {
       backdrop: { itemId: 'movie-arrival', imageTag: 'tag-arrival-backdrop' },
       audioLanguages: ['eng', 'fra'],
       subtitleLanguages: ['eng'],
+      // Only the two MDBList is asked by, under this app's own spellings.
+      providerIds: { imdb: 'tt2543164', tmdb: '329865' },
       watched: true,
     });
+  });
+
+  it('has no provider ids for a Title the Server holds none for', () => {
+    // Plenty of a household's own files have none, and #20 asks nothing about
+    // a Title it cannot name to MDBList.
+    const details = titleDetailsFrom({ Id: 'movie-home', Name: 'Holiday', Type: 'Movie' });
+
+    expect(details?.providerIds).toEqual({});
   });
 
   it('reads where this User got to, which is what Play resumes from', () => {
@@ -191,6 +203,7 @@ describe('a Title’s details', () => {
       cast: [],
       audioLanguages: [],
       subtitleLanguages: [],
+      providerIds: {},
       watched: false,
     });
   });
