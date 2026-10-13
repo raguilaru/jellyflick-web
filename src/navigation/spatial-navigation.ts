@@ -18,7 +18,7 @@
  */
 import { useEffect, useRef } from 'preact/hooks';
 import type { DeviceKey, DeviceLayer } from '../device/types';
-import { FOCUSABLE_SELECTOR, groupOf, isEditable, tabStopIn } from './focusable';
+import { fixedRootOf, FOCUSABLE_SELECTOR, groupOf, isEditable, tabStopIn } from './focusable';
 import { nearestInDirection, type Box, type Direction } from './nearest';
 import { scrollToReveal } from './reveal';
 
@@ -258,23 +258,6 @@ function viewportEdge(direction: Direction): Box {
     case 'Left':
       return { left: width + 1, top: 0, right: width + 1, bottom: height };
   }
-}
-
-/**
- * The fixed thing this element is inside, which is the flow it belongs to, or
- * nothing when it is in the page's own flow. Two elements are in the same flow
- * when this answers the same element for both.
- */
-function fixedRootOf(element: Element | null): Element | undefined {
-  let current: Element | null = element;
-  let root: Element | undefined;
-  while (current !== null && current !== document.body) {
-    // The outermost fixed ancestor, so a fixed thing inside a fixed overlay is
-    // part of that overlay rather than a flow of its own.
-    if (window.getComputedStyle(current).position === 'fixed') root = current;
-    current = current.parentElement;
-  }
-  return root;
 }
 
 /**

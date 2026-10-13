@@ -44,6 +44,38 @@ export function tabStopIn(group: Element): HTMLElement | undefined {
 }
 
 /**
+ * The fixed thing this element is inside, which is the flow it belongs to, or
+ * nothing when it is in the page's own flow. Two elements are in the same flow
+ * when this answers the same element for both.
+ *
+ * **The innermost fixed ancestor, not the outermost.** Overlays nest: the
+ * player is drawn inside whatever screen was showing, and the title page's
+ * pop-up shape is itself `position: fixed` (`.title--popup`, which is the
+ * mechanism that makes *it* a flow). Reading the outermost answered
+ * `.title--popup` for the player's own controls as well as for the cards on the
+ * page behind it, so the two sat in one flow and the overlay rule in
+ * `spatial-navigation.ts` — the one that says an overlay has no way out of it —
+ * never applied on the one screen a Title is played from. Right from the subtitle menu's Off button
+ * focused a card behind the picture; it was the nearest thing rightwards, and
+ * on CI's slightly wider boxes it beat the choice beside it.
+ *
+ * Innermost is the answer every case that rule was written for wants. A
+ * menu inside the player (`track-picker.tsx`) becomes a flow in its own right,
+ * which is what a modal menu covering those controls should be. The phone's
+ * bottom bar is still a flow of its own rather than part of the player, which
+ * is what #26 needed. And a screen that is fixed is still the flow for the
+ * things *in* that screen, which is what #17 needed.
+ */
+export function fixedRootOf(element: Element | null): Element | undefined {
+  let current: Element | null = element;
+  while (current !== null && current !== document.body) {
+    if (window.getComputedStyle(current).position === 'fixed') return current;
+    current = current.parentElement;
+  }
+  return undefined;
+}
+
+/**
  * Whether the User is typing into this, in which case the keys are the field's
  * and not the app's: Left and Right move a caret, and Backspace is an edit.
  */

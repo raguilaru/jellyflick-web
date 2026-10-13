@@ -337,6 +337,26 @@ test('chooses the subtitles with the arrow keys, and draws them over the picture
   // controls *behind* it, for the reason `track-picker.tsx` sets out.
   await expect(picker.locator(':focus')).toBeVisible();
 
+  /*
+   * The arrow keys cannot leave this menu either, in any direction — the same
+   * check as the one above for the player, and it is here because the menu is
+   * the *second* overlay on the screen rather than the first.
+   *
+   * This is what the player's own escape hatch looked like from inside the
+   * menu: the title page is a pop-up at this width and so is itself
+   * `position: fixed`, and the flow rule used to read the **outermost** fixed
+   * ancestor of a thing. That answered the title page for the menu's buttons
+   * and for the cards on the page behind it alike, so Right from Off had a
+   * card among its candidates — nearer than the choice beside it, once CI's
+   * boxes came out a hair wider than this machine's. Only the rule is pinned
+   * here, not the geometry that exposed it, because the geometry is exactly
+   * the part that differs between one machine and the next.
+   */
+  for (const key of ['ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown']) {
+    await page.keyboard.press(key);
+    await expect(picker.locator(':focus'), `${key} left the menu`).toBeVisible();
+  }
+
   // Every track is reachable by direction alone, which is the whole criterion.
   const spanish = picker
     .getByRole('group', { name: 'Subtitles' })
