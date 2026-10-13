@@ -57,6 +57,20 @@ describe('the Newest Addition Billboard Source', () => {
     // that can be *drawn* as a Billboard is Severance.
     expect(await featured('newest-addition')).toBe('Severance');
   });
+
+  it('plays an Episode of the Series it features, not the Series', async () => {
+    // Severance is a Series, and a Series holds no file: the third Source's
+    // Play has to come to an Episode exactly as the other two do.
+    const gateway = rafaelsGateway();
+
+    const result = await loadBillboard(gateway, { draw: 0, source: 'newest-addition' });
+    expect(result.outcome).toBe('feature');
+    if (result.outcome !== 'feature') return;
+
+    const target = await resolvePlayTarget(gateway, result.feature, createTranslate(en));
+
+    expect(target?.itemId).toBe('episode-severance-s2e3');
+  });
 });
 
 describe('the Resume Billboard Source', () => {
