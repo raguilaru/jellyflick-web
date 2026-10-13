@@ -4,6 +4,7 @@ import { App } from '../../src/app';
 import { en } from '../../src/i18n/en';
 import {
   ACCENT_COLOUR_KEY,
+  BILLBOARD_SOURCE_KEY,
   BILLBOARD_TRAILER_AUTOPLAY_KEY,
   UI_LANGUAGE_KEY,
 } from '../../src/settings/client-settings';
@@ -167,6 +168,83 @@ describe('a User turning the Billboard trailer off', () => {
     expect(
       screen.getByRole('button', { name: 'Just show the backdrop', pressed: true }),
     ).toBeTruthy();
+  });
+});
+
+/**
+ * The Billboard Source (#22). Another of Jellyflick's own, for the same reason
+ * the trailer setting is: no other Jellyfin app has a Billboard.
+ */
+describe('a User choosing what the Billboard features', () => {
+  /** The row of Sources, as against the trailer's two buttons above it. */
+  function sources(): HTMLElement {
+    return screen.getByRole('group', { name: en['settings.billboardSourceHeading'] });
+  }
+
+  it('is offered Spotlight, which is what Home does out of the box', async () => {
+    await signInAndLand();
+    await openSettings();
+
+    expect(
+      within(sources()).getByRole('button', { name: 'Spotlight', pressed: true }),
+    ).toBeTruthy();
+    // Every Source the app has is offered, each of them a Row as well.
+    for (const name of ['Resume', 'Newest Addition', 'Because You Watched']) {
+      expect(within(sources()).getByRole('button', { name, pressed: false })).toBeTruthy();
+    }
+  });
+
+  it('has their choice kept in Client Settings, under a key of ours', async () => {
+    await signInAndLand();
+    await openSettings();
+    await forgetFakeWrites();
+
+    fireEvent.click(within(sources()).getByRole('button', { name: 'Resume' }));
+
+    await waitFor(async () => {
+      expect((await lastSavedPreferences())[BILLBOARD_SOURCE_KEY]).toBe('resume');
+    });
+    expect(within(sources()).getByRole('button', { name: 'Resume', pressed: true })).toBeTruthy();
+  });
+
+  it('is offered what they chose last time', async () => {
+    await setFakeState({
+      displayPreferences: {
+        'jellyflick|jellyflick|user-rafael': { [BILLBOARD_SOURCE_KEY]: 'because-you-watched' },
+      },
+    });
+
+    await signInAndLand();
+    await openSettings();
+
+    expect(
+      within(sources()).getByRole('button', { name: 'Because You Watched', pressed: true }),
+    ).toBeTruthy();
+  });
+
+  it('presses none of them for a Source it does not offer, and keeps it', async () => {
+    // A Source a newer Jellyflick added. Nothing is marked rather than
+    // Spotlight being marked, because the User has not chosen Spotlight — and
+    // their real choice is left on the Server for the version that knows it.
+    await setFakeState({
+      displayPreferences: {
+        'jellyflick|jellyflick|user-rafael': { [BILLBOARD_SOURCE_KEY]: 'what-comes-next' },
+      },
+    });
+
+    await signInAndLand();
+    await openSettings();
+    await forgetFakeWrites();
+    for (const name of ['Spotlight', 'Resume', 'Newest Addition', 'Because You Watched']) {
+      expect(within(sources()).getByRole('button', { name, pressed: false })).toBeTruthy();
+    }
+
+    // Changing something else must not rewrite it.
+    fireEvent.click(screen.getByRole('button', { name: 'Just show the backdrop' }));
+
+    await waitFor(async () => {
+      expect((await lastSavedPreferences())[BILLBOARD_SOURCE_KEY]).toBe('what-comes-next');
+    });
   });
 });
 

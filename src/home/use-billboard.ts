@@ -3,9 +3,10 @@ import { useContext, useEffect, useRef, useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso/router';
 import type { DeviceLayer } from '../device/types';
 import type { JellyfinGateway } from '../jellyfin/gateway';
+import { useSettings } from '../settings/settings-provider';
 import { HOME_PATH } from '../shell/sections';
 import { titlePathFor } from '../title/title-page';
-import { loadBillboard, type BillboardResult } from './billboard-sources';
+import { billboardSourceFor, loadBillboard, type BillboardResult } from './billboard-sources';
 
 /**
  * The Billboard's Title, held in the shell rather than on Home (#16, stories 30
@@ -74,6 +75,22 @@ export function useLoadedBillboard(
   const cameFrom = useRef<string | undefined>(undefined);
   const serverAddress = gateway.serverAddress;
 
+  /**
+   * The User's own Billboard Source and their hidden Series (#22).
+   *
+   * Read through a ref rather than as a dependency, which is the whole of the
+   * care this needs: taking a *fresh pick* is what arriving at Home means
+   * (story 30), and these two change elsewhere — the Source on the settings
+   * screen, the hidden Series by dismissing a Continue Watching card on Home
+   * itself. As a dependency, dismissing a card would re-pick the Billboard
+   * under the User's hands. Navigating back to Home from the settings screen
+   * changes `path`, so a Source the User has just chosen is picked with on the
+   * very next visit.
+   */
+  const { settings, loaded } = useSettings();
+  const chosen = useRef(settings);
+  chosen.current = settings;
+
   useEffect(() => {
     const previous = cameFrom.current;
     cameFrom.current = path;
@@ -83,20 +100,35 @@ export function useLoadedBillboard(
     if (path !== HOME_PATH) return undefined;
     // Back from the Title that was featured, or from playing it (story 31).
     if (previous !== undefined && isATitlePage(previous)) return undefined;
+    /**
+     * Nothing is picked until the User's settings have landed. Not caution
+     * about a *control* drawn from defaults, which is the settings screens'
+     * problem, but about reading the Server twice and showing two different
+     * Titles: a Billboard picked by Spotlight and then replaced by the Source
+     * the User actually chose is a visible flinch on the first thing on Home.
+     * `result` is still `undefined` meanwhile, which is the state Home already
+     * draws nothing for.
+     */
+    if (!loaded) return undefined;
 
     let abandoned = false;
     setResult(undefined);
-    void loadBillboard(gateway, { draw: device.random() }).then((loaded) => {
+    void loadBillboard(gateway, {
+      draw: device.random(),
+      source: billboardSourceFor(chosen.current.billboardSource),
+      hidden: chosen.current.hiddenSeries,
+    }).then((picked) => {
       if (abandoned) return;
-      setResult(loaded);
+      setResult(picked);
     });
     return () => {
       abandoned = true;
     };
     // The gateway is rebuilt on every render, so who it belongs to is the
     // dependency rather than the object itself — as My List and Home do. The
-    // address is here because arriving at Home is what asks again.
-  }, [path, serverAddress, userId, device]);
+    // address is here because arriving at Home is what asks again, and
+    // `loaded` because the first pick waits for the settings above.
+  }, [path, serverAddress, userId, device, loaded]);
 
   return { result };
 }
