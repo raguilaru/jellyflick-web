@@ -27,22 +27,24 @@ import type { RowCard } from './row';
  *
  * Three things about it are load-bearing.
  *
- * - **The buttons are in the document from the start; only the enlargement
- *   waits.** The panel is hidden the way the My List toggle has always been
- *   hidden (`display: none`, shown under `.card:hover` in `base.css`), so a
- *   browser with no JavaScript running yet, or one that cannot transform, still
- *   gives a User the three controls. `spatial-navigation.ts` ignores a
- *   zero-sized box, so a hidden panel is not a stop the arrow keys step through
- *   and Right still takes the next card along the Row — which is the whole
- *   reason #13's toggle was hover-only in the first place.
- * - **Nothing is read until the pointer has rested.** The facts and the
- *   ratings are mounted only once the delay has passed, so a Row of twenty
- *   cards makes no request at all until somebody stops on one.
- *   `<ExtraRatings>` reads when it mounts, and `ratings-mdblist.md` is explicit
- *   that reading eagerly would burn MDBList's thousand requests a day.
+ * - **Nothing appears until the pointer has rested**, and the delay is what
+ *   makes that true (story 53). `base.css` draws the panel from
+ *   `data-resting`, never from `:hover`: a panel on bare hover would put three
+ *   buttons across the middle of a card the instant the pointer crossed it, and
+ *   a press meant for the card — a focus stop that opens the title page — would
+ *   land on Play. `arrow-key-navigation.spec.ts` caught precisely that.
+ *   `spatial-navigation.ts` ignores a zero-sized box, so a card nobody is
+ *   resting on carries no stop the arrow keys step through, and Right still
+ *   takes the next card along the Row (#8) — the same reason #13's toggle was
+ *   hover-only to begin with.
+ * - **Nothing is read until then either.** The facts and the ratings mount only
+ *   once the delay has passed, so a Row of twenty cards makes no request at all
+ *   until somebody stops on one. `<ExtraRatings>` reads when it mounts, and
+ *   `ratings-mdblist.md` is explicit that reading eagerly would burn MDBList's
+ *   thousand requests a day.
  * - **The pointer is watched on the card, not on this panel.** The panel is
- *   `display: none` until the pointer is already over the card, so it can never
- *   be what notices the pointer arriving. The card is the `<li class="card">`
+ *   `display: none` until the card is already rested on, so it can never be
+ *   what notices the pointer arriving. The card is the `<li class="card">`
  *   `Row` draws around this, and `closest` is how the panel reaches it — a
  *   handler on the card itself would mean `Row` growing an API for one
  *   feature's sake.
