@@ -116,6 +116,20 @@ export const en = {
   'continueWatching.unsaved': 'Jellyflick could not save that change on the Server.',
   'continueWatching.remove': (p: { name: string }) => `Remove ${p.name} from Continue Watching`,
 
+  // The Billboard: the one Title featured at the top of Home (#16, stories 22
+  // to 27). Its region is named rather than headed, because the heading inside
+  // it is the Title's own logo or name.
+  'billboard.region': 'Featured',
+  'billboard.play': 'Play',
+  'billboard.moreInfo': 'More info',
+  'billboard.unavailable': 'Jellyflick could not read a Title to feature from the Server.',
+  // The trailer's controls. Each says what pressing it will do, not what the
+  // trailer is doing now, so a remote User hears the action rather than a state.
+  'billboard.unmute': 'Unmute the trailer',
+  'billboard.mute': 'Mute the trailer',
+  'billboard.pauseTrailer': 'Pause the trailer',
+  'billboard.playTrailer': 'Play the trailer',
+
   'home.newOnJellyflick': 'New on Jellyflick',
   'home.newOnJellyflick.empty': 'Nothing has been added to your libraries yet.',
   'home.newOnJellyflick.unavailable': 'Jellyflick could not read what is new from the Server.',
@@ -258,6 +272,15 @@ export const en = {
   'settings.spoken.por': 'Portuguese',
   'settings.spoken.jpn': 'Japanese',
   'settings.spoken.kor': 'Korean',
+
+  // The Billboard trailer (#16, story 27). One of Jellyflick's own settings,
+  // so it sits with the Accent Colour and the language rather than under
+  // "What plays", which is the User's Jellyfin account.
+  'settings.billboardTrailerHeading': 'The Billboard trailer',
+  'settings.billboardTrailerExplanation':
+    'Home can play the featured Title’s trailer by itself, with the sound off. Turning it off saves data and memory, and shows the backdrop instead.',
+  'settings.billboardTrailer.autoPlay': 'Play it automatically',
+  'settings.billboardTrailer.off': 'Just show the backdrop',
 
   'settings.homeHeading': 'Home',
   'settings.homeExplanation': 'Choose the Rows on your Home and the order they come in.',

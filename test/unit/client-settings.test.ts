@@ -197,6 +197,36 @@ describe('the settings the settings screen saves', () => {
     expect((await rafaelsStore().read()).settings.hiddenSeries).toEqual([]);
   });
 
+  it('autoplays the Billboard trailer for a User who has never said otherwise', async () => {
+    // On by default: story 24 is what Home does out of the box, and story 27 is
+    // a User turning it off (#16).
+    expect((await rafaelsStore().read()).settings.billboardTrailerAutoplay).toBe(true);
+  });
+
+  it('reads back the Billboard trailer autoplay being turned off', async () => {
+    await rafaelsStore().save({ billboardTrailerAutoplay: false });
+
+    expect((await rafaelsStore().read()).settings.billboardTrailerAutoplay).toBe(false);
+  });
+
+  it('reads back the Billboard trailer autoplay being turned on again', async () => {
+    await rafaelsStore().save({ billboardTrailerAutoplay: false });
+
+    await rafaelsStore().save({ billboardTrailerAutoplay: true });
+
+    expect((await rafaelsStore().read()).settings.billboardTrailerAutoplay).toBe(true);
+  });
+
+  it('keeps the Home Layout when only the trailer setting changes', async () => {
+    await rafaelsStore().save({ homeLayout: layout });
+
+    await rafaelsStore().save({ billboardTrailerAutoplay: false });
+
+    const read = await rafaelsStore().read();
+    expect(read.settings.homeLayout).toEqual(layout);
+    expect(read.settings.billboardTrailerAutoplay).toBe(false);
+  });
+
   it('keeps the Home Layout when only the colour changes', async () => {
     await rafaelsStore().save({ homeLayout: layout });
 

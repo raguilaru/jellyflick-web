@@ -2,7 +2,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/preact';
 import { App } from '../../src/app';
 import { en } from '../../src/i18n/en';
-import { ACCENT_COLOUR_KEY, UI_LANGUAGE_KEY } from '../../src/settings/client-settings';
+import {
+  ACCENT_COLOUR_KEY,
+  BILLBOARD_TRAILER_AUTOPLAY_KEY,
+  UI_LANGUAGE_KEY,
+} from '../../src/settings/client-settings';
 import { accentColourFor } from '../../src/settings/accent-colours';
 import { inMemoryDeviceStorage, testDeviceLayer } from '../device/profiles';
 import {
@@ -116,6 +120,55 @@ async function lastSavedConfiguration(): Promise<Record<string, unknown>> {
 async function savedPreferenceWrites(): Promise<unknown[]> {
   return (await fakeWrites()).filter((write) => write.path.startsWith('/DisplayPreferences'));
 }
+
+/**
+ * The Billboard trailer (#16, story 27). One of Jellyflick's own settings, so
+ * it lands in Client Settings rather than in the User's Jellyfin account — no
+ * other Jellyfin app has a Billboard for it to mean anything to.
+ */
+describe('a User turning the Billboard trailer off', () => {
+  it('is offered it on, which is what Home does out of the box', async () => {
+    await signInAndLand();
+    await openSettings();
+
+    expect(
+      screen.getByRole('button', { name: 'Play it automatically', pressed: true }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: 'Just show the backdrop', pressed: false }),
+    ).toBeTruthy();
+  });
+
+  it('has their choice kept in Client Settings, under a key of ours', async () => {
+    await signInAndLand();
+    await openSettings();
+    await forgetFakeWrites();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Just show the backdrop' }));
+
+    await waitFor(async () => {
+      expect((await lastSavedPreferences())[BILLBOARD_TRAILER_AUTOPLAY_KEY]).toBe('false');
+    });
+    expect(
+      screen.getByRole('button', { name: 'Just show the backdrop', pressed: true }),
+    ).toBeTruthy();
+  });
+
+  it('is offered what they chose last time', async () => {
+    await setFakeState({
+      displayPreferences: {
+        'jellyflick|jellyflick|user-rafael': { [BILLBOARD_TRAILER_AUTOPLAY_KEY]: 'false' },
+      },
+    });
+
+    await signInAndLand();
+    await openSettings();
+
+    expect(
+      screen.getByRole('button', { name: 'Just show the backdrop', pressed: true }),
+    ).toBeTruthy();
+  });
+});
 
 describe('a User choosing their Accent Colour', () => {
   it('is offered the presets, with the one they are using marked', async () => {

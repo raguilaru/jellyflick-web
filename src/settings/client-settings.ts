@@ -67,6 +67,7 @@ export const HOME_LAYOUT_KEY = `${SETTINGS_KEY_PREFIX}homeLayout`;
 export const UI_LANGUAGE_KEY = `${SETTINGS_KEY_PREFIX}uiLanguage`;
 export const ACCENT_COLOUR_KEY = `${SETTINGS_KEY_PREFIX}accentColour`;
 export const HIDDEN_SERIES_KEY = `${SETTINGS_KEY_PREFIX}hiddenSeries`;
+export const BILLBOARD_TRAILER_AUTOPLAY_KEY = `${SETTINGS_KEY_PREFIX}billboardTrailerAutoplay`;
 
 /**
  * A User's settings, typed, with a default for every one of them — a new User
@@ -102,11 +103,28 @@ export type ClientSettings = {
    * `jf.`.
    */
   readonly hiddenSeries: readonly HiddenSeries[];
+  /**
+   * Whether the Billboard's local trailer starts by itself, muted, after a
+   * short delay (#16, stories 24 and 27).
+   *
+   * **On unless the User has turned it off**, which is why it is a plain
+   * `boolean` with a default rather than an optional one: story 24 is what Home
+   * does out of the box. Stored as `'true'` or `'false'` — `CustomPrefs` holds
+   * strings — and anything else reads as on, so a half-written value leaves
+   * Home behaving the way it does for everybody else.
+   *
+   * It is Jellyflick's own rather than the User's Jellyfin account: no other
+   * Jellyfin app has a Billboard, so there is nothing of Jellyfin's for it to
+   * be. Story 27's reasons are data and memory, which are per *person* here
+   * rather than per device, so it follows them between devices like the rest.
+   */
+  readonly billboardTrailerAutoplay: boolean;
 };
 
 export const DEFAULT_CLIENT_SETTINGS: ClientSettings = {
   homeLayout: DEFAULT_HOME_LAYOUT,
   hiddenSeries: [],
+  billboardTrailerAutoplay: true,
 };
 
 /**
@@ -208,6 +226,9 @@ function settingsFrom(prefs: Record<string, string | null>): ClientSettings {
   return {
     homeLayout: parseHomeLayout(prefs[HOME_LAYOUT_KEY]),
     hiddenSeries: parseHiddenSeries(prefs[HIDDEN_SERIES_KEY]),
+    // Off only when the User said so in as many words. Nothing stored, and
+    // anything unreadable, is the default the rest of Home has.
+    billboardTrailerAutoplay: prefs[BILLBOARD_TRAILER_AUTOPLAY_KEY] !== 'false',
     // An empty string is how "no choice" is stored, so it is not a choice.
     ...chosen('uiLanguage', prefs[UI_LANGUAGE_KEY]),
     ...chosen('accentColour', prefs[ACCENT_COLOUR_KEY]),
@@ -239,6 +260,9 @@ function prefsFor(changes: Partial<ClientSettings>): Record<string, string | nul
   }
   if ('accentColour' in changes) {
     prefs[ACCENT_COLOUR_KEY] = changes.accentColour ?? '';
+  }
+  if (changes.billboardTrailerAutoplay !== undefined) {
+    prefs[BILLBOARD_TRAILER_AUTOPLAY_KEY] = String(changes.billboardTrailerAutoplay);
   }
   return prefs;
 }

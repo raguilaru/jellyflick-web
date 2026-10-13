@@ -89,7 +89,11 @@ test('Back closes it and leaves Home as it was', async ({ page }) => {
 
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole('list', { name: 'New on Jellyflick' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Arrival', level: 1 })).toHaveCount(0);
+  // The title page itself is gone. Asserted on the page's own sheet rather
+  // than on "no level-1 heading named Arrival": since #16 Home has a heading
+  // of its own — the Billboard's featured Title — and Spotlight may well have
+  // featured this one.
+  await expect(page.locator('.title__sheet')).toHaveCount(0);
 });
 
 test('My List is reachable here with nothing but a remote', async ({ page }) => {

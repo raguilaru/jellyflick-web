@@ -44,8 +44,13 @@ src/
                         opens, one module per Row beside it —
                         `new-on-jellyflick.ts`, `continue-watching.ts`
                         with the `-row.tsx` that draws it, and
-                        `suggestion-rows.ts` for the four of #15. The Billboard
-                        is still to come.
+                        `suggestion-rows.ts` for the four of #15. Above the Rows
+                        is the Billboard (#16): `spotlight.ts` is the rule that
+                        picks its Title, `billboard-sources.ts` what it reads
+                        from the Server and the seam the Billboard Sources sit
+                        behind, `billboard.tsx` what a User sees, and
+                        `use-billboard.ts` the pick the shell holds so a title
+                        page cannot disturb it.
   i18n/                 `en.ts` is the key set, `es.ts` is typed against it.
   jellyfin/             The gateway: the only module that talks HTTP to the Server.
   my-list/              My List, which is Jellyfin's Favorites: `my-list.ts` is
@@ -225,6 +230,19 @@ narrow `includeItemTypes` is caught rather than merely untested. The genres of
 the Titles, in the order `/Genres` serves them, are exactly:
 
     Comedy, Crime, Drama, Family, Science Fiction, Thriller
+
+Three of the Titles carry a **backdrop**, which is what the Billboard needs
+(#16): Arrival and Severance with a logo and a community rating above
+Spotlight's threshold, and **Paddington with a backdrop and neither** — so "the
+Billboard falls back to the Title's own name in the logo font" is a state a test
+can reach rather than one it has to patch in. Their local trailers are
+`state.localTrailers`, keyed by the Title's item id, with the trailer files
+themselves ordinary items of Type `Trailer` carrying a `media` file: Arrival and
+Severance have one and Paddington deliberately has none. `/Items/Latest` leaves
+a `Trailer` out, as the real endpoint leaves out an extra, and no query for
+`Movie,Series` reaches one. `/Items/{id}/LocalTrailers` answers a **bare array**
+and gives a Title with no trailer an **empty** one rather than a 404; it goes
+quiet with `failRelatedQueriesWith`, beside `/Similar` and `/Collections`.
 
 **Arrival is the Title the track picker (#27) is tested against**: English audio
 at stream 1, French at 2, English subtitles at 3 and Spanish at 4, with the
@@ -521,8 +539,11 @@ belongs to a screen rather than a person.
   reads no body.
 - **A new setting is three lines**: a `jf.` key, a field on `ClientSettings`
   with a default, and a line each in `settingsFrom` and `prefsFor`. There are
-  four keys today: `jf.homeLayout`, `jf.uiLanguage`, `jf.accentColour` and
-  `jf.hiddenSeries` (#12). A
+  five keys today: `jf.homeLayout`, `jf.uiLanguage`, `jf.accentColour`,
+  `jf.hiddenSeries` (#12) and `jf.billboardTrailerAutoplay` (#16). A
+  **boolean** setting is stored as `'true'` or `'false'` and read back as "off
+  only when it says `false`", so a half-written value leaves the User with the
+  behaviour everybody else has rather than with the feature silently gone. A
   setting whose value is a name rather than a structure is typed as a plain
   `string`, not a union, so a preset a *newer* Jellyflick offers survives being
   read by an older one — the reader falls back when it draws it
@@ -576,6 +597,84 @@ its loader does. **Adding a Row's feature** is: a loader beside
 `new-on-jellyflick.ts`, a case in `HomeRowFor`, and the kind in
 `BUILT_ROW_KINDS`. The layout already carries it — My List (#13) was added
 exactly that way.
+
+## The Billboard and Spotlight
+
+`src/home/` holds the Billboard (#16, stories 22 to 33): the one Title at the
+top of Home, with its backdrop, logo, short description, age rating, Play and
+More info, and its local trailer.
+
+- **The Source is a seam, and `billboard-sources.ts` is it.** A Billboard Source
+  is an entry in `BILLBOARD_SOURCES` plus a loader beside
+  `loadSpotlightBillboard`, and every Source answers with the same
+  `BillboardResult` — so #22's Resume, Newest Addition and Because You Watched
+  arrive without anything that *draws* the Billboard changing. Spotlight is the
+  default (story 29) and the only one built today; the User's choice of Source
+  is #22's setting, not a key this ticket wrote.
+- **Spotlight is a weighted pick, not a filter** (`spotlight.ts`). Eligible is a
+  Title the User has not finished that the Server has a backdrop for — the
+  backdrop is not a preference, because the Billboard *is* a backdrop with
+  words over it. A logo and a community rating of `SPOTLIGHT_GOOD_RATING` (6.5)
+  or higher each **double** a candidate's weight on their own, so the four
+  combinations weigh 1, 2, 2 and 4: a household whose highly rated Titles are
+  all watched still sees its other Titles featured, which a filter would not
+  allow. The fallback is any Title with a backdrop, finished or not (story 33),
+  and it is a *second pool* rather than a weaker weight, because "I have not
+  seen this" is the Billboard's promise and not merely a preference.
+- **The randomness is the device layer's, and it is read once at the edge.**
+  `use-billboard.ts` takes one `device.random()` and hands it to
+  `loadBillboard` as a number, so every rule below it is a pure function of the
+  library plus that number. That is what makes a pick reproducible: a Vitest
+  test fixes `randomSequence`, and `test/e2e/the-billboard.spec.ts` — where the
+  draw really is `Math.random()` — makes the pick deterministic through the
+  *library* instead, marking the other candidates watched so the pool holds one.
+- **The pick is held in the shell, above the router** (`use-billboard.ts`),
+  because `preact-iso` draws only the matching route and opening a title page
+  therefore **unmounts Home**. Stories 30 and 31 pull against each other and the
+  rule that settles them is: arriving at Home asks Spotlight again, *unless* the
+  address the User came from was a title page. The player is an overlay over the
+  title page rather than an address, so that one test covers returning from the
+  player too. Anywhere else — Search, My List, the settings screen — is a fresh
+  visit and a fresh pick.
+- **The Billboard's query is its own** (`getBillboardCandidates`), neither a
+  Row's nor a title page's: it asks for the backdrop, the logo and the overview
+  that no Row wants, and none of the cast, streams or provider ids a title page
+  does. It asks in a **fixed order and without a limit** — `sortBy=Random` would
+  take the choice away from the device layer and make a pick unreproducible, and
+  a limit on a name-ordered query would quietly confine the Billboard to the
+  beginning of the alphabet.
+- **Local trailers only, and the backdrop always stays underneath.** The trailer
+  comes from `Items/{id}/LocalTrailers`; there is deliberately **no** gateway
+  method for `RemoteTrailers`, so nothing can hand the Billboard a YouTube
+  embed — that is story 75's Watch trailer button, behind a press. The trailer
+  starts muted after `BILLBOARD_TRAILER_DELAY_MS`, and a Title with no trailer,
+  a Server that will not answer, a plan that cannot play and a browser that
+  refuses to autoplay all come to the same harmless place: the backdrop, which
+  was never removed (story 25).
+- **Nothing about the trailer is reported to the Server.** It is decoration the
+  User did not ask for, so no `/Sessions/Playing` report is sent for it. It does
+  reuse `playback/`'s `planPlayback` and `attachPlaybackSource`, because how to
+  play something on this device is one correct answer and not this screen's to
+  re-derive.
+- **Its controls say what they will do, and an effect applies them.** The mute
+  and pause buttons change what the User *wants* and a single effect applies
+  that to the element, so "Pause" can never start a trailer whose source has not
+  arrived yet — which is exactly what reading the element's live `paused` gave.
+- **It is the one thing on Home that is not inset.** `.billboard`'s negative
+  margin is exactly `.screen`'s padding, so the backdrop bleeds to the window's
+  edges while everything inside stays lined up with the Rows. The stack is
+  `position: absolute` with explicit `top`/`right`/`bottom`/`left` rather than
+  the `inset` shorthand (Chrome 87), its height is a `clamp()` rather than
+  `aspect-ratio` (88), and the scrim is a gradient rather than
+  `backdrop-filter` (76).
+
+Two tests elsewhere had to change because Home now has a Billboard, and both
+were assertions about Home's *shape* rather than about their own subject: the
+title page's "Back closes it" tests proved closure by there being no level-1
+heading named Arrival, which Home itself now legitimately has, and now assert
+that the page's own `.title__sheet` is gone; and the wheel-over-a-Row test
+compared the page's scroll against zero, which only held while Home fitted the
+viewport, and now compares it against where hovering the Row left it.
 
 ## The suggestion Rows
 

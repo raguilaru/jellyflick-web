@@ -177,11 +177,17 @@ test.describe('driving Home with the arrow keys', () => {
         await signInAndLand(page);
 
       await strip(page).hover();
+      // Where the page is *before* the wheel, not zero: hovering scrolls the
+      // Row into view, and since #16 the Billboard above it means that really
+      // moves the page. What this test is about is the wheel, so the reading
+      // it compares against is the one taken once the pointer is in place.
+      const before = await page.evaluate(() => window.pageYOffset);
+
       await page.mouse.wheel(0, 200);
 
       await expect.poll(() => scrollLeftOfRow(page)).toBeGreaterThan(0);
       // The page stayed where it was: the Row took the wheel.
-      expect(await page.evaluate(() => window.pageYOffset)).toBe(0);
+      expect(await page.evaluate(() => window.pageYOffset)).toBe(before);
     });
 
     test('a sideways wheel scrolls the Row too, which is what a trackpad sends', async ({

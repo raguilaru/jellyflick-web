@@ -138,7 +138,10 @@ describe('a User opening a title page', () => {
 
     await screen.findByRole('list', { name: 'New on Jellyflick' });
     expect(window.location.pathname).toBe('/');
-    expect(screen.queryByRole('heading', { name: 'Arrival', level: 1 })).toBeNull();
+    // The page itself is gone. Asserted on the page's own sheet rather than on
+    // "no level-1 heading named Arrival": since #16 Home has a heading of its
+    // own — the Billboard's featured Title — which may be this one.
+    expect(document.querySelector('.title__sheet')).toBeNull();
   });
 
   it('adds the Title to My List, and the Row on Home has it', async () => {

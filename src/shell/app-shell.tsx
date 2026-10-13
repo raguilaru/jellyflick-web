@@ -2,6 +2,7 @@ import { LocationProvider, Route, Router, useLocation } from 'preact-iso/router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { DeviceLayer } from '../device/types';
 import { HomeScreen } from '../home/home-screen';
+import { BillboardProvider, useLoadedBillboard } from '../home/use-billboard';
 import { createMyList, type MyList } from '../my-list/my-list';
 import { MyListScreen } from '../my-list/my-list-screen';
 import { MyListProvider } from '../my-list/use-my-list';
@@ -109,6 +110,15 @@ function ShellFrame({ user, session, device, users }: AppShellProps) {
   const { path } = useLocation();
   const wide = useWideScreen();
   useBackHandler(device);
+  /**
+   * The Billboard's Title (#16). Held here rather than on Home because opening
+   * a title page unmounts Home, and story 31 says the featured Title must be
+   * the same one when the User comes back. It is in `ShellFrame` rather than
+   * beside My List above, because working out whether this is a fresh visit to
+   * Home means asking where the User is — which only a component inside the
+   * `LocationProvider` can do.
+   */
+  const billboard = useLoadedBillboard(session.gateway(), user.userId, device);
   // The User's Accent Colour, painted on the root element so every rule that
   // reads `--accent` follows it (#11).
   useAccentColour();
@@ -151,8 +161,15 @@ function ShellFrame({ user, session, device, users }: AppShellProps) {
         />
       ) : null}
 
+      <BillboardProvider value={billboard}>
       <Router>
-        <Route path={HOME_PATH} component={HomeScreen} user={user} session={session} />
+        <Route
+          path={HOME_PATH}
+          component={HomeScreen}
+          user={user}
+          session={session}
+          device={device}
+        />
         <Route path={MY_LIST_SECTION.path} component={MyListScreen} />
         <Route path={SEARCH_SECTION.path} component={SearchScreen} session={session} />
         {SECTIONS.filter(
@@ -179,6 +196,7 @@ function ShellFrame({ user, session, device, users }: AppShellProps) {
         <Route path={TITLE_PATH} component={TitleScreen} session={session} device={device} />
         <Route default component={UnknownSection} />
       </Router>
+      </BillboardProvider>
 
       {wide ? null : (
         <BottomBar
