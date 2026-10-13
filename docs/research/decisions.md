@@ -257,3 +257,50 @@ within weeks of being written, because the repository moved and the document did
   route, for tests that play the other app.
 
 Affects #9 and anything that later shows Quick Connect's state anywhere else.
+
+## 12. The next Episode: "ask me each time" really asks, and cancelling stays
+
+Decided in #31. The ticket says a countdown starts the next Episode "following
+the User's Jellyfin autoplay setting" and that the User can cancel it, and
+leaves two things open that the code had to answer.
+
+- **`EnableNextEpisodeAutoPlay` off does not mean "do nothing".** #35's settings
+  screen already draws the two readings as **"Start the next one"** against
+  **"Ask me each time"** (`settings.nextEpisode.autoPlay` / `.ask`), so a
+  household that turned autoplay off was promised a question, not silence. The
+  player therefore offers the next Episode either way and only the **countdown**
+  follows the flag: on, it counts down from ten and starts; off, the same offer
+  stands with nothing counting until somebody presses. Reading the flag as "close
+  the player" would have made the settings screen's own wording untrue.
+- **Cancelling stays at the end of the Episode**, which is one of the two
+  readings the ticket's fourth box allows ("returns to the title page **or**
+  stays at the end"). They said "not the next one", which is not "take me out of
+  here": the Episode is over, the player's controls stay up because there is
+  nothing playing behind them, and the title page is one press of Close or Back
+  away. Closing outright would take a decision the User did not make, and it is
+  not reversible without finding the Title again.
+- **Ten seconds is Jellyflick's own**, like Quick Connect's deadline in §11
+  above. Jellyfin stores *whether* to autoplay and says nothing about how long to
+  wait, so there is no Server fact to follow here.
+- **An Episode the User has already watched is still the next Episode.** The
+  Server's aired order is the order a Series is watched in, and skipping ahead to
+  the first unwatched one would be this app deciding what a household has
+  finished with. That is deliberately *different* from what a press of Play means
+  (#18, `episodeToPlay`), which does resume where somebody left off — Play is
+  "take me where I am" and this is "what comes after this one".
+
+Affects #31 and anything later that shows the end of an Episode.
+
+## 13. Skip offers `Intro` and `Outro`, and nothing else yet
+
+Also #31, and a narrowing rather than a decision against the research.
+`jellyfin-playback.md` §12 notes that `Recap` and `Preview` — "previously on"
+and "next time on" — are "also worth offering skips for on episodes". The ticket
+asks for Skip Intro and Skip Credits and nothing more, so
+`SKIPPABLE_SEGMENT_TYPES` in `src/playback/media-segments.ts` holds exactly
+those two and they are what `includeSegmentTypes` asks the Server for.
+
+Growing the offer is one entry in that list and one translated label each; it is
+written down here so the next person reads it as a line that was drawn rather
+than as a case that was missed. `Commercial` stays out regardless: it is a Live
+TV concern and this app shows no Live TV.
