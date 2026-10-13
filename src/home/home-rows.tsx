@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'preact/hooks';
 import { useTranslate, type MessageKey } from '../i18n/index';
 import type { JellyfinGateway } from '../jellyfin/gateway';
-import { MyListToggle } from '../my-list/my-list-toggle';
 import { useMyList } from '../my-list/use-my-list';
+import { HoverCard } from './hover-card-panel';
 import { ContinueWatchingRow } from './continue-watching-row';
 import type { HomeRow, HomeRowKind } from './home-layout';
 import { loadNewOnJellyflick, type NewOnJellyflickResult } from './new-on-jellyflick';
@@ -76,11 +76,15 @@ export const BUILT_ROW_KINDS: readonly HomeRowKind[] = [
 ];
 
 /**
- * The My List toggle on every card on Home, which is how a Title gets into My
- * List in the first place (stories 40 and 52). Home is the one place Rows are
- * drawn, so it is also the one place that decides what a card offers.
+ * What every card on Home offers. Home is the one place Rows are drawn, so it
+ * is also the one place that decides this.
+ *
+ * `HoverCard` is both halves of it (#21): the enlarged card with Play, My List
+ * and More info where there is a pointer that can rest on something, and
+ * #13's plain My List toggle on every phone and every TV (stories 40, 52
+ * and 55).
  */
-const myListControl = (card: RowCard) => <MyListToggle card={card} />;
+const cardControl = (card: RowCard) => <HoverCard card={card} />;
 
 export function isRowBuilt(kind: HomeRowKind): boolean {
   return BUILT_ROW_KINDS.indexOf(kind) !== -1;
@@ -238,7 +242,7 @@ function SuggestionRow({
       heading={heading}
       cards={result.titles}
       onCardPress={openTitle}
-      cardControl={myListControl}
+      cardControl={cardControl}
     />
   );
 }
@@ -285,7 +289,7 @@ function NewOnJellyflickRow({ gateway, readKey }: { gateway: JellyfinGateway; re
       heading={t('home.newOnJellyflick')}
       cards={result.titles}
       onCardPress={openTitle}
-      cardControl={myListControl}
+      cardControl={cardControl}
     />
   );
 }
@@ -315,7 +319,7 @@ function MyListRow() {
       heading={t('home.row.myList')}
       cards={state.titles}
       onCardPress={openTitle}
-      cardControl={myListControl}
+      cardControl={cardControl}
     />
   );
 }

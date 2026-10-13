@@ -127,6 +127,11 @@ export const es: Messages = {
   'myList.remove': (p) => `Quitar ${p.name} de Mi lista`,
   'home.empty': 'No se muestra ninguna fila en Inicio. Edita Inicio para elegir algunas.',
 
+  'home.card.play': (p) => `Reproducir ${p.name}`,
+  'home.card.playLabel': 'Reproducir',
+  'home.card.moreInfo': (p) => `Más información sobre ${p.name}`,
+  'home.card.moreInfoLabel': 'Más información',
+
   'home.row.continueWatching': 'Seguir viendo',
   'home.row.myList': 'Mi lista',
   'home.row.watchAgain': 'Volver a ver',

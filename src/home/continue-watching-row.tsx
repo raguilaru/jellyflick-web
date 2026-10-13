@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { useTranslate } from '../i18n/index';
 import type { JellyfinGateway } from '../jellyfin/gateway';
-import { MyListToggle } from '../my-list/my-list-toggle';
+import { HoverCard } from './hover-card-panel';
 import { useSettings } from '../settings/settings-provider';
 import {
   continueWatchingRow,
@@ -183,7 +183,7 @@ export function ContinueWatchingRow({ gateway, readKey }: ContinueWatchingRowPro
             const entry = entries.find((candidate) => candidate.card.titleId === card.titleId);
             return (
               <>
-                <MyListToggle card={card} />
+                <HoverCard card={card} />
                 {entry === undefined ? null : (
                   <RemoveFromContinueWatching entry={entry} onRemove={remove} />
                 )}
