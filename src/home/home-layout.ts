@@ -140,6 +140,11 @@ export function addRow(
   kind: HomeRowKind,
   parameter?: string,
 ): HomeLayout {
+  // A genre or Collection Row **is** its parameter: one stored without it is
+  // dropped by `parseHomeLayout` on the next read, so it would sit on Home
+  // until the User reloaded and then be silently gone. Refused where Rows are
+  // made rather than mended where they are read back.
+  if (isParameterised(kind) && parameter === undefined) return layout;
   const row: HomeRow = { kind, ...(parameter === undefined ? {} : { parameter }) };
   if (hasRow(layout, rowKeyOf(row))) return layout;
   return [...layout, row];

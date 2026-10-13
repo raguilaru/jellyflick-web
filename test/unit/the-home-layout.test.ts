@@ -239,3 +239,20 @@ describe('reordering Rows', () => {
     expect(kinds(visibleRows(moved))).toEqual(['continue-watching', 'new-on-jellyflick']);
   });
 });
+
+describe('adding a Row that needs a parameter', () => {
+  /**
+   * A genre or Collection Row *is* its parameter: `parseHomeLayout` drops one
+   * stored without it, so a Row added this way would be on Home until the User
+   * reloaded and then silently gone. The editor's picker cannot produce it, but
+   * nothing stopped another caller from doing so.
+   */
+  it('refuses a genre or Collection Row with no parameter', () => {
+    expect(addRow([], 'genre')).toEqual([]);
+    expect(addRow([], 'collection')).toEqual([]);
+  });
+
+  it('still adds one that names its genre', () => {
+    expect(addRow([], 'genre', 'Comedy')).toEqual([{ kind: 'genre', parameter: 'Comedy' }]);
+  });
+});

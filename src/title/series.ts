@@ -121,6 +121,10 @@ export function seasonsOf(
     if (item === undefined || item.kind !== 'Season') continue;
     const seasonNumber = item.seasonNumber;
     if (seasonNumber === undefined) continue;
+    // A number already claimed: two Season items can carry the same one — a
+    // duplicate folder, or specials filed into a Season — and the Episodes are
+    // matched by number, so a second claim would list them all over again.
+    if (taken.indexOf(seasonNumber) !== -1) continue;
 
     const under = episodesOfSeason(details, seasonNumber);
     if (under.length === 0) continue;

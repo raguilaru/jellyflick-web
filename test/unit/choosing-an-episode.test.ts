@@ -199,4 +199,21 @@ describe('the Seasons the picker offers', () => {
   it('has no Seasons at all for a Series the Server listed no Episodes for', () => {
     expect(seasonsOf([season('season-1', 1, 'Season 1')], [])).toEqual([]);
   });
+
+  /**
+   * A library really can hold two Season items carrying the same number — a
+   * stray duplicate folder, or specials filed into Season 1. The Episodes are
+   * matched by number, so both items would otherwise claim the same ones and
+   * the picker would offer the same Season twice.
+   */
+  it('offers a Season once when the Server holds two items with its number', () => {
+    const grouped = seasonsOf(
+      [season('season-1', 1, 'Season 1'), season('season-1-again', 1, 'Season 1 (again)')],
+      [episode('one', { season: 1, number: 1 }), episode('two', { season: 1, number: 2 })],
+    );
+
+    expect(grouped.map((group) => group.seasonNumber)).toEqual([1]);
+    expect(grouped[0]?.id).toBe('season-1');
+    expect(grouped[0]?.episodes.map((detail) => detail.episode.itemId)).toEqual(['one', 'two']);
+  });
 });
