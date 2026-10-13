@@ -30,7 +30,12 @@ branch tip it had gated, so only the fast steps were re-run there.
 
 **In flight — do not touch these areas:** `ticket/20-mdblist-ratings` (`src/title/`,
 `server/`, ports 4320/8320) and `ticket/28-subtitle-offset` (`src/playback/`, Client
-Settings, ports 4328/8328).
+Settings, ports 4328/8328). Both were interrupted by a session limit once and resumed from
+pushed WIP commits — see below.
+
+**CI is green and has stayed green.** Five consecutive successful runs: `587eddb`,
+`a639c1d`, `1211a60`, `c0b7298`, `bb2a797`. Before this session the `e2e` job had failed
+on every run of this branch since it began.
 
 ### #31 fixed the shared arrow-key search — know this before writing an e2e that reaches a control
 
@@ -43,6 +48,36 @@ reported a button a remote reaches in two presses as unreachable.
 
 Any later ticket adding a focusable control **over the picture** uses this helper and
 inherits that fix. #40's in-menu pin came through the move verbatim.
+
+### Tell an implementer to commit as it goes — a limit can stop it with nothing durable
+
+A session limit stopped **#20 and #28 together**, mid-flight. What each had to show for
+its work was entirely a matter of habit:
+
+- **#20** had one real commit and ten files uncommitted.
+- **#28** had **no commits at all** — eleven files, 1,306 insertions, every line of it
+  uncommitted, including two finished unit specs.
+
+Nothing was lost, because the integrator committed both trees as **WIP commits whose
+messages tell the reader to distrust them** and pushed the branches. But #28 came within
+one worktree cleanup of losing a ticket's worth of work, and the recovery is only possible
+while the worktree still exists.
+
+So brief implementers to **commit at each green step**, which the `tdd` loop asks for
+anyway, and not to save it all for the end. And when recovering one:
+
+1. Snapshot the tree as a patch *and* as a WIP commit; push the branch. A pushed commit is
+   the only thing that survives a worktree going away.
+2. Say in the WIP message that its boundaries are the integrator's, not the author's, and
+   tell whoever resumes to `git reset --soft <their last real commit>` and recommit it
+   properly rather than build on top of it.
+3. Tell the resumed implementer **how far the integration tip has moved and what is in
+   those commits**, not just that it moved — #20's base had gained #31, which touches the
+   same `src/title/` files, so it faced a real conflict rather than the usual `i18n` one.
+
+This is the second interruption in this session. The first cost a full untangling because
+the worktrees had silently not been created; this one cost almost nothing, because they
+had been. The worktree-per-implementer rule above is what made the difference.
 
 ### The run's own open findings, filed rather than carried in reports
 
