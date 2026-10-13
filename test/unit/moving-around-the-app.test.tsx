@@ -120,6 +120,62 @@ describe('a User moving around the app', () => {
     expect(await screen.findByText('Signed in as Rafael.')).toBeTruthy();
   });
 
+  /**
+   * Search is the one section that gives a field focus by itself as it opens
+   * (#24), and a field owns the keys that edit text. It does **not** own Back:
+   * a TV has no back button of its own, so a Back the field swallowed left a
+   * User with no way out of the section at all.
+   */
+  it('leaves Search on Back even though the field has the focus', async () => {
+    renderApp();
+    await signIn();
+
+    fireEvent.click(screen.getByRole('link', { name: 'Search' }));
+    const field = await screen.findByLabelText('Search for a Movie or Series');
+    field.focus();
+    expect(document.activeElement).toBe(field);
+
+    await afterPaint();
+    fireEvent.keyDown(field, { key: 'Escape' });
+
+    expect(await screen.findByText('Signed in as Rafael.')).toBeTruthy();
+    expect(window.location.pathname).toBe('/');
+  });
+
+  it('answers a remote’s Back key in Search too, where the field has the focus', async () => {
+    renderApp();
+    await signIn();
+
+    fireEvent.click(screen.getByRole('link', { name: 'Search' }));
+    const field = await screen.findByLabelText('Search for a Movie or Series');
+    field.focus();
+
+    await afterPaint();
+    fireEvent.keyDown(field, { key: '', keyCode: 461 });
+
+    expect(await screen.findByText('Signed in as Rafael.')).toBeTruthy();
+  });
+
+  /**
+   * The other half of the same rule, and the reason the guard exists at all:
+   * Backspace is a Back key on a remote and a deleted character in a field, and
+   * there the field has to win or a User could not correct a typo.
+   */
+  it('leaves Backspace to the field a User is typing in', async () => {
+    renderApp();
+    await signIn();
+
+    fireEvent.click(screen.getByRole('link', { name: 'Search' }));
+    const field = await screen.findByLabelText('Search for a Movie or Series');
+    field.focus();
+
+    await afterPaint();
+    fireEvent.keyDown(field, { key: 'Backspace' });
+
+    expect(await screen.findByRole('heading', { name: 'Search' })).toBeTruthy();
+    expect(window.location.pathname).toBe('/search');
+  });
+
   it('goes to Home when Back is pressed in a section that was opened directly', async () => {
     window.history.replaceState(null, '', '/series');
     renderApp();
