@@ -539,6 +539,12 @@ export type MediaStream = {
   /** Set when the Server has a URL of its own for this stream. */
   DeliveryUrl?: string | null;
   IsExternalUrl?: boolean | null;
+  /**
+   * The subtitle **file** behind an external stream, on the Server's own disk.
+   * It is what the Subtitle Offset is remembered per (#28): two Episodes can
+   * point at one file, and only this says so.
+   */
+  Path?: string | null;
 };
 
 /**

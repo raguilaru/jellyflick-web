@@ -53,6 +53,14 @@ export type SubtitleTrack = {
    * already at an absolute address — so it is preferred where it exists.
    */
   readonly deliveryUrl?: string;
+  /**
+   * `Path`: the subtitle file itself on the Server, set for an external track
+   * and absent for one muxed into the video. It is what the Subtitle Offset is
+   * remembered per (#28, story 102) — `subtitleFileOf` in
+   * `subtitle-offset.ts` — because it is the one field that can say two
+   * Episodes are reading the same file.
+   */
+  readonly path?: string;
 };
 
 export type MediaTracks = {
@@ -87,6 +95,7 @@ export function tracksOf(source: MediaSourceInfo): MediaTracks {
       isDefault: stream.IsDefault === true,
       isForced: stream.IsForced === true,
       ...textOf('deliveryUrl', stream.DeliveryUrl),
+      ...textOf('path', stream.Path),
     });
   });
 
