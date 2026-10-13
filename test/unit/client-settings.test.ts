@@ -227,6 +227,42 @@ describe('the settings the settings screen saves', () => {
     expect(read.settings.billboardTrailerAutoplay).toBe(false);
   });
 
+  it('is Spotlight’s Billboard for a User who has never chosen a Source', async () => {
+    // Story 29: Spotlight is what Home does out of the box (#22).
+    expect((await rafaelsStore().read()).settings.billboardSource).toBeUndefined();
+  });
+
+  it('reads back the Billboard Source the User chose', async () => {
+    await rafaelsStore().save({ billboardSource: 'resume' });
+
+    expect((await rafaelsStore().read()).settings.billboardSource).toBe('resume');
+  });
+
+  it('reads back a Billboard Source being put back to Spotlight', async () => {
+    await rafaelsStore().save({ billboardSource: 'newest-addition' });
+
+    await rafaelsStore().save({ billboardSource: undefined });
+
+    // "No choice at all" is the empty string on the Server, which reads back as
+    // no choice rather than as a Source named "".
+    expect((await rafaelsStore().read()).settings.billboardSource).toBeUndefined();
+  });
+
+  it('keeps a Billboard Source a newer Jellyflick stored', async () => {
+    // A plain string, not a union, so a Source this version has never heard of
+    // survives being read here — it is fallen back on when it is *used*, not
+    // rewritten. `accentColour` gets the same treatment.
+    await setFakeState({
+      displayPreferences: {
+        'jellyflick|jellyflick|user-rafael': { 'jf.billboardSource': 'what-comes-next' },
+      },
+    });
+
+    await rafaelsStore().save({ accentColour: 'blue' });
+
+    expect((await rafaelsStore().read()).settings.billboardSource).toBe('what-comes-next');
+  });
+
   it('keeps the Home Layout when only the colour changes', async () => {
     await rafaelsStore().save({ homeLayout: layout });
 

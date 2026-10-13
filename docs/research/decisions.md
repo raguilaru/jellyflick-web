@@ -258,7 +258,41 @@ within weeks of being written, because the repository moved and the document did
 
 Affects #9 and anything that later shows Quick Connect's state anywhere else.
 
-## 12. The next Episode: "ask me each time" really asks, and cancelling stays
+## 12. A Billboard Source needs a backdrop, and falls back to Spotlight widely
+
+Decided in #22, which added Resume, Newest Addition and Because You Watched
+beside Spotlight. Three things the spec and the ticket do not settle:
+
+- **A Source features the first Title of its Row that the Server has a backdrop
+  for**, not simply the Row's first. The Billboard is a backdrop with words over
+  it, so a Title without one cannot be drawn at all. This means the Billboard's
+  "Newest Addition" and the first card of New on Jellyflick **can legitimately
+  differ** — in the sample library the newest addition is Bluey, which has no
+  backdrop, so the Billboard features Severance. Anything later that compares
+  the two should expect that rather than treat it as a bug.
+- **"Nothing to show" includes a Row the Server refused**, not only an empty
+  one. The ticket says each Source falls back to Spotlight when it has nothing
+  to show; a refused Row read is a third case, and it falls back too. Only a
+  Server that will not answer the Billboard's *own* query leaves it
+  `unavailable`, because then no rule has anything to draw. The reasoning is
+  #16's: an empty Billboard is the one answer worth avoiding (story 33).
+- **The stored Source is a plain string, and an unknown one presses no button.**
+  As with `jf.accentColour`, a Source a newer Jellyflick offers is carried back
+  to the Server untouched and fallen back on only where it is *used*. On the
+  settings screen that means nothing stored presses Spotlight — which is what
+  Home really does — while an unknown Source presses none of the four, rather
+  than telling a User they chose Spotlight when they did not.
+
+The Billboard's first pick also **waits for Client Settings to land**, which is
+a departure from "Home drawing the default layout for a moment is harmless"
+(§ "Client Settings and the Home Layout" in `architecture.md`): picking with
+Spotlight and then replacing it with the User's real Source is two reads of the
+library and a visible flinch on the first thing on Home, where a Row quietly
+re-rendering is not.
+
+Affects #23, which builds on this, and anything later that adds a Source.
+
+## 13. The next Episode: "ask me each time" really asks, and cancelling stays
 
 Decided in #31. The ticket says a countdown starts the next Episode "following
 the User's Jellyfin autoplay setting" and that the User can cancel it, and
@@ -291,7 +325,7 @@ leaves two things open that the code had to answer.
 
 Affects #31 and anything later that shows the end of an Episode.
 
-## 13. Skip offers `Intro` and `Outro`, and nothing else yet
+## 14. Skip offers `Intro` and `Outro`, and nothing else yet
 
 Also #31, and a narrowing rather than a decision against the research.
 `jellyfin-playback.md` §12 notes that `Recap` and `Preview` — "previously on"

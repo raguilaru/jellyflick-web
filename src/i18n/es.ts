@@ -228,6 +228,14 @@ export const es: Messages = {
   'settings.billboardTrailer.autoPlay': 'Reproducirlo automáticamente',
   'settings.billboardTrailer.off': 'Mostrar solo la imagen de fondo',
 
+  'settings.billboardSourceHeading': 'Qué destaca Inicio',
+  'settings.billboardSourceExplanation':
+    'Inicio destaca un título en la parte superior. Elige cómo se selecciona: cada opción es también una fila que puedes añadir a tu Inicio.',
+  'settings.billboardSource.spotlight': 'Destacado',
+  'settings.billboardSource.resume': 'Continuar',
+  'settings.billboardSource.newestAddition': 'Novedades',
+  'settings.billboardSource.becauseYouWatched': 'Porque viste',
+
   'settings.homeHeading': 'Inicio',
   'settings.homeExplanation': 'Elige las filas de tu Inicio y el orden en que aparecen.',
 

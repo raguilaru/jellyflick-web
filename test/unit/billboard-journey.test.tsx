@@ -329,3 +329,55 @@ describe('the Billboard’s Play', () => {
     expect(src).not.toContain('series-severance');
   });
 });
+
+/**
+ * A User's own choice of Billboard Source (#22). Spotlight is what they get
+ * until they choose, so these are the other three arriving on Home — the
+ * selection itself is `the-billboard-sources.test.ts`, at the HTTP seam, and
+ * what this adds is that the *stored* choice is what Home honours.
+ */
+describe('a User who chose a Billboard Source', () => {
+  /** Rafael, with one Client Setting already on the Server. */
+  async function havingChosen(source: string): Promise<void> {
+    await setFakeState({
+      displayPreferences: {
+        'jellyflick|jellyflick|user-rafael': { 'jf.billboardSource': source },
+      },
+    });
+  }
+
+  it('is featured the newest addition rather than Spotlight’s pick', async () => {
+    await havingChosen('newest-addition');
+
+    // The draw would feature Arrival if Spotlight were still picking, so the
+    // stored choice is the only thing that can account for Severance.
+    await signInAndLand(FEATURES_ARRIVAL);
+    await billboard();
+
+    expect(await featuredTitle()).toBe('Severance');
+  });
+
+  it('is featured what they are part-way through when they chose Resume', async () => {
+    await havingChosen('resume');
+    await setFakeState({
+      playbackPositions: { 'user-rafael': { 'episode-severance-s2e3': 6_000_000_000 } },
+      lastPlayedDates: { 'user-rafael': { 'episode-severance-s2e3': '2026-06-16T09:00:00Z' } },
+    });
+
+    await signInAndLand(FEATURES_ARRIVAL);
+    await billboard();
+
+    expect(await featuredTitle()).toBe('Severance');
+  });
+
+  it('is featured Spotlight’s pick when the Source they chose has nothing to show', async () => {
+    // Nothing is part-watched, so Resume has nothing — and an empty Billboard
+    // is the one answer worth avoiding (story 33).
+    await havingChosen('resume');
+
+    await signInAndLand(FEATURES_ARRIVAL);
+    await billboard();
+
+    expect(await featuredTitle()).toBe('Arrival');
+  });
+});

@@ -45,10 +45,12 @@ src/
                         `new-on-jellyflick.ts`, `continue-watching.ts`
                         with the `-row.tsx` that draws it, and
                         `suggestion-rows.ts` for the four of #15. Above the Rows
-                        is the Billboard (#16): `spotlight.ts` is the rule that
-                        picks its Title, `billboard-sources.ts` what it reads
-                        from the Server and the seam the Billboard Sources sit
-                        behind, `billboard.tsx` what a User sees, and
+                        is the Billboard (#16): `spotlight.ts` is the default
+                        rule that picks its Title, `billboard-sources.ts` what
+                        it reads from the Server and the seam all four
+                        Billboard Sources sit behind (#22 added Resume, Newest
+                        Addition and Because You Watched, each one its Row's
+                        own loader), `billboard.tsx` what a User sees, and
                         `use-billboard.ts` the pick the shell holds so a title
                         page cannot disturb it.
   i18n/                 `en.ts` is the key set, `es.ts` is typed against it.
@@ -579,8 +581,9 @@ belongs to a screen rather than a person.
   reads no body.
 - **A new setting is three lines**: a `jf.` key, a field on `ClientSettings`
   with a default, and a line each in `settingsFrom` and `prefsFor`. There are
-  five keys today: `jf.homeLayout`, `jf.uiLanguage`, `jf.accentColour`,
-  `jf.hiddenSeries` (#12) and `jf.billboardTrailerAutoplay` (#16). A
+  six keys today: `jf.homeLayout`, `jf.uiLanguage`, `jf.accentColour`,
+  `jf.hiddenSeries` (#12), `jf.billboardTrailerAutoplay` (#16) and
+  `jf.billboardSource` (#22). A
   **boolean** setting is stored as `'true'` or `'false'` and read back as "off
   only when it says `false`", so a half-written value leaves the User with the
   behaviour everybody else has rather than with the feature silently gone. A
@@ -648,9 +651,38 @@ More info, and its local trailer.
   is an entry in `BILLBOARD_SOURCES` plus a loader beside
   `loadSpotlightBillboard`, and every Source answers with the same
   `BillboardResult` — so #22's Resume, Newest Addition and Because You Watched
-  arrive without anything that *draws* the Billboard changing. Spotlight is the
-  default (story 29) and the only one built today; the User's choice of Source
-  is #22's setting, not a key this ticket wrote.
+  arrived without anything that *draws* the Billboard changing. All four are
+  built as of #22. Spotlight is the default (story 29), and the User's choice
+  is `jf.billboardSource` in Client Settings.
+- **The other three Sources are their Rows, read through `billboardFromRow`**
+  (#22). Each one calls **the Row's own loader** — `loadNewOnJellyflick`,
+  `loadContinueWatching` + `continueWatchingRow`, `loadBecauseYouWatched` — and
+  takes the ids it answers, in its order. That is what makes "the same rules as
+  the Row" true by construction rather than by a second copy of each rule:
+  Resume inherits the three-read merge, one entry per Title, and a hidden
+  Series staying hidden until its activity moves on, without restating any of
+  it. A Row answers **ids** because a Row and the Billboard want different
+  fields of the same Title — a Row's query asks for a poster, the Billboard
+  needs a backdrop, a logo and an overview — so `getBillboardCandidates` is
+  read once and supplies both the chosen Title's fields *and* the pool
+  Spotlight falls back over, in one round trip rather than two.
+- **A Source features the first Title of its Row that has a backdrop**, not
+  simply the first. The Billboard *is* a backdrop with words over it
+  (`canBeABillboard`, which `spotlight.ts` exports because it is a fact about
+  the Billboard and not about Spotlight), so the newest addition to a library
+  and the Billboard's Newest Addition can honestly differ — in the sample
+  library the newest addition is Bluey, which has no backdrop, so the Billboard
+  features Severance.
+- **Every Source falls back to Spotlight**, and three different things reach
+  that fallback: an empty Row, a Row whose Titles have no backdrop, and a Row
+  the Server refused. Only a Server that will not answer the Billboard's **own**
+  query is `unavailable`, because then there is nothing to draw by any rule. An
+  empty Billboard is the single answer worth avoiding (story 33).
+- **Play is `resolvePlayTarget`'s, for every Source.** Resume, Newest Addition
+  and Because You Watched can all feature a Series as readily as Spotlight can,
+  and a Series holds no file — see "Playing a Title" below. Nothing in a Source
+  touches this: `billboard.tsx` is one component for all four, so a new Source
+  inherits the right Play rather than having to remember it.
 - **Spotlight is a weighted pick, not a filter** (`spotlight.ts`). Eligible is a
   Title the User has not finished that the Server has a backdrop for — the
   backdrop is not a preference, because the Billboard *is* a backdrop with
@@ -668,6 +700,15 @@ More info, and its local trailer.
   test fixes `randomSequence`, and `test/e2e/the-billboard.spec.ts` — where the
   draw really is `Math.random()` — makes the pick deterministic through the
   *library* instead, marking the other candidates watched so the pool holds one.
+- **The pick waits for Client Settings, and reads them through a ref** (#22).
+  `useLoadedBillboard` picks nothing until `settings.loaded`: picking with
+  Spotlight and then replacing it with the Source the User really chose is two
+  reads and a visible flinch on the first thing on Home. The Source and the
+  hidden Series are then read from a ref rather than taken as dependencies,
+  because *arriving at Home* is what takes a fresh pick (story 30) — as
+  dependencies, dismissing a Continue Watching card on Home would re-pick the
+  Billboard under the User's hands. A Source chosen on the settings screen is
+  picked with on the next visit to Home, which changes `path` anyway.
 - **The pick is held in the shell, above the router** (`use-billboard.ts`),
   because `preact-iso` draws only the matching route and opening a title page
   therefore **unmounts Home**. Stories 30 and 31 pull against each other and the
@@ -780,9 +821,9 @@ The editor, `src/settings/home-layout-screen.tsx`:
 ## The settings screen, Accent Colour and language
 
 `src/settings/settings-screen.tsx` is the screen a User changes their own things
-on: their Accent Colour, the language the app is in, and the way to their Home
-Layout (#11), and under a "What plays" subheading the four their Jellyfin
-account carries (#35). Its address `/settings` is **not a section** — `src/shell/sections.ts`
+on: their Accent Colour, the language the app is in, what the Billboard features
+(#22) and the way to their Home Layout (#11), and under a "What plays"
+subheading the four their Jellyfin account carries (#35). Its address `/settings` is **not a section** — `src/shell/sections.ts`
 is still the one list of sections and this is not in it — but both navigation bars
 reach it: the top bar with a link of its own after the sections, and the phone's
 bottom bar through the User's picture, which is where a phone User looks for
@@ -814,6 +855,18 @@ their own settings. The picture used to be inert; it is now a real link named
   `.settings-choices--stacked` is one whose labels are sentences (when to show
   subtitles), one per line at every width. Both sit *after* the 640px rule they
   override. `.screen__subheading` is a heading over a run of groups.
+  The four Billboard Sources are `--wrap` too: "Because You Watched" is long
+  enough that four of them do not share a line on a phone, and a choice that
+  runs off the side of the screen is one the arrow keys reach and a User never
+  sees. Rendered and looked at on a 375px viewport in both languages — the e2e
+  suite cannot catch this, because Playwright scrolls an element into view
+  before pressing it.
+- **An unknown stored choice presses nothing** (#22). The Billboard Source
+  buttons are compared against the *stored* name: nothing stored presses
+  Spotlight, because that is what Home really does, but a Source a newer
+  Jellyflick wrote presses none of them rather than claiming the User chose
+  Spotlight — and their real choice is carried back to the Server untouched,
+  which is the treatment an unknown Accent Colour preset already gets.
 
 **Accent Colour** (story 112) is `accent-colours.ts`: seven presets, each
 carrying both the `--accent` colour *and* the `--accent-text` that reads on it,

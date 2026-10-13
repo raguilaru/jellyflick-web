@@ -68,6 +68,7 @@ export const UI_LANGUAGE_KEY = `${SETTINGS_KEY_PREFIX}uiLanguage`;
 export const ACCENT_COLOUR_KEY = `${SETTINGS_KEY_PREFIX}accentColour`;
 export const HIDDEN_SERIES_KEY = `${SETTINGS_KEY_PREFIX}hiddenSeries`;
 export const BILLBOARD_TRAILER_AUTOPLAY_KEY = `${SETTINGS_KEY_PREFIX}billboardTrailerAutoplay`;
+export const BILLBOARD_SOURCE_KEY = `${SETTINGS_KEY_PREFIX}billboardSource`;
 
 /**
  * A User's settings, typed, with a default for every one of them — a new User
@@ -119,6 +120,23 @@ export type ClientSettings = {
    * rather than per device, so it follows them between devices like the rest.
    */
   readonly billboardTrailerAutoplay: boolean;
+  /**
+   * Which Billboard Source picks the Title at the top of Home (#22), or absent
+   * for Spotlight, which is what a User gets before they have chosen (story
+   * 29).
+   *
+   * A plain `string` rather than `BillboardSourceId`, for the reason every
+   * stored *name* here is one: a Source a newer Jellyflick offers has to
+   * survive being read by this version rather than being quietly rewritten to
+   * Spotlight the next time anything else is saved. `billboardSourceFor` is
+   * what falls back when it is drawn and used — the same treatment
+   * `accentColourFor` gives a preset and `HomeRow.parameter` gets in a layout.
+   *
+   * Absent rather than defaulted to `'spotlight'`, so "I have never chosen"
+   * and "I chose Spotlight" are stored the same way and the default can move
+   * without rewriting what Users have.
+   */
+  readonly billboardSource?: string;
 };
 
 export const DEFAULT_CLIENT_SETTINGS: ClientSettings = {
@@ -232,6 +250,7 @@ function settingsFrom(prefs: Record<string, string | null>): ClientSettings {
     // An empty string is how "no choice" is stored, so it is not a choice.
     ...chosen('uiLanguage', prefs[UI_LANGUAGE_KEY]),
     ...chosen('accentColour', prefs[ACCENT_COLOUR_KEY]),
+    ...chosen('billboardSource', prefs[BILLBOARD_SOURCE_KEY]),
   };
 }
 
@@ -260,6 +279,11 @@ function prefsFor(changes: Partial<ClientSettings>): Record<string, string | nul
   }
   if ('accentColour' in changes) {
     prefs[ACCENT_COLOUR_KEY] = changes.accentColour ?? '';
+  }
+  if ('billboardSource' in changes) {
+    // Back to Spotlight is the empty string, as "match my device" is for the
+    // language: `CustomPrefs` holds strings and nothing else.
+    prefs[BILLBOARD_SOURCE_KEY] = changes.billboardSource ?? '';
   }
   if (changes.billboardTrailerAutoplay !== undefined) {
     prefs[BILLBOARD_TRAILER_AUTOPLAY_KEY] = String(changes.billboardTrailerAutoplay);
