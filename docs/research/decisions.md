@@ -338,3 +338,52 @@ Growing the offer is one entry in that list and one translated label each; it is
 written down here so the next person reads it as a line that was drawn rather
 than as a case that was missed. `Commercial` stays out regardless: it is a Live
 TV concern and this app shows no Live TV.
+
+## 15. A Subtitle Offset is remembered per subtitle *file*, and `MediaStream.Path` is what says which
+
+#28, and an extension of the spec rather than a correction of it. The spec says
+the Client Settings store holds "Subtitle Offsets keyed by subtitle file", and
+story 102 reads that literally: the offset applies "to every Episode that uses
+the same file".
+
+Nothing else in `MediaStreams` can say that two items point at one file.
+`jellyfin-playback.md` §14 lists **`Path`** among the fields a client may read,
+and the Server sets it for an **external** subtitle — a `.srt` beside the video,
+or one subtitle pack dropped beside a season. So `subtitleFileOf`
+(`src/playback/subtitle-offset.ts`) prefers `path:<Path>` where the Server gave
+one, and falls back to `stream:<mediaSourceId>:<MediaStream.Index>` for a track
+muxed into the video, which has no file of its own: there the file **is** the
+video, and the media source names it. `Path` is read through
+`src/jellyfin/gateway.ts` and `media-tracks.ts` for this and nothing else.
+
+**To check against a real Server**: `Path` for an external subtitle is a path on
+the Server's own disk, which is what makes it stable and shared. A Server that
+leaves it null for external streams — or one behind a path-hiding proxy — falls
+back to the per-stream key and loses only story 102's second half; the offset
+still follows the User to every device.
+
+Two figures are Jellyflick's own, because neither Jellyfin nor the spec has one:
+the offset is clamped to **±30 seconds**, so a held button on a remote cannot
+leave a User with subtitles they will never see, and at most **100** files'
+offsets are kept, newest write last. They share one `CustomPrefs` string on a
+Server that is somebody's Raspberry Pi, and a household cannot be allowed to
+collect a line per subtitle file it has ever watched.
+
+## 16. The offset is saved when an adjustment finishes, not when it changes
+
+Also #28. A Client Settings write is a read-modify-write against the Server
+(`client-settings.ts`), and holding `+` for two seconds is around forty steps.
+Saving each one would be forty round trips, serialised behind each other, for a
+number the User is still moving.
+
+So `subtitle-timing.tsx` reports an adjustment **finishing** — a button or an
+arrow key let go, one press of Reset or of "Sync to this line" — and the player
+saves that. No timer and no debounce is involved, which is deliberate: #31's
+note that the player has exactly two timers, the ping and the next-Episode
+countdown, still holds.
+
+The consequence worth knowing: a player closed *mid-hold* — which needs a Back
+press while a thumb is down — saves nothing, and the file keeps the offset it
+had. That is the right way round. The alternative is a timer whose window is
+either too short to help or long enough to save a number the User was still
+dragging through.
