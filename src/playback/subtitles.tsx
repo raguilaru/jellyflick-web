@@ -35,13 +35,28 @@ import { createCueCursor, parseSubtitles, type SubtitleCue } from './subtitle-cu
  * player's own `position` state, which is the four-times-a-second one the seek
  * bar draws with.
  *
- * ## The seam #28 takes over
+ * ## The Subtitle Offset (#28), and the seam #29 and #30 meet it at
  *
- * The loop reads the position and asks the cursor for that moment. An offset is
- * one subtraction on the way in — `cursor.at(element.currentTime - offset)` —
- * and nothing else here or in `subtitle-cues.ts` changes. The cursor is correct
- * for any position rather than only an increasing one, which is exactly what a
- * User dragging an offset back and forth needs.
+ * The loop reads the position and asks the cursor for that moment, and the
+ * offset is **one subtraction on the way in** —
+ * `cursor.at(element.currentTime - offsetSeconds)`. That is the whole of
+ * applying it: the cursor is correct for any position rather than only an
+ * increasing one, which is exactly what a User dragging an offset back and
+ * forth needs, and `subtitle-cues.ts` still knows nothing about an offset.
+ *
+ * It is read through a ref rather than being a dependency of the loop, so a
+ * held button does not tear the frame loop down and build it again eight times
+ * a second — the offset is in force on the **next frame**, which is what story
+ * 96's "see the result live" means.
+ *
+ * `onCues` is what makes the offset a seam rather than a feature of this
+ * component. The player is handed the cue list, because "Sync to this line"
+ * has to know which line is on the screen and the player is where the offset
+ * lives. **#29 and #30 meet the offset here**: a styled or image renderer
+ * takes the same `offsetSeconds` and gives it to its own library — libass has
+ * `timeOffset` and `setCurrentTime`, `libpgs` has `timeOffset`
+ * (`player-subtitles.md` §6a and §6b) — so neither has to know how an offset
+ * is stored or adjusted, and nothing above has to know how a cue is drawn.
  */
 
 export type SubtitlesProps = {
@@ -50,6 +65,17 @@ export type SubtitlesProps = {
   mediaSourceId: string;
   /** The track to draw. Absent draws nothing, which is subtitles off. */
   track?: SubtitleTrack;
+  /**
+   * How far the subtitles are shifted (#28), in seconds, positive for later.
+   * It is subtracted from the element's position, so a cue the file puts at
+   * ten seconds is drawn at ten and a half with an offset of half a second.
+   */
+  offsetSeconds?: number;
+  /**
+   * The cues this track parsed, said once per track. The player keeps them so
+   * "Sync to this line" can ask which line is on the screen.
+   */
+  onCues?: (cues: readonly SubtitleCue[]) => void;
   /** The element whose position the cues are read against. */
   video: { current: HTMLVideoElement | null };
   /** Said once, so the player can show it in the picker where the press was. */
@@ -70,6 +96,8 @@ export function Subtitles({
   itemId,
   mediaSourceId,
   track,
+  offsetSeconds,
+  onCues,
   video,
   onUnavailable,
 }: SubtitlesProps) {
@@ -78,6 +106,15 @@ export function Subtitles({
   const [text, setText] = useState('');
   const unavailable = useRef(onUnavailable);
   unavailable.current = onUnavailable;
+  const reportCues = useRef(onCues);
+  reportCues.current = onCues;
+  /**
+   * The offset, read on every frame rather than depended on: a held button
+   * steps it eight times a second, and a dependency would stop and restart the
+   * loop each time.
+   */
+  const offset = useRef(0);
+  offset.current = offsetSeconds ?? 0;
 
   /**
    * The track, fetched and parsed once. The gateway does the fetching because
@@ -88,6 +125,7 @@ export function Subtitles({
   useEffect(() => {
     setCues([]);
     setText('');
+    reportCues.current?.([]);
     if (track === undefined) return;
 
     let abandoned = false;
@@ -104,6 +142,7 @@ export function Subtitles({
           if (abandoned) return;
           const parsed = parseSubtitles(body);
           setCues(parsed);
+          reportCues.current?.(parsed);
           // A track the Server handed over but that held no cues is the same
           // thing to a User as one it refused: there is nothing to read.
           if (parsed.length === 0) unavailable.current();
@@ -137,9 +176,9 @@ export function Subtitles({
     const tick = (): void => {
       const element = video.current;
       if (element !== null) {
-        // Where #28's offset is subtracted, and the only change it needs here.
+        // Where #28's offset is subtracted, and the only place it is applied.
         const wanted = cursor
-          .at(element.currentTime)
+          .at(element.currentTime - offset.current)
           .map((cue) => cue.text)
           .join('\n');
         if (wanted !== showing) {

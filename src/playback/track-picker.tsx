@@ -46,6 +46,19 @@ export type TrackPickerProps = {
   onChooseAudio: (index: number) => void;
   /** `undefined` turns subtitles off. */
   onChooseSubtitle: (index: number | undefined) => void;
+  /**
+   * Opens the Subtitle timing panel (#28), which story 96 reaches "from the
+   * subtitle menu". **Absent when there is nothing to time** — subtitles off,
+   * or a track this app is not drawing — because a control that opens a panel
+   * about nothing is a focus stop the arrow keys step through for nothing, the
+   * same call `PlayerControls` makes about this menu itself.
+   *
+   * #30 is where the third case arrives: a track the Server burned into the
+   * picture cannot be shifted at all, and the honest shape for that is the one
+   * an undrawable track already has below — the control offered, carrying
+   * `aria-disabled`, with the group saying why in words.
+   */
+  onOpenTiming?: () => void;
   onClose: () => void;
 };
 
@@ -56,6 +69,7 @@ export function TrackPicker({
   subtitlesUnavailable,
   onChooseAudio,
   onChooseSubtitle,
+  onOpenTiming,
   onClose,
 }: TrackPickerProps) {
   const t = useTranslate();
@@ -145,6 +159,18 @@ export function TrackPicker({
             );
           })}
         </div>
+        {/*
+          Subtitle timing (#28). It sits in the subtitles group rather than
+          among the choices, because it is not a track: it is what to do with
+          the one that is playing.
+        */}
+        {onOpenTiming === undefined ? null : (
+          <p class="player__buttons">
+            <button type="button" class="button button--quiet" onClick={onOpenTiming}>
+              {t('player.subtitleTiming')}
+            </button>
+          </p>
+        )}
         {hasImageSubtitles ? <p class="notice">{t('player.subtitlesImage')}</p> : null}
         {subtitlesUnavailable ? (
           <p class="notice notice--problem" role="alert">
