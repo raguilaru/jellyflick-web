@@ -58,7 +58,14 @@ async function openTheSubtitleMenu(page: Page): Promise<void> {
     .getByRole('list', { name: 'New on Jellyflick' })
     .getByRole('listitem', { name: 'Arrival' })
     .press('Enter');
-  await expect(page.getByRole('heading', { name: 'Arrival', level: 1 })).toBeVisible();
+  /*
+   * The **URL**, not the `h1`. The Billboard draws the featured Title's name
+   * in an `h1` too, and the sample Server features Arrival — so a test that
+   * waits for that heading is already looking at it on Home and can assert
+   * happily against a screen that never changed. #21 found two tests doing
+   * exactly that. The address is the one thing only the title page has.
+   */
+  await expect(page).toHaveURL(/\/title\/movie-arrival$/);
 
   await page.getByRole('button', { name: 'Play', exact: true }).press('Enter');
   await expect(page.getByRole('region', { name: 'Playing Arrival' })).toBeVisible();
