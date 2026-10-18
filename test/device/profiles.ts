@@ -11,6 +11,8 @@ import type {
   DeviceLayer,
   DeviceStorage,
   PlaybackTargets,
+  StyledSubtitleRenderer,
+  StyledSubtitleRendererOptions,
   SubtitleCapabilities,
   VideoCapabilities,
 } from '../../src/device/types';
@@ -34,7 +36,47 @@ export type TestDeviceOptions = {
    * test that says nothing about language gets the English dictionary.
    */
   preferredLanguages?: readonly string[];
+  /**
+   * The styled-subtitle renderer this device loads (#29). It stands in for
+   * libass compiled to WebAssembly, which is a system boundary like the rest
+   * of this file — no test runs a 2 MB WASM binary in happy-dom, and nothing
+   * in this project reads what libass draws.
+   *
+   * Pass `styledRendererFails` to model the case the fallback exists for: a
+   * device that said it could draw the styling and then could not load the
+   * engine.
+   */
+  styledRenderer?: FakeStyledRenderer;
 };
+
+/**
+ * The fake styled-subtitle renderer, and the record of what was asked of it.
+ *
+ * It records rather than draws, because what a test can meaningfully assert is
+ * the *contract*: that it was started with the file and the fonts, that the
+ * Subtitle Offset reached it, and that it was destroyed. What libass makes of
+ * the file afterwards is libass's business and a real browser's — the e2e
+ * suite is where a real one runs.
+ */
+export type FakeStyledRenderer = {
+  /** One entry per renderer started, in order. */
+  readonly started: StyledSubtitleRendererOptions[];
+  /** Every offset handed to a live renderer, in order. */
+  readonly offsets: number[];
+  /** How many renderers were destroyed. */
+  destroyed: number;
+  /** Set to make loading reject, which is what the fallback is for. */
+  failing: boolean;
+};
+
+export function fakeStyledRenderer(options: { failing?: boolean } = {}): FakeStyledRenderer {
+  return {
+    started: [],
+    offsets: [],
+    destroyed: 0,
+    failing: options.failing ?? false,
+  };
+}
 
 /** 2026-06-15T12:00:00Z — a fixed instant, so date-derived behaviour is stable. */
 export const FIXED_NOW = Date.UTC(2026, 5, 15, 12, 0, 0);
@@ -65,6 +107,8 @@ export function testDeviceLayer(options: TestDeviceOptions = {}): DeviceLayer {
   const profile = CAPABILITY_PROFILES[profileName];
   const randomSequence = options.randomSequence ?? [0.5];
   const storage = options.storage ?? inMemoryDeviceStorage();
+  // One per device layer, for a test that does not care to look at it.
+  const styledRenderer = fakeStyledRenderer();
   let randomIndex = 0;
   let deviceIdCount = 0;
   // Unique per device layer as well as per call, so two device layers in one
@@ -87,6 +131,23 @@ export function testDeviceLayer(options: TestDeviceOptions = {}): DeviceLayer {
     videoCapabilities: () => profile.video,
     subtitleCapabilities: () => profile.subtitles,
     playbackTargets: () => profile.targets,
+
+    loadStyledSubtitleRenderer: (rendererOptions) => {
+      const record = options.styledRenderer ?? styledRenderer;
+      if (record.failing) {
+        return Promise.reject(new Error('The test device layer cannot load a styled renderer.'));
+      }
+      record.started.push(rendererOptions);
+      record.offsets.push(rendererOptions.timeOffset);
+      return Promise.resolve<StyledSubtitleRenderer>({
+        setTimeOffset: (seconds) => {
+          record.offsets.push(seconds);
+        },
+        destroy: () => {
+          record.destroyed += 1;
+        },
+      });
+    },
     now: () => options.now ?? FIXED_NOW,
     random: () => {
       const value = randomSequence[randomIndex % randomSequence.length] as number;
