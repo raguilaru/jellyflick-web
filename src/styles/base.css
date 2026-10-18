@@ -442,7 +442,13 @@ body {
   grid-auto-columns: 150px;
   gap: var(--space-3);
   margin: 0 calc(var(--space-2) * -1);
-  padding: var(--space-2);
+  /*
+   * Room above and below for the focus ring, and for a card grown by the hover
+   * card (#21): `overflow-x: auto` clips vertically as well, so a card scaled
+   * past this padding would have its top and bottom shaved off. The horizontal
+   * padding stays what the negative margin above cancels.
+   */
+  padding: var(--space-3) var(--space-2);
   list-style: none;
   overflow-x: auto;
   /* A Row at its end does not drag the page with it. */
@@ -480,8 +486,10 @@ body {
  * is not only a look: `src/navigation/spatial-navigation.ts` ignores anything
  * with a zero-sized box, so a hidden control is not a stop the arrow keys have
  * to step through, and Right still takes the next card along the Row. The
- * keyboard and the remote reach My List from the title page (#17); the hover
- * card (#21) is where this button finally belongs beside Play and More info.
+ * keyboard and the remote reach My List from the title page (#17). On Home the
+ * button is now inside the hover card (#21), beside Play and More info, and the
+ * rule below that reveals it does not reach it there — `.card__hover
+ * .card__control` is what draws it in its new home.
  *
  * `.card--managed` is a card on a page for managing the list, where the control
  * is always drawn and is a focus stop the arrow keys reach on purpose.
@@ -524,6 +532,171 @@ body {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--accent-text);
+}
+
+/*
+ * The enlarged hover card (#21, stories 52 and 53).
+ *
+ * **It is `data-resting` that draws it, not `:hover`.** The attribute is
+ * written on the card by `src/home/hover-card-panel.tsx` once the pointer has
+ * stayed for `HOVER_CARD_DELAY_MS`, and nothing here keys off `:hover` at all.
+ * That is not a flourish:
+ *
+ * - A panel drawn on bare `:hover` puts three buttons across the foot of the
+ *   artwork **the instant the pointer crosses the card**, which is the middle
+ *   of the card — so a press meant for the card lands on Play instead.
+ *   `arrow-key-navigation.spec.ts` caught exactly that, with the keyboard's
+ *   highlight test reporting focus on "Play Severance" where it expected the
+ *   card. A card is a focus stop that opens the title page, and a quick pass
+ *   of the pointer must not change what pressing it does.
+ * - It also makes the delay mean something. Story 53 asks for a card that does
+ *   not trigger while scrolling quickly, and a panel appearing instantly under
+ *   a card that has not grown yet would be the trigger it asks us to avoid.
+ *
+ * The attribute is on the *card* and not on the panel because CSS cannot style
+ * an ancestor: `:has()` is Chrome 105 and ADR 0002's floor is 68. A panel that
+ * knew its own state could never grow the card around it.
+ *
+ * **The plain fallback** story 52's last box asks for is the growing, and only
+ * the growing: the panel's own visibility is the attribute's, so a browser that
+ * draws no `transform` still shows a User the three buttons and the facts on an
+ * un-grown card. Nothing here needs a fallback written out — `transform`,
+ * `transition`, `linear-gradient` and `z-index` are all far below the floor,
+ * and the one modern thing in it is grid `gap`, which is Chrome 66. No flex
+ * `gap` (84, silently nothing), no `inset` (87), no `:is()`/`:where()` (88,
+ * dropped whole), no `backdrop-filter` (76).
+ */
+.card__hover {
+  display: none;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  /* The artwork's box, not the card's: the card's own bottom edge is below the
+     name, which `--card-artwork-height` is what both this and the progress bar
+     measure from. */
+  height: var(--card-artwork-height);
+  box-sizing: border-box;
+  padding: var(--space-2);
+  border-radius: var(--radius);
+  /* A genre list long enough to fill a poster is cut off rather than allowed
+     to grow out of the card and be clipped by the strip's own overflow. */
+  overflow: hidden;
+}
+
+.card[data-resting] > .card__hover {
+  display: grid;
+  gap: var(--space-1);
+  align-content: start;
+  /* Words over the whole poster rather than a line at the foot of it. */
+  background: rgba(11, 11, 13, 0.92);
+}
+
+/*
+ * Rested on: the card grows, and the panel becomes the card's face.
+ *
+ * `transform` rather than width and height, so nothing around it reflows — a
+ * Row that re-laid itself out under the pointer would move the card out from
+ * under it. `z-index` lifts the grown card over its neighbours; `.row__strip`
+ * carries the vertical padding that keeps it from being clipped by its own
+ * `overflow-x`.
+ */
+.card {
+  transition: transform 150ms ease-out;
+}
+
+.card[data-resting] {
+  transform: scale(1.08);
+  z-index: 2;
+}
+
+/*
+ * The three the ticket asks for: Play, My List and More info. Play takes the
+ * line it is on, because it is the one a User came for; the other two share
+ * the line under it. Grid, so the `gap` is the Chrome 66 one.
+ *
+ * The second line is `auto 1fr` and not `auto auto`: My List is a 28px square
+ * and More info is a word and a half, and two `auto` tracks sized to content
+ * left More info narrow enough to break "More info" across two lines on a
+ * 150px card — the one thing rendering it and looking at it caught that no
+ * assertion here would have. The `1fr` gives it everything My List does not
+ * want, and `nowrap` below says it would rather be clipped by the panel's own
+ * `overflow: hidden` than be two lines tall.
+ */
+.card__hover-actions {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-1);
+  margin: 0;
+  justify-content: start;
+  align-items: center;
+}
+
+/*
+ * Both of these are **scoped to the panel on purpose**, and that is not
+ * tidiness: `.button` is written further down this file and sets `font:
+ * inherit` and a page-sized `padding`, so a bare `.card__hover-play` has the
+ * same specificity and *loses* on source order. The symptom was More info
+ * arriving at the page's own font size and breaking across two lines on a
+ * 150px card — caught by rendering a rested card and looking at it, which no
+ * assertion in `desktop-hover-cards.spec.ts` would have.
+ */
+.card__hover .card__hover-play {
+  grid-column: 1 / -1;
+  /* The card is 150px wide, so the page's own button padding is too generous. */
+  margin-top: 0;
+  padding: var(--space-1) var(--space-3);
+  width: 100%;
+  font-size: 13px;
+}
+
+.card__hover .card__hover-more {
+  margin-top: 0;
+  padding: var(--space-1) var(--space-2);
+  font-size: 13px;
+  /* It would rather be clipped by the panel's own `overflow: hidden` than be
+     two lines tall; with the font size above it is neither. */
+  white-space: nowrap;
+}
+
+/*
+ * My List, here, is the same control the card has carried since #13 — which is
+ * where it was always going to end up (`my-list-toggle.tsx`). Inside the panel
+ * it is one of three buttons in a row rather than a thing floating in a
+ * corner, so it gives up being positioned: the rule above that reveals it is
+ * `.card:hover > .card__control`, and in here it is no longer a child of the
+ * card at all.
+ */
+.card__hover .card__control {
+  display: block;
+  position: static;
+  top: auto;
+  right: auto;
+  width: 28px;
+  height: 28px;
+  font-size: 16px;
+}
+
+/*
+ * The age rating, the length and the genres (story 52). A wrapping run with
+ * margins on the children, never flex `gap`: that is Chrome 84 and does
+ * nothing at all on the floor, which is the trap #20's badges were caught by.
+ */
+.card__hover-facts {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0 calc(var(--space-1) * -1);
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.card__hover-fact {
+  margin: 0 var(--space-1);
+  min-width: 0;
+  /* A two-word genre may break; "1h 56m" and "PG-13" are read as one thing. */
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 /* A fixed 2:3 poster box rather than `aspect-ratio`, which ships raw at 88. */

@@ -14,7 +14,7 @@ import {
  * Two components, because two screens want different halves of this:
  *
  * - {@link ExtraRatings} reads a Title's ratings and draws them. The title page
- *   uses it, and so should **#21's enlarged hover card**: it takes the Title's
+ *   uses it, and so does **#21's enlarged hover card**: it takes the Title's
  *   `TitleDetails` and a `compact` flag and needs nothing else, and the read
  *   happens when it mounts, which on a card means on hover rather than for
  *   every card in a Row — `docs/research/ratings-mdblist.md` is explicit that

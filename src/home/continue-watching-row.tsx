@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { useTranslate } from '../i18n/index';
 import type { JellyfinGateway } from '../jellyfin/gateway';
-import { MyListToggle } from '../my-list/my-list-toggle';
+import { HoverCard } from './hover-card-panel';
 import { useSettings } from '../settings/settings-provider';
 import {
   continueWatchingRow,
@@ -183,7 +183,7 @@ export function ContinueWatchingRow({ gateway, readKey }: ContinueWatchingRowPro
             const entry = entries.find((candidate) => candidate.card.titleId === card.titleId);
             return (
               <>
-                <MyListToggle card={card} />
+                <HoverCard card={card} />
                 {entry === undefined ? null : (
                   <RemoveFromContinueWatching entry={entry} onRemove={remove} />
                 )}
@@ -202,8 +202,9 @@ export function ContinueWatchingRow({ gateway, readKey }: ContinueWatchingRowPro
  * It is drawn while the pointer is over the card and is deliberately not a
  * focus stop, exactly as the My List toggle beside it is: the arrow keys read a
  * Row as a line of cards, and a second stop inside each card would break that
- * (`base.css` and `src/navigation/`). The enlarged hover card (#21) is where a
- * remote finally reaches a card's controls, this one included.
+ * (`base.css` and `src/navigation/`). It sits beside the enlarged hover card
+ * (#21), which carries My List, Play and More info; this one stays the Row's
+ * own and keeps its corner.
  */
 function RemoveFromContinueWatching({
   entry,
