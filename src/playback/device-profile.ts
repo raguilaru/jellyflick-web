@@ -1,4 +1,4 @@
-import type { VideoCapabilities } from '../device/types';
+import type { SubtitleCapabilities, VideoCapabilities } from '../device/types';
 
 /**
  * The DeviceProfile Jellyflick sends to `POST /Items/{id}/PlaybackInfo`.
@@ -117,12 +117,38 @@ const TRANSCODE_AUDIO_CHANNELS = '2';
 const SUBTITLE_FORMATS: readonly string[] = ['vtt', 'srt', 'ass', 'ssa'];
 
 /**
+ * The image formats, declared only by a device that can really draw one (#30).
+ *
+ * **This list is how burn-in is asked for, and the asking is by omission.**
+ * `StreamBuilder.GetSubtitleProfile` matches a declared `Format` against the
+ * stream's own `MediaStream.Codec` — exactly, case-insensitively — and falls
+ * back to `SubtitleDeliveryMethod.Encode` when nothing matches, which is the
+ * Server rendering the words into the picture. There is no flag that requests
+ * that; leaving the format out *is* the request.
+ *
+ * So the entries are **codec names rather than file extensions**, unlike the
+ * text formats above, and all three spellings §14 lists are declared: a
+ * Server that reports a track as `sup` would burn it in if only `pgssub` were
+ * claimed, and the failure would look like a device that cannot draw PGS.
+ *
+ * **VobSub and DVB are absent on every device**, which is the ticket's own
+ * first finding: no maintained client-side renderer exists, and Jellyfin's
+ * graphical passthrough hands over a raw PGS payload and never a VobSub
+ * `.idx`, so one would be given the bitmaps with no palette to colour them.
+ * Claiming them would trade a picture that works for one that does not.
+ */
+const PGS_CODEC_NAMES: readonly string[] = ['pgssub', 'hdmv_pgs_subtitle', 'sup'];
+
+/**
  * The profile for a device, from what the device layer says it can play.
  *
  * A pure function of the capabilities, so it is the same answer on the same
  * device and a test can hold one device class's profile still.
  */
-export function deviceProfileFor(capabilities: VideoCapabilities): DeviceProfile {
+export function deviceProfileFor(
+  capabilities: VideoCapabilities,
+  subtitles: SubtitleCapabilities,
+): DeviceProfile {
   const videoCodecs = capabilities.videoCodecs.join(',');
   const audioCodecs = capabilities.audioCodecs.join(',');
 
@@ -162,7 +188,13 @@ export function deviceProfileFor(capabilities: VideoCapabilities): DeviceProfile
       },
     ],
 
-    SubtitleProfiles: SUBTITLE_FORMATS.map((format) => ({
+    SubtitleProfiles: [
+      ...SUBTITLE_FORMATS,
+      // Declared only where the device can draw a bitmap itself. Left out,
+      // the Server burns the track into the picture, which is #30's "the
+      // Server burns them in" and the only way to ask for it.
+      ...(subtitles.canRenderImage ? PGS_CODEC_NAMES : []),
+    ].map((format) => ({
       Format: format,
       Method: 'External' as const,
     })),
