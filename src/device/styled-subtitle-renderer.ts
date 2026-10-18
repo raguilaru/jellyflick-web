@@ -64,27 +64,32 @@ export async function createStyledSubtitleRenderer(
   }
 
   /*
-   * The three `?url` imports are JASSUB's own documented bundler escape hatch
-   * (`player-subtitles.md` §6a quotes it): the worker and the WASM have to be
-   * separate assets with addresses of their own, because the worker fetches
-   * the binary itself at runtime. Vite emits them as assets and hands back the
-   * hashed URLs. Both WASM builds are named, and JASSUB picks between them by
-   * testing for SIMD — the non-SIMD one is why this works on older engines.
+   * Imported here rather than at the top of the module, so a browser that
+   * cannot run it does not fetch it: this module is already in a chunk of its
+   * own, and the engine is the two megabytes inside that chunk.
    */
-  const [{ default: JASSUB }, workerUrl, wasmUrl, modernWasmUrl] = await Promise.all([
-    import('jassub'),
-    import('jassub/dist/wasm/jassub-worker.js?url').then((module) => module.default),
-    import('jassub/dist/wasm/jassub-worker.wasm?url').then((module) => module.default),
-    import('jassub/dist/wasm/jassub-worker-modern.wasm?url').then((module) => module.default),
-  ]);
+  const { default: JASSUB } = await import('jassub');
 
+  /*
+   * **No `workerUrl` or `wasmUrl`.** JASSUB's own defaults are
+   * `new Worker(new URL('./worker/worker.js', import.meta.url), { type: 'module' })`
+   * and `new URL('./wasm/jassub-worker.wasm', import.meta.url)`, and those are
+   * precisely the two patterns a modern bundler understands: Vite bundles the
+   * worker — which it must, because `worker/worker.js` imports bare specifiers
+   * a browser cannot resolve — and emits both WASM builds and the default font
+   * as assets with hashed addresses of their own. JASSUB picks between the two
+   * binaries by testing for SIMD.
+   *
+   * Pointing `workerUrl` at `jassub/dist/wasm/jassub-worker.js` is the trap
+   * here, and it fails **silently**: that file is the Emscripten glue loaded
+   * *inside* the worker, not the worker, so the Worker starts, nothing ever
+   * answers, `ready` never settles and a User watches a blank canvas with no
+   * error anywhere. `test/e2e/styled-subtitles.spec.ts` is what catches it.
+   */
   const renderer = new JASSUB({
     video: options.video,
     canvas: options.canvas,
     subContent: options.content,
-    workerUrl,
-    wasmUrl,
-    modernWasmUrl,
     // The embedded fonts (`MediaAttachments`), as URLs the worker fetches
     // itself. `fonts` is the list of extra faces to load beside the default.
     fonts: [...options.fontUrls],
@@ -99,6 +104,17 @@ export async function createStyledSubtitleRenderer(
      */
     queryFonts: false,
   });
+
+  /*
+   * **Waited for, and this is the difference between a fallback and a blank
+   * canvas.** The constructor returns at once; everything that can really go
+   * wrong — the worker, the WASM binary, libass refusing the file — happens
+   * after it, inside `ready`. Resolving the seam's promise before that would
+   * report success for a renderer that never draws, and the caller would have
+   * no reason to fall back to the words. Rejecting here is what makes
+   * `onUnsupported` honest.
+   */
+  await renderer.ready;
 
   return {
     setTimeOffset: (seconds) => {
