@@ -614,28 +614,49 @@ body {
  * The three the ticket asks for: Play, My List and More info. Play takes the
  * line it is on, because it is the one a User came for; the other two share
  * the line under it. Grid, so the `gap` is the Chrome 66 one.
+ *
+ * The second line is `auto 1fr` and not `auto auto`: My List is a 28px square
+ * and More info is a word and a half, and two `auto` tracks sized to content
+ * left More info narrow enough to break "More info" across two lines on a
+ * 150px card — the one thing rendering it and looking at it caught that no
+ * assertion here would have. The `1fr` gives it everything My List does not
+ * want, and `nowrap` below says it would rather be clipped by the panel's own
+ * `overflow: hidden` than be two lines tall.
  */
 .card__hover-actions {
   display: grid;
-  grid-template-columns: auto auto;
+  grid-template-columns: auto 1fr;
   gap: var(--space-1);
   margin: 0;
   justify-content: start;
   align-items: center;
 }
 
-.card__hover-play {
+/*
+ * Both of these are **scoped to the panel on purpose**, and that is not
+ * tidiness: `.button` is written further down this file and sets `font:
+ * inherit` and a page-sized `padding`, so a bare `.card__hover-play` has the
+ * same specificity and *loses* on source order. The symptom was More info
+ * arriving at the page's own font size and breaking across two lines on a
+ * 150px card — caught by rendering a rested card and looking at it, which no
+ * assertion in `desktop-hover-cards.spec.ts` would have.
+ */
+.card__hover .card__hover-play {
   grid-column: 1 / -1;
   /* The card is 150px wide, so the page's own button padding is too generous. */
   margin-top: 0;
   padding: var(--space-1) var(--space-3);
   width: 100%;
+  font-size: 13px;
 }
 
-.card__hover-more {
+.card__hover .card__hover-more {
   margin-top: 0;
   padding: var(--space-1) var(--space-2);
   font-size: 13px;
+  /* It would rather be clipped by the panel's own `overflow: hidden` than be
+     two lines tall; with the font size above it is neither. */
+  white-space: nowrap;
 }
 
 /*
