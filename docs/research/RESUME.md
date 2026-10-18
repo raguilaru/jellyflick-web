@@ -4,6 +4,114 @@ State of the `/implement-spec` run on the integration branch `feat/jellyflick-v1
 (draft PR #38). Update this whenever a wave lands, so a fresh session can pick the work
 up without re-deriving anything.
 
+## EIGHTH SESSION — PAUSED FOR TOKENS, two branches snapshotted mid-flight
+
+**Read this, then the seventh session's section below, which is still the standing guidance
+and has not been superseded.** The seventh session's traps, conflict groups and wave costs
+all still apply.
+
+The session was **paused deliberately**, by the host, to free tokens — not interrupted and
+not finished. Two implementers were running and were **stopped on purpose**, with their
+trees snapshotted first. Nothing is running now: no agent, no dev server, no fake Jellyfin,
+no browser process (checked with `pgrep`, not assumed).
+
+### What landed
+
+**#43 is merged and closed at `d99b590`**, done inline by the integrator before launching
+anything, which is where the seventh session said a `GLOSSARY.md` edit belongs. The sweep
+found **three** gaps rather than the one #43 suspected: the **Subtitle timing** panel
+(#28), kept as a separate entry from the Subtitle Offset it moves; **Extra Ratings** (#20);
+and **Trailer**, which the Billboard has shown since #16 and which no entry had ever
+defined. **Billboard Source was already in** — #43's body was wrong about that one.
+Docs-only, so no gate was re-run beyond the integration tip's own.
+
+**Integration tip `26f6bff`, pushed; origin verified with `git ls-remote`, not with a quiet
+push.** Draft PR #38 still draft. Nothing has merged into the branch since #28 except #43
+and these two doc commits, so **the seventh session's gate numbers still describe the tip**:
+851 unit tests in 62 files, 400 Playwright passed / 26 skipped / 0 failed, main JS
+161.22 kB / 48.88 kB gz.
+
+### The two paused branches — both pushed, both ungated
+
+Both were created by the integrator, `npm ci` run in each before either agent was briefed,
+and both branches are based on `d99b590` (verified with `git merge-base --is-ancestor`).
+**Both are pushed to `origin` and both worktrees are clean** — `git status --short` empty in
+each. The work is durable whether or not the worktrees survive.
+
+| | #29 Styled subtitles | #21 Desktop hover cards |
+|---|---|---|
+| Branch | `ticket/29-styled-subtitles` | `ticket/21-desktop-hover-cards` |
+| Worktree | `.claude/worktrees/ticket-29-styled-subtitles` | `.claude/worktrees/ticket-21-desktop-hover-cards` |
+| Ports (**both suites**) | `APP_PORT=8331` `FAKE_JELLYFIN_PORT=8332` | `APP_PORT=8341` `FAKE_JELLYFIN_PORT=8342` |
+| Last **real** commit | `69ccf08` | `13ef239` |
+| WIP snapshot tip | `287b8a0` | `24a5184` |
+| Real commits | 5 | 4 |
+| In the snapshot | 17 files, +837/−14 | 6 files, +125/−24 |
+| Whole branch so far | 27 files, +2124/−13 | 18 files, +1497/−45 |
+
+**The last commit on each branch is a WIP snapshot the integrator made, not the author.**
+Its boundary is arbitrary — wherever the agent happened to be, not a green step — and
+**nothing on either branch has been gated at all.** Each WIP message says so and names the
+commit to `git reset --soft` back to. Do that and recommit in the author's own steps rather
+than building on top of it.
+
+**Resuming either one:**
+
+1. `npm ci` in its worktree first. **#29 adds `jassub@2.5.20` as a runtime dependency** —
+   the project's second after hls.js — so its worktree's `node_modules` is stale and will
+   fail `typecheck`, `test` and `build` at once (trap 3).
+2. `git reset --soft <its last real commit>`, inspect, recommit properly.
+3. **#29 renames `src/playback/styled-subtitles.ts` → `subtitle-presentation.ts` while
+   adding a new `styled-subtitles.tsx`.** Read the rename before assuming which file you
+   are looking at; the name is now reused for a different thing.
+4. **#21's `docs/architecture.md` edit is half-finished.** Its last words were that it was
+   flipping stale forward-references in that file to past tense, so expect a file mid-edit
+   rather than a wrong one.
+5. Re-brief a fresh implementer with **pointers only**, plus how far the integration tip has
+   moved and what is in those commits — not just that it moved.
+6. Then gate: `lint`, `typecheck`, `build`, unit, Playwright, **each with its own exit
+   code**, and a bundle measurement. Nothing on either branch has passed any of these yet.
+
+### Two things these branches found that change the plan below
+
+- **#21 never touched `src/title/title-screen.tsx`.** It is entirely in `src/home/`:
+  `hover-card-panel.tsx`, `hover-card.ts`, `card-actions.tsx`, `home-screen.tsx`,
+  `home-rows.tsx`, `row.tsx`. So the seventh session's conflict grouping was wrong in both
+  directions: **#19 is not blocked by #21 at all** and can run beside it, while **#21 now
+  collides with #23 and #41**, which are the `src/home/` tickets. Re-read the conflict
+  groups below with that correction in hand.
+- **The only file the two paused branches share is `src/styles/base.css`**, and #21 is the
+  only one of them that touched `src/i18n/`. So the usual every-wave `en.ts`/`es.ts`
+  conflict does **not** apply between these two — but **#21 also added four lines to
+  `GLOSSARY.md`** on top of #43, so a glossary conflict is possible now where there was
+  none before.
+
+### The frontier when work resumes
+
+- **In flight, paused, ungated:** #29 and #21 as above. Finish these before launching
+  anything new in `src/playback/` or `src/home/`.
+- **Spec tickets open and unblocked:** #19, #23, #30, #32, #33, #34. All six report
+  `blocked_by` 0 live. #30 and #32 are `src/playback/` and wait on #29 in practice; #23
+  waits on #21 now, not on #22; **#19 is free immediately** — see the correction above.
+- **The run's own findings:** #41, #42, #46 open. #43 is now closed.
+- **`needs-info`, both needing the host rather than an agent:** #45 (MDBList's ratings
+  shape, no key available to make one real call) and #47 (`MediaStream.Path` for subtitles
+  against a real Jellyfin).
+- **Still owed at the end:** `code-review` over the whole branch, the git history rewrite in
+  `decisions.md` §10, and marking PR #38 ready. See "Still owed at the end of the run" at
+  the bottom — it is current.
+
+### Worktrees
+
+Four exist. **Keep all four:**
+
+- `implement-spec-c273ce` — the integrator's own, on `feat/jellyflick-v1`.
+- `ticket-29-styled-subtitles`, `ticket-21-desktop-hover-cards` — **the paused work. Do not
+  remove these**; they are clean and pushed, so removing them would lose nothing, but
+  keeping them saves an `npm ci` each and keeps the resume cheap.
+- `implement-spec-88c250` and `remote-setup-2e9b22` — **other Claude sessions, not this
+  run. Leave them alone.**
+
 ## START HERE — seventh session, four merged, nothing in flight
 
 The seventh session fixed the **last of the four e2e failures** and launched **#31 and
