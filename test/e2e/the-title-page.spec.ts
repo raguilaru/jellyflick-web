@@ -215,7 +215,12 @@ test('is driveable with nothing but the arrow keys', async ({ page }, testInfo) 
   }
   expect(await focused(page)).toBe('Play');
 
-  // And the actions are a line: Right takes the next one along.
+  // And the actions are a line: Right takes the next one along. Arrival's
+  // line gained Watch trailer between Play and My List in #19 — what this
+  // asserts is that Right walks the line, so the line's own contents are
+  // named rather than assumed.
+  await page.keyboard.press('ArrowRight');
+  expect(await focused(page)).toBe('Watch trailer');
   await page.keyboard.press('ArrowRight');
   expect(await focused(page)).toBe('Add Arrival to My List');
 });
