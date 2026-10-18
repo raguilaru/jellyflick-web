@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { MediaSourceInfo } from '../../src/jellyfin/gateway';
-import { tracksOf } from '../../src/playback/media-tracks';
+import { imageSubtitleFormatOf, tracksOf } from '../../src/playback/media-tracks';
 
 /**
  * A media source's `MediaStreams` read as the two lists the track picker shows
@@ -87,6 +87,44 @@ describe('the tracks of a media source', () => {
         expect(tracks.subtitles[0]?.kind).toBe('image');
       });
     }
+  });
+
+  /**
+   * **Which** bitmap, which is #30's question rather than #27's. `kind` says
+   * only that a track is a picture; whether this app can draw it depends on
+   * the family, because PGS has a client-side renderer and VobSub and DVB have
+   * none (the finding recorded on #30). The expected values are §14's own
+   * table of codec names, not a restatement of the regular expressions.
+   */
+  describe('which bitmap family an image track is', () => {
+    const pgsCodecs = ['pgssub', 'hdmv_pgs_subtitle', 'sup', 'PGSSUB'];
+    const vobSubCodecs = ['dvdsub', 'dvd_subtitle', 'vobsub', 'sub'];
+    const dvbCodecs = ['dvbsub', 'dvb_subtitle'];
+
+    for (const codec of pgsCodecs) {
+      it(`reads ${codec} as PGS, the one family a renderer exists for`, () => {
+        expect(imageSubtitleFormatOf(codec)).toBe('pgs');
+      });
+    }
+
+    for (const codec of vobSubCodecs) {
+      it(`reads ${codec} as VobSub, which is always burned in`, () => {
+        expect(imageSubtitleFormatOf(codec)).toBe('vobsub');
+      });
+    }
+
+    for (const codec of dvbCodecs) {
+      it(`reads ${codec} as DVB, which is always burned in`, () => {
+        expect(imageSubtitleFormatOf(codec)).toBe('dvb');
+      });
+    }
+
+    it('reads a text codec as no bitmap family at all', () => {
+      expect(imageSubtitleFormatOf('subrip')).toBeUndefined();
+      // The trap §14 names: a `.sub` extension on a text format.
+      expect(imageSubtitleFormatOf('microdvd')).toBeUndefined();
+      expect(imageSubtitleFormatOf(undefined)).toBeUndefined();
+    });
   });
 
   it('has no tracks at all for a source the Server sent no streams for', () => {
