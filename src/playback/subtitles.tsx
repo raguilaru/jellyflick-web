@@ -4,7 +4,7 @@ import type { JellyfinGateway } from '../jellyfin/gateway';
 import { flattenAss } from './ass';
 import type { SubtitleTrack } from './media-tracks';
 import { createCueCursor, parseSubtitles, type SubtitleCue } from './subtitle-cues';
-import type { SubtitleFormat } from './styled-subtitles';
+import type { SubtitleFormat } from './subtitle-presentation';
 
 /**
  * The subtitles drawn over the picture (#27).
@@ -74,7 +74,7 @@ export type SubtitlesProps = {
    * dropped, which is what a device that cannot draw the styling gets and what
    * a device that can falls back to when the renderer will not load.
    *
-   * `styled-subtitles.ts` decides it. The decision is not made here because
+   * `subtitle-presentation.ts` decides it. The decision is not made here because
    * the player has to know it too: it is what picks this component or the
    * styled renderer in the first place.
    */
@@ -102,7 +102,7 @@ export type SubtitlesProps = {
  * extension, so one request gets a VTT out of SubRip, MicroDVD or anything
  * else text it holds — which is why there is no per-codec branch here. A
  * styled track is the one exception, and it arrives as `format` from
- * `styled-subtitles.ts`.
+ * `subtitle-presentation.ts`.
  */
 const DEFAULT_SUBTITLE_FORMAT: SubtitleFormat = 'vtt';
 

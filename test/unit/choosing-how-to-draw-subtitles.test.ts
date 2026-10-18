@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CAPABILITY_PROFILES } from '../device/profiles';
 import type { MediaSourceInfo } from '../../src/jellyfin/gateway';
 import type { SubtitleTrack } from '../../src/playback/media-tracks';
-import { embeddedFontsOf, subtitlePresentationFor } from '../../src/playback/styled-subtitles';
+import { embeddedFontsOf, subtitlePresentationFor } from '../../src/playback/subtitle-presentation';
 
 /**
  * How a subtitle track is going to be drawn (#29), decided per device.

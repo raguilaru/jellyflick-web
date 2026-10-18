@@ -53,7 +53,7 @@ import type { SubtitleCue } from './subtitle-cues';
 
 /**
  * Whether a subtitle codec is a styled one, which is what decides whether the
- * styled renderer is worth loading for a track (`styled-subtitles.ts`).
+ * styled renderer is worth loading for a track (`subtitle-presentation.ts`).
  *
  * `jellyfin-playback.md` §14's text codecs include `ass` and `ssa`, and those
  * are the two the Server converts to and from. `media-tracks.ts` already reads
