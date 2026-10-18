@@ -167,6 +167,10 @@ function sourceFor(
     SupportsTranscoding: true,
     RunTimeTicks: item.RunTimeTicks ?? null,
     MediaStreams: item.MediaStreams ?? [],
+    // The embedded fonts a styled subtitle track is drawn with (#29). An empty
+    // list rather than null for a file with none, which is what the real
+    // Server sends.
+    MediaAttachments: item.MediaAttachments ?? [],
     DefaultAudioStreamIndex: audioIndex,
     DefaultSubtitleStreamIndex: subtitleIndex,
     // #31: whether this Server's detection plugin found anything on this item.

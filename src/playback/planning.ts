@@ -6,6 +6,7 @@ import type {
 } from '../jellyfin/gateway';
 import { deviceProfileFor } from './device-profile';
 import { tracksOf, type MediaTracks } from './media-tracks';
+import { embeddedFontsOf, type EmbeddedFont } from './subtitle-presentation';
 
 /**
  * Asking the Server how to play a Title, and turning its answer into the one
@@ -52,6 +53,13 @@ export type PlaybackPlan = {
   readonly subtitleStreamIndex?: number;
   /** Every track the file holds, which is what the picker offers (#27). */
   readonly tracks: MediaTracks;
+  /**
+   * The embedded fonts a styled subtitle track is drawn with (#29, story 104).
+   * Read here for the same reason `tracks` is: this is the one place the
+   * Server's `MediaSourceInfo` is turned into the app's own vocabulary, so
+   * nothing downstream has to hold on to the raw source to find them.
+   */
+  readonly fonts: readonly EmbeddedFont[];
   /**
    * Whether the Server holds any intro or credits markers for this source
    * (#31). `jellyfin-playback.md` §12: the flag "exists precisely to avoid a
@@ -148,6 +156,7 @@ export async function planPlayback(
       ...numberIf('audioStreamIndex', source.DefaultAudioStreamIndex),
       ...numberIf('subtitleStreamIndex', source.DefaultSubtitleStreamIndex),
       tracks: tracksOf(source),
+      fonts: embeddedFontsOf(source),
       hasSegments: source.HasSegments === true,
     },
   };

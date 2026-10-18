@@ -29,6 +29,8 @@ import {
   subtitleOffsetFor,
   withSubtitleOffset,
 } from './subtitle-offset';
+import { subtitlePresentationFor } from './subtitle-presentation';
+import { StyledSubtitles } from './styled-subtitles';
 import { Subtitles } from './subtitles';
 import { SubtitleTiming } from './subtitle-timing';
 import { TrackPicker } from './track-picker';
@@ -203,6 +205,45 @@ export function Player({
   const audioIndex = chosenAudio ?? plan?.audioStreamIndex;
 
   /**
+   * **How** that track is going to be drawn on this device (#29): with its own
+   * styling, or flattened to the words and the timing. It is asked here rather
+   * than inside the overlay because the answer picks *which* thing draws it,
+   * and the file to fetch comes with it.
+   */
+  const presentation =
+    subtitleTrack === undefined
+      ? undefined
+      : subtitlePresentationFor({
+          track: subtitleTrack,
+          capabilities: device.subtitleCapabilities(),
+        });
+
+  /**
+   * Whether the styled renderer turned out not to be loadable on this device
+   * after all (#29). The capability can only say whether it is worth asking;
+   * a dropped chunk or a WASM binary the browser refused is only known once
+   * the asking has happened, so the fallback is a state the renderer reports
+   * and this is it. Reset per subtitle file, because the next track deserves
+   * its own attempt — and because a User who switched away and back has done
+   * the one thing that most looks like asking again.
+   */
+  const [styledUnsupported, setStyledUnsupported] = useState(false);
+
+  /**
+   * What is really going to draw, once that is taken into account. Falling
+   * back lands on `cues`: the same overlay, the same flattened file and the
+   * same offset the Chromium 68 floor gets.
+   */
+  const draw: 'styled' | 'cues' | 'none' =
+    presentation === undefined
+      ? 'none'
+      : presentation.draw !== 'styled'
+        ? presentation.draw
+        : styledUnsupported
+          ? 'cues'
+          : 'styled';
+
+  /**
    * Which **subtitle file** is being drawn, which is what an offset belongs to
    * (#28, story 102). Absent while subtitles are off, which is also when there
    * is nothing to time.
@@ -211,6 +252,15 @@ export function Player({
     subtitleTrack === undefined || plan === undefined
       ? undefined
       : subtitleFileOf(subtitleTrack, plan.mediaSourceId);
+  /**
+   * A new subtitle file gets its own attempt at the styled renderer: the last
+   * one failing says nothing about this one, and switching away and back is
+   * the one thing a User does that most looks like asking again.
+   */
+  useEffect(() => {
+    setStyledUnsupported(false);
+  }, [subtitleFile]);
+
   /** The offset stored for it, read on every render so the ref below is fresh. */
   const storedOffset = subtitleOffsetFor(settings.settings.subtitleOffsets, subtitleFile ?? '');
   const stored = useRef(storedOffset);
@@ -474,12 +524,32 @@ export function Player({
         goes full-screen, and an overlay outside it would vanish the moment it
         did (`player-subtitles.md` §6c pitfall 3).
       */}
-      {plan !== undefined ? (
+      {plan !== undefined && draw === 'styled' && subtitleTrack !== undefined ? (
+        /*
+          Styled subtitles (#29), drawn by libass on its own canvas in the same
+          grid cell. It is the alternative to the overlay below rather than an
+          addition to it: both drawing at once would be every line twice.
+        */
+        <StyledSubtitles
+          device={device}
+          gateway={gateway}
+          itemId={plan.itemId}
+          mediaSourceId={plan.mediaSourceId}
+          track={subtitleTrack}
+          fonts={plan.fonts}
+          offsetSeconds={offsetSeconds}
+          onCues={setCues}
+          video={video}
+          onUnavailable={() => setSubtitlesUnavailable(true)}
+          onUnsupported={() => setStyledUnsupported(true)}
+        />
+      ) : plan !== undefined ? (
         <Subtitles
           gateway={gateway}
           itemId={plan.itemId}
           mediaSourceId={plan.mediaSourceId}
-          {...(subtitleTrack === undefined ? {} : { track: subtitleTrack })}
+          {...(subtitleTrack === undefined || draw === 'none' ? {} : { track: subtitleTrack })}
+          {...(presentation === undefined ? {} : { format: presentation.format })}
           offsetSeconds={offsetSeconds}
           onCues={setCues}
           video={video}

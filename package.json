@@ -6,6 +6,7 @@
   "type": "module",
   "dependencies": {
     "hls.js": "1.7.3",
+    "jassub": "2.5.20",
     "preact": "11.0.1",
     "preact-iso": "2.12.2"
   },

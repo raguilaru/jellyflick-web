@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { useTranslate } from '../i18n/index';
 import type { JellyfinGateway } from '../jellyfin/gateway';
+import { flattenAss } from './ass';
 import type { SubtitleTrack } from './media-tracks';
 import { createCueCursor, parseSubtitles, type SubtitleCue } from './subtitle-cues';
+import type { SubtitleFormat } from './subtitle-presentation';
 
 /**
  * The subtitles drawn over the picture (#27).
@@ -66,6 +68,18 @@ export type SubtitlesProps = {
   /** The track to draw. Absent draws nothing, which is subtitles off. */
   track?: SubtitleTrack;
   /**
+   * Which file to ask the Server for, and so which grammar the text is read
+   * with (#29). `vtt` is #27's path and the common case; `ass` is a styled
+   * track being **flattened** — the words and the timing kept and the styling
+   * dropped, which is what a device that cannot draw the styling gets and what
+   * a device that can falls back to when the renderer will not load.
+   *
+   * `subtitle-presentation.ts` decides it. The decision is not made here because
+   * the player has to know it too: it is what picks this component or the
+   * styled renderer in the first place.
+   */
+  format?: SubtitleFormat;
+  /**
    * How far the subtitles are shifted (#28), in seconds, positive for later.
    * It is subtracted from the element's position, so a cue the file puts at
    * ten seconds is drawn at ten and a half with an offset of half a second.
@@ -83,19 +97,21 @@ export type SubtitlesProps = {
 };
 
 /**
- * The format asked for. `jellyfin-playback.md` §14: the Server converts on the
- * fly and the format **is** the file extension, so one request gets a VTT out
- * of SubRip, MicroDVD or anything else text it holds — which is why there is no
- * per-codec branch here. A graphical track never reaches this component; the
- * picker will not offer one (`media-tracks.ts`).
+ * The format asked for when nothing says otherwise. `jellyfin-playback.md`
+ * §14: the Server converts on the fly and the format **is** the file
+ * extension, so one request gets a VTT out of SubRip, MicroDVD or anything
+ * else text it holds — which is why there is no per-codec branch here. A
+ * styled track is the one exception, and it arrives as `format` from
+ * `subtitle-presentation.ts`.
  */
-const SUBTITLE_FORMAT = 'vtt';
+const DEFAULT_SUBTITLE_FORMAT: SubtitleFormat = 'vtt';
 
 export function Subtitles({
   gateway,
   itemId,
   mediaSourceId,
   track,
+  format = DEFAULT_SUBTITLE_FORMAT,
   offsetSeconds,
   onCues,
   video,
@@ -134,13 +150,17 @@ export function Subtitles({
         itemId,
         mediaSourceId,
         index: track.index,
-        format: SUBTITLE_FORMAT,
+        format,
         ...(track.deliveryUrl === undefined ? {} : { deliveryUrl: track.deliveryUrl }),
       })
       .then(
         (body) => {
           if (abandoned) return;
-          const parsed = parseSubtitles(body);
+          // One grammar per format, and the only thing the two parsers share
+          // is what they answer. `flattenAss` is where the override language
+          // is understood; `parseSubtitles` strips `<markup>` and would draw
+          // `{\i1}` at a User verbatim.
+          const parsed = format === 'ass' ? flattenAss(body) : parseSubtitles(body);
           setCues(parsed);
           reportCues.current?.(parsed);
           // A track the Server handed over but that held no cues is the same
@@ -159,7 +179,7 @@ export function Subtitles({
       abandoned = true;
     };
     // The gateway is rebuilt on every render, so its address is the dependency.
-  }, [gateway.serverAddress, itemId, mediaSourceId, track?.index, track?.deliveryUrl]);
+  }, [gateway.serverAddress, itemId, mediaSourceId, track?.index, track?.deliveryUrl, format]);
 
   /**
    * The frame loop. It runs only while there are cues, so a Title with

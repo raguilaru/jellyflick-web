@@ -152,6 +152,9 @@ const GRAPHICAL_SUBTITLE_BYTES = new Uint8Array([0x50, 0x47, 0x00, 0x01, 0x02, 0
  */
 function subtitleFileFor(item: FakeItem, stream: FakeMediaStream, format: string): string {
   const [first, second] = linesFor(stream.Language);
+  if (format === 'ass' || format === 'ssa') {
+    return assFileFor(item, first, second);
+  }
   if (format === 'srt') {
     return [
       '1',
@@ -183,7 +186,56 @@ function linesFor(language: string | undefined): readonly [string, string] {
       return ['Hola', 'Adiós'];
     case 'fra':
       return ['Bonjour', 'Au revoir'];
+    // Arrival's styled ASS track (#29). Its own words, so a test can tell the
+    // styled track apart from the English one it would otherwise read alike.
+    case 'jpn':
+      return ['こんにちは', 'さようなら'];
     default:
       return ['Hello', 'Goodbye'];
   }
+}
+
+/**
+ * A styled file (#29), for a track whose codec is `ass` — and the one the
+ * Server hands over when `Stream.ass` is asked for.
+ *
+ * It is a **real ASS file**, not a shape: the flattener and libass both have
+ * to be able to read it, and a fake that answered an approximation would let a
+ * client ship a parser nobody had run. So it carries what makes such a file
+ * hard, and each of these is a rule `flattening-styled-subtitles.test.ts`
+ * holds on its own:
+ *
+ * - a `[Script Info]` and a `[V4+ Styles]` section above the events, and a
+ *   `Format:` line naming the event columns
+ * - a style naming an **embedded font** by name, which is what the
+ *   `MediaAttachments` beside this track carry
+ * - override blocks on the dialogue — italics, and a positioned, faded sign
+ * - a `Comment:` row, which is in the file and is not a subtitle
+ *
+ * The two spoken lines keep the **same times as every other format this route
+ * serves** (0.5–3 s and 3–6 s, inside the committed six-second video), so a
+ * test can switch from the English SubRip track to this one and compare like
+ * with like — and the words still name the language, which is what makes "the
+ * User switched tracks" readable off the screen.
+ */
+function assFileFor(item: FakeItem, first: string, second: string): string {
+  return [
+    '[Script Info]',
+    `Title: ${item.Name}`,
+    'ScriptType: v4.00+',
+    'PlayResX: 1920',
+    'PlayResY: 1080',
+    '',
+    '[V4+ Styles]',
+    'Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding',
+    'Style: Default,Heptapod Sans,54,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,2,0,2,10,10,30,1',
+    'Style: Sign,Heptapod Display,72,&H00FFD700,&H000000FF,&H00000000,&H00000000,1,0,0,0,100,100,0,0,1,3,0,8,10,10,10,1',
+    '',
+    '[Events]',
+    'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text',
+    `Comment: 0,0:00:00.00,0:00:00.50,Default,,0,0,0,,Typesetting note: do not show this line.`,
+    `Dialogue: 0,0:00:00.50,0:00:03.00,Default,,0,0,0,,{\\i1}${first}{\\i0}`,
+    `Dialogue: 0,0:00:03.00,0:00:06.00,Default,,0,0,0,,{\\pos(960,540)\\fad(200,200)}${second} (${item.Name})`,
+    '',
+  ].join('\n');
 }

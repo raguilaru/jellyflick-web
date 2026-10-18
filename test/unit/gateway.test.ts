@@ -723,6 +723,26 @@ describe('the Jellyfin gateway', () => {
       expect(text).toContain('Hola');
     });
 
+    /**
+     * #29: the styled file itself, which is what the renderer is handed and
+     * what `flattenAss` reads when there is no renderer. The format is the
+     * file extension, so one request gets ASS out of the same endpoint that
+     * answers WebVTT.
+     */
+    it('fetches a styled track as ASS, which is the renderer’s own format', async () => {
+      const text = await subtitleGateway().getSubtitleText({
+        itemId: 'movie-arrival',
+        mediaSourceId: 'source-movie-arrival',
+        index: 5,
+        format: 'ass',
+      });
+
+      expect(text).toContain('[Events]');
+      expect(text).toContain('Dialogue:');
+      // The style names an embedded font, which is what the attachments carry.
+      expect(text).toContain('Heptapod Sans');
+    });
+
     it('fails rather than answering with nothing when the Server refuses a track', async () => {
       await expect(
         subtitleGateway().getSubtitleText({
@@ -734,6 +754,60 @@ describe('the Jellyfin gateway', () => {
       ).rejects.toMatchObject({ status: 404 });
     });
   });
+
+  /**
+   * The embedded fonts a styled subtitle file is drawn with (#29). A URL
+   * rather than the bytes, because the renderer fetches it in its own worker —
+   * so the token has to ride in the query, as the video's and the subtitles'
+   * do, and the canonical path is the one the Server generates for itself.
+   */
+  describe('one embedded font attachment', () => {
+    const attachmentGateway = () =>
+      createJellyfinGateway({
+        serverAddress: fakeJellyfinUrl(),
+        deviceId: 'reads-attachments',
+        ...identity,
+        token: tokenFor('reads-attachments'),
+      });
+
+    it('builds the canonical Attachments path, with the token in the query', () => {
+      expect(
+        attachmentGateway().attachmentUrl({
+          itemId: 'movie-arrival',
+          mediaSourceId: 'source-movie-arrival',
+          index: 1,
+        }),
+      ).toBe(
+        `${fakeJellyfinUrl()}/Videos/movie-arrival/source-movie-arrival/Attachments/1?ApiKey=${tokenFor('reads-attachments')}`,
+      );
+    });
+
+    /** The renderer fetches this itself, so the address has to really answer. */
+    it('answers the font at that address', async () => {
+      const response = await fetch(
+        attachmentGateway().attachmentUrl({
+          itemId: 'movie-arrival',
+          mediaSourceId: 'source-movie-arrival',
+          index: 0,
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toContain('font');
+    });
+
+    it('uses the Server’s own DeliveryUrl when it gave one', () => {
+      expect(
+        attachmentGateway().attachmentUrl({
+          itemId: 'movie-arrival',
+          mediaSourceId: 'source-movie-arrival',
+          index: 1,
+          deliveryUrl: '/Videos/movie-arrival/source-movie-arrival/Attachments/0',
+        }),
+      ).toBe(`${fakeJellyfinUrl()}/Videos/movie-arrival/source-movie-arrival/Attachments/0`);
+    });
+  });
+
 
   /**
    * The intro and credits markers (#31), from `jellyfin-playback.md` §12:
