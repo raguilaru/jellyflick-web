@@ -6,6 +6,7 @@ import type { CapabilityProfileName, FakeStyledRenderer } from '../device/profil
 import { fakeStyledRenderer, inMemoryDeviceStorage, testDeviceLayer } from '../device/profiles';
 import {
   fakeRequests,
+  fakeWrites,
   forgetFakeRequests,
   forgetFakeWrites,
   resetFakeState,
@@ -21,7 +22,7 @@ import { fakeJellyfinUrl } from '../fake-jellyfin/url';
  * as plain text where it cannot**, and the Subtitle Offset works either way.
  * The grammar is pinned down on its own in
  * `flattening-styled-subtitles.test.ts` and the decision in
- * `choosing-a-subtitle-renderer.test.ts`; this file is about what a User ends
+ * `choosing-how-to-draw-subtitles.test.ts`; this file is about what a User ends
  * up looking at, and which file the Server was asked for.
  *
  * **The capability profile is what each test varies**, which is the one thing
@@ -35,7 +36,34 @@ import { fakeJellyfinUrl } from '../fake-jellyfin/url';
  * attachments.
  */
 
-afterEach(resetFakeState);
+/**
+ * A Client Settings save is written **behind** the User, so one a test started
+ * can still be in flight when that test ends — and if it lands after the next
+ * test has reseeded the Server, that test is handed an offset nobody in it
+ * ever made (#46). Two tests here move the Subtitle Offset, so this file has
+ * the same exposure `shifting-the-subtitles.test.tsx` guards against, and the
+ * same guard: two equal counts in a row is settled.
+ *
+ * It is worth the words here because of how this one would fail. #28 met this
+ * hazard as a subtitle that **silently refused to draw** rather than as
+ * anything resembling a settings bug, and a styled track that draws nothing is
+ * this file's most ordinary failure. A victim test fails only in sequence and
+ * never in isolation, which is the signature to recognise.
+ */
+async function savesHaveSettled(): Promise<void> {
+  let seen = -1;
+  await waitFor(async () => {
+    const now = (await fakeWrites()).length;
+    const quiet = now === seen;
+    seen = now;
+    expect(quiet).toBe(true);
+  });
+}
+
+afterEach(async () => {
+  await savesHaveSettled();
+  await resetFakeState();
+});
 
 beforeEach(async () => {
   window.history.replaceState(null, '', '/');
