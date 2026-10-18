@@ -159,8 +159,17 @@ test.describe('with a pointer', () => {
 
     // The player over Home, and Home still behind it: story 52 is about acting
     // on a Title *without* opening the title page.
+    //
+    // The **address** is what says which screen this is, and a level-1 heading
+    // is not: the Billboard above the Rows draws the featured Title's name in
+    // an `<h1>`, and the Title it features on the sample Server is Arrival.
+    // So "no h1 called Arrival" is false on Home whatever Play did, and "an h1
+    // called Arrival" is true on Home before anything is pressed. The player
+    // is an overlay rather than an address of its own (#25), so Home's own
+    // address is still the one showing.
     await expect(page.getByRole('region', { name: 'Playing Arrival' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Arrival', level: 1 })).toHaveCount(0);
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByRole('region', { name: 'Featured' })).toBeAttached();
   });
 
   test('opens the title page from More info', async ({ page }) => {
@@ -170,6 +179,9 @@ test.describe('with a pointer', () => {
 
     await card.getByRole('button', { name: 'More info about Arrival' }).click();
 
+    // The address, for the reason above: the Billboard's own `<h1>` says
+    // Arrival too, so only the address tells the two screens apart.
+    await expect(page).toHaveURL(/\/title\/movie-arrival$/);
     await expect(page.getByRole('heading', { name: 'Arrival', level: 1 })).toBeVisible();
   });
 });
