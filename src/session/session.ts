@@ -48,6 +48,22 @@ export type SignedInUser = {
   readonly deviceId: string;
   /** Absent when the User has no picture: show their initials instead. */
   readonly primaryImageTag?: string;
+  /**
+   * `Policy.EnableContentDownloading`: whether the Server allows this User to
+   * download a Title's original file (#19, stories 76 and 77).
+   *
+   * It is a fact about the User rather than about a screen, so it is read once
+   * where the Server states it — `AuthenticationResult.User` at sign-in and
+   * `GET /Users/Me` on resume — and every screen asks the session rather than
+   * the Server. **Refreshed on every resume**, because a household's admin can
+   * take the permission away between visits.
+   *
+   * Absent means no. A stored User from before this field existed has none
+   * until the next resume, which happens at start-up, and the Server refuses
+   * the download either way: this decides what is *offered*, never what is
+   * allowed.
+   */
+  readonly mayDownload?: boolean;
 };
 
 export type Credentials = {
@@ -293,6 +309,10 @@ export function createSession(options: SessionOptions): Session {
           ...(typeof dto.PrimaryImageTag === 'string' && dto.PrimaryImageTag !== ''
             ? { primaryImageTag: dto.PrimaryImageTag }
             : {}),
+          // Re-read every time, because an admin can grant or withdraw it
+          // between visits and the stored answer would otherwise be last
+          // month's (#19).
+          mayDownload: dto.Policy?.EnableContentDownloading === true,
         };
         remember(refreshed);
         return { outcome: 'signed-in', user: refreshed };
@@ -437,5 +457,6 @@ function toSignedInUser(
     token,
     deviceId,
     ...(typeof tag === 'string' && tag !== '' ? { primaryImageTag: tag } : {}),
+    mayDownload: result.User?.Policy?.EnableContentDownloading === true,
   };
 }

@@ -1,8 +1,14 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createSession, SESSION_STORAGE_KEY, type Session } from '../../src/session/session';
 import { inMemoryDeviceStorage, testDeviceLayer } from '../device/profiles';
-import { fakeWrites, forgetFakeWrites, resetFakeState, setFakeState } from '../fake-jellyfin/control';
-import { SAMPLE_PASSWORD } from '../fake-jellyfin/data';
+import {
+  fakeState,
+  fakeWrites,
+  forgetFakeWrites,
+  resetFakeState,
+  setFakeState,
+} from '../fake-jellyfin/control';
+import { SAMPLE_PASSWORD, type FakeUser } from '../fake-jellyfin/data';
 import { fakeJellyfinUrl } from '../fake-jellyfin/url';
 import type { DeviceStorage } from '../../src/device/types';
 
@@ -48,6 +54,27 @@ describe('signing in', () => {
 
     expect(first?.deviceId).toBeTruthy();
     expect(other.activeUser()?.deviceId).not.toBe(first?.deviceId);
+  });
+
+  it('remembers whether the Server allows this User to download (#19)', async () => {
+    // `Policy.EnableContentDownloading` is what the download endpoint is
+    // authorised by, and it is a fact about the User rather than about a
+    // screen — so the session carries it, and every screen asks the session.
+    const session = newSession();
+    session.useServer(fakeJellyfinUrl());
+
+    await session.signIn(CREDENTIALS);
+
+    expect(session.activeUser()?.mayDownload).toBe(true);
+  });
+
+  it('remembers when the Server does not allow it (story 77)', async () => {
+    const session = newSession();
+    session.useServer(fakeJellyfinUrl());
+
+    await session.signIn({ username: 'Nico', password: SAMPLE_PASSWORD });
+
+    expect(session.activeUser()?.mayDownload).toBe(false);
   });
 
   it('signs in a User the public list hides', async () => {
@@ -113,6 +140,27 @@ describe('a signed-in User on this device', () => {
     afterReload.useServer(fakeJellyfinUrl());
 
     expect(afterReload.activeUser()?.deviceId).toBe(first.activeUser()?.deviceId);
+  });
+
+  it('refreshes the download permission on resume, because an admin can change it', async () => {
+    const first = newSession();
+    first.useServer(fakeJellyfinUrl());
+    await first.signIn(CREDENTIALS);
+    expect(first.activeUser()?.mayDownload).toBe(true);
+
+    // The household's admin takes the permission away while the app is shut.
+    const users = ((await fakeState()).users as FakeUser[]).map((user) =>
+      user.Id === 'user-rafael'
+        ? { ...user, Policy: { ...user.Policy, EnableContentDownloading: false } }
+        : user,
+    );
+    await setFakeState({ users });
+
+    const afterReload = newSession();
+    afterReload.useServer(fakeJellyfinUrl());
+    await afterReload.resume();
+
+    expect(afterReload.activeUser()?.mayDownload).toBe(false);
   });
 
   it('proves the stored token still works, and refreshes the name', async () => {
