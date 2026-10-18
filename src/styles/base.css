@@ -888,6 +888,12 @@ body {
   font: inherit;
   font-weight: 600;
   cursor: pointer;
+  /* Two lines that only an anchor needs, and that no `<button>` notices:
+     Download File (#19) is an `<a download>`, because saving a file is the
+     browser's own job. A `<button>` is already inline-block, and a flex item
+     is blockified whatever this says. */
+  display: inline-block;
+  text-decoration: none;
 }
 
 .button--primary {
@@ -1382,6 +1388,40 @@ html[data-input='pointer'] [tabindex]:focus {
   /* The line's own spacing, so the three controls sit on one baseline however
      the line wraps. */
   margin: var(--space-1);
+}
+
+/*
+ * The YouTube trailer (#19, story 75), which is in the page's own flow rather
+ * than over it: #40 is what happens when something focusable is put over a
+ * screen that is already `position: fixed`, and an iframe holding another
+ * site's page is as focusable as anything gets.
+ *
+ * `aspect-ratio` is Chrome 88 and the floor is 68 (ADR 0002), so the shape is
+ * the padding-ratio box the ADR names: 56.25% is 9/16, and the frame is
+ * stretched over it. `height: 0` is what makes the padding the whole height.
+ */
+.title__trailer {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.title__trailer-frame {
+  position: relative;
+  width: 100%;
+  height: 0;
+  padding-bottom: 56.25%;
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+}
+
+.title__trailer-frame > iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
 }
 
 .title__overview {
