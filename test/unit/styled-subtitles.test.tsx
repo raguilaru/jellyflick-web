@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/preact';
 import { App } from '../../src/app';
 import { en } from '../../src/i18n/en';
-import type { CapabilityProfileName } from '../device/profiles';
-import { inMemoryDeviceStorage, testDeviceLayer } from '../device/profiles';
+import type { CapabilityProfileName, FakeStyledRenderer } from '../device/profiles';
+import { fakeStyledRenderer, inMemoryDeviceStorage, testDeviceLayer } from '../device/profiles';
 import {
   fakeRequests,
   forgetFakeRequests,
@@ -45,11 +45,18 @@ beforeEach(async () => {
 });
 
 /** Signs in on a device of the given class, which is what each test varies. */
-async function signIn(profile: CapabilityProfileName): Promise<void> {
+async function signIn(
+  profile: CapabilityProfileName,
+  styledRenderer?: FakeStyledRenderer,
+): Promise<void> {
   render(
     <App
       config={{ presetServerAddress: fakeJellyfinUrl(), appVersion: 'test' }}
-      device={testDeviceLayer({ profile, storage: inMemoryDeviceStorage() })}
+      device={testDeviceLayer({
+        profile,
+        storage: inMemoryDeviceStorage(),
+        ...(styledRenderer === undefined ? {} : { styledRenderer }),
+      })}
       messages={en}
     />,
   );
@@ -77,8 +84,11 @@ function pressCard(rowName: string, name: string): void {
   fireEvent.click(card);
 }
 
-async function play(profile: CapabilityProfileName): Promise<void> {
-  await signIn(profile);
+async function play(
+  profile: CapabilityProfileName,
+  styledRenderer?: FakeStyledRenderer,
+): Promise<void> {
+  await signIn(profile, styledRenderer);
   await screen.findByRole('list', { name: 'New on Jellyflick' });
   pressCard('New on Jellyflick', 'Arrival');
   await screen.findByRole('heading', { name: 'Arrival', level: 1 });
@@ -193,5 +203,186 @@ describe('a styled track on a device that cannot draw the styling', () => {
 
     const asked = await subtitleRequests();
     expect(asked.some((path) => path.includes('/Subtitles/3/0/Stream.vtt'))).toBe(true);
+  });
+});
+
+describe('a styled track on a device that can draw the styling', () => {
+  /** Where the renderer draws: a canvas over the picture, inside the player. */
+  function styledCanvas(): HTMLCanvasElement | null {
+    return document.querySelector<HTMLCanvasElement>('.player__styled-subtitles');
+  }
+
+  it('hands the styled file and its embedded fonts to the renderer', async () => {
+    const renderer = fakeStyledRenderer();
+    await play('modern-desktop-browser', renderer);
+    await chooseTheStyledTrack();
+
+    await waitFor(() => {
+      expect(renderer.started).toHaveLength(1);
+    });
+    const started = renderer.started[0];
+    if (started === undefined) throw new Error('No renderer was started.');
+
+    // The file itself, not a conversion of it: the styling is the point.
+    expect(started.content).toContain('[Events]');
+    expect(started.content).toContain('Heptapod Sans');
+    // Both embedded fonts, and **not** the cover image that sits beside them.
+    expect(started.fontUrls).toHaveLength(2);
+    expect(started.fontUrls[0]).toContain('/Attachments/0');
+    expect(started.fontUrls[1]).toContain('/Attachments/1');
+    expect(started.fontUrls.join(' ')).not.toContain('/Attachments/2');
+  });
+
+  /**
+   * The styling is drawn by the renderer on its own canvas, so the app-drawn
+   * text overlay must not also be drawing the same words underneath it —
+   * which would be every line on the screen twice.
+   */
+  it('draws on its own canvas and leaves the plain-text overlay empty', async () => {
+    const renderer = fakeStyledRenderer();
+    await play('modern-desktop-browser', renderer);
+    await chooseTheStyledTrack();
+    await waitFor(() => {
+      expect(renderer.started).toHaveLength(1);
+    });
+
+    expect(styledCanvas()).not.toBeNull();
+    watchUpTo(1);
+    expect(subtitleText()).toBe('');
+  });
+
+  /**
+   * #28 on the styled path. The architecture note is explicit that the offset
+   * is "deliberately not a feature of the text renderer": the player holds it
+   * and the styled renderer is handed the same number, which it gives to
+   * libass's own `timeOffset`.
+   */
+  it('passes the Subtitle Offset to the renderer rather than re-drawing anything', async () => {
+    const renderer = fakeStyledRenderer();
+    await play('modern-desktop-browser', renderer);
+    await chooseTheStyledTrack();
+    await waitFor(() => {
+      expect(renderer.started).toHaveLength(1);
+    });
+
+    // The subtitle menu's timing panel, which is #28's.
+    fireEvent.click(screen.getByRole('button', { name: 'Audio and subtitles for Arrival' }));
+    const picker = await screen.findByRole('dialog', { name: en['player.tracksLabel'] });
+    fireEvent.click(within(picker).getByRole('button', { name: en['player.subtitleTiming'] }));
+    await screen.findByRole('dialog', { name: en['player.subtitleTiming'] });
+    const later = screen.getByRole('button', { name: en['player.subtitlesStepLater'] });
+
+    fireEvent.click(later);
+
+    // A tenth of a second later, reaching the renderer and nothing else.
+    await waitFor(() => {
+      // `at()` is Chrome 92, above ADR 0002's floor, so indexed from length.
+      expect(renderer.offsets[renderer.offsets.length - 1]).toBeCloseTo(0.1, 5);
+    });
+  });
+
+  it('takes the renderer away when the track is turned off', async () => {
+    const renderer = fakeStyledRenderer();
+    await play('modern-desktop-browser', renderer);
+    await chooseTheStyledTrack();
+    await waitFor(() => {
+      expect(renderer.started).toHaveLength(1);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Audio and subtitles for Arrival' }));
+    await screen.findByRole('dialog', { name: en['player.tracksLabel'] });
+    fireEvent.click(
+      within(screen.getByRole('group', { name: en['player.subtitleTracks'] })).getByRole('button', {
+        name: en['player.subtitlesOff'],
+      }),
+    );
+
+    await waitFor(() => {
+      expect(renderer.destroyed).toBe(1);
+    });
+    expect(styledCanvas()).toBeNull();
+  });
+
+  /**
+   * The case the whole fallback exists for: the device said it could draw the
+   * styling and then the engine would not load — a dropped chunk, a WASM
+   * binary the browser refused. A User who asked for subtitles is owed the
+   * words far more than the styling, so they get the words.
+   */
+  it('falls back to the words when the renderer will not load', async () => {
+    const renderer = fakeStyledRenderer({ failing: true });
+    await play('modern-desktop-browser', renderer);
+    await chooseTheStyledTrack();
+    watchUpTo(1);
+
+    await waitFor(() => {
+      expect(subtitleText()).toContain('こんにちは');
+    });
+    expect(styledCanvas()).toBeNull();
+    // And it is not said to be unavailable: there are subtitles on the screen.
+    expect(screen.queryByText(en['player.subtitlesUnavailable'])).toBeNull();
+  });
+
+  /**
+   * The reason the styled path reports flattened cues up at all. "Sync to this
+   * line" (#28, story 100) asks which line is on the screen, and the player is
+   * where it lives — so a styled track flattens the same file purely to answer
+   * that. Without it, the one feature this app adds over other clients would
+   * stop working on exactly the subtitles it works hardest to draw.
+   */
+  it('still syncs to the line on screen, though libass is what drew it', async () => {
+    const renderer = fakeStyledRenderer();
+    await play('modern-desktop-browser', renderer);
+    await chooseTheStyledTrack();
+    await waitFor(() => {
+      expect(renderer.started).toHaveLength(1);
+    });
+
+    // The first line runs 0.5–3s in the file. A User hears it at 2s, which
+    // means it is a second and a half late.
+    video().currentTime = 2;
+    fireEvent(video(), new Event('timeupdate'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Audio and subtitles for Arrival' }));
+    const picker = await screen.findByRole('dialog', { name: en['player.tracksLabel'] });
+    fireEvent.click(within(picker).getByRole('button', { name: en['player.subtitleTiming'] }));
+    await screen.findByRole('dialog', { name: en['player.subtitleTiming'] });
+    fireEvent.click(screen.getByRole('button', { name: en['player.subtitleSyncToLine'] }));
+
+    await waitFor(() => {
+      expect(renderer.offsets[renderer.offsets.length - 1]).toBeCloseTo(1.5, 5);
+    });
+  });
+
+  /** A plain-text track never asks for a renderer, so nothing is downloaded. */
+  it('never loads the renderer for a plain-text track', async () => {
+    const renderer = fakeStyledRenderer();
+    await play('modern-desktop-browser', renderer);
+    fireEvent.click(screen.getByRole('button', { name: 'Audio and subtitles for Arrival' }));
+    await screen.findByRole('dialog', { name: en['player.tracksLabel'] });
+    fireEvent.click(
+      within(screen.getByRole('group', { name: en['player.subtitleTracks'] })).getByRole('button', {
+        name: 'English',
+      }),
+    );
+    watchUpTo(1);
+    await waitFor(() => {
+      expect(subtitleText()).toContain('Hello');
+    });
+
+    expect(renderer.started).toHaveLength(0);
+  });
+
+  /** And neither does a device that says it cannot draw the styling. */
+  it('never loads the renderer on a device that cannot draw the styling', async () => {
+    const renderer = fakeStyledRenderer();
+    await play('webos-5-like', renderer);
+    await chooseTheStyledTrack();
+    watchUpTo(1);
+    await waitFor(() => {
+      expect(subtitleText()).toContain('こんにちは');
+    });
+
+    expect(renderer.started).toHaveLength(0);
   });
 });
