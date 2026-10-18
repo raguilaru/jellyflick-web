@@ -486,8 +486,10 @@ body {
  * is not only a look: `src/navigation/spatial-navigation.ts` ignores anything
  * with a zero-sized box, so a hidden control is not a stop the arrow keys have
  * to step through, and Right still takes the next card along the Row. The
- * keyboard and the remote reach My List from the title page (#17); the hover
- * card (#21) is where this button finally belongs beside Play and More info.
+ * keyboard and the remote reach My List from the title page (#17). On Home the
+ * button is now inside the hover card (#21), beside Play and More info, and the
+ * rule below that reveals it does not reach it there — `.card__hover
+ * .card__control` is what draws it in its new home.
  *
  * `.card--managed` is a card on a page for managing the list, where the control
  * is always drawn and is a focus stop the arrow keys reach on purpose.

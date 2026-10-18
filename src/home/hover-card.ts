@@ -10,9 +10,10 @@ import type { JellyfinGateway } from '../jellyfin/gateway';
  *
  * No DOM and no components, for the reason `src/playback/subtitle-offset.ts`
  * has none: happy-dom gives every element a zero-sized rectangle, so what a
- * unit test can hold still is the rule and never the layout. `hover-card.tsx`
- * is the card itself, and `test/e2e/desktop-hover-cards.spec.ts` is the only
- * place the enlargement is measured.
+ * unit test can hold still is the rule and never the layout.
+ * `hover-card-panel.tsx` is the card itself, and
+ * `test/e2e/desktop-hover-cards.spec.ts` is the only place the enlargement is
+ * measured.
  */
 
 /**

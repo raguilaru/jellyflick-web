@@ -15,8 +15,9 @@ import { useMyList } from './use-my-list';
  * deliberately *not* a focus stop (see `base.css`): the arrow keys read a Row
  * as a line of cards, and a second stop inside each card would break that.
  * The keyboard and the remote reach My List from the title page instead
- * (story 70, ticket #17), and the enlarged hover card (#21) is where this
- * button finally belongs beside Play and More info.
+ * (story 70, ticket #17). On Home this button is now drawn **inside** the
+ * enlarged hover card (#21), beside Play and More info, which is where it was
+ * always going to belong; everywhere else it is still the control on its own.
  */
 export type MyListToggleProps = {
   card: RowCard;

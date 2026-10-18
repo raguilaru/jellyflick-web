@@ -202,8 +202,9 @@ export function ContinueWatchingRow({ gateway, readKey }: ContinueWatchingRowPro
  * It is drawn while the pointer is over the card and is deliberately not a
  * focus stop, exactly as the My List toggle beside it is: the arrow keys read a
  * Row as a line of cards, and a second stop inside each card would break that
- * (`base.css` and `src/navigation/`). The enlarged hover card (#21) is where a
- * remote finally reaches a card's controls, this one included.
+ * (`base.css` and `src/navigation/`). It sits beside the enlarged hover card
+ * (#21), which carries My List, Play and More info; this one stays the Row's
+ * own and keeps its corner.
  */
 function RemoveFromContinueWatching({
   entry,

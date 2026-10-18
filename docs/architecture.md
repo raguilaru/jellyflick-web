@@ -52,7 +52,13 @@ src/
                         Addition and Because You Watched, each one its Row's
                         own loader), `billboard.tsx` what a User sees, and
                         `use-billboard.ts` the pick the shell holds so a title
-                        page cannot disturb it.
+                        page cannot disturb it. The enlarged hover card (#21):
+                        `hover-card.ts` is the rules — which devices get one,
+                        how long resting takes, which facts it says, and the
+                        read behind it, with no DOM in any of them —
+                        `hover-card-panel.tsx` is the card itself, and
+                        `card-actions.tsx` what a card can do to its Title,
+                        which is how its Play reaches the player Home holds.
   i18n/                 `en.ts` is the key set, `es.ts` is typed against it,
                         and `format.ts` holds the formatting both of them use,
                         so two dictionaries cannot disagree about how a number
@@ -1080,10 +1086,10 @@ the first file, as a pure function of what the Server said.
 - **The remove control is pointer-only**, like the My List toggle beside it and
   for the reason in `src/navigation/`: a second focus stop inside a card would
   stop the arrow keys reading a Row as a line of cards. So a remote cannot take
-  something off this Row today — the enlarged hover card (#21) is where a card's
-  controls finally become reachable, and this one belongs there with Play, My
-  List and More info. The Playwright spec skips those two journeys in the
-  keyboard-only project for exactly that reason.
+  something off this Row: it stays in its corner beside the enlarged hover card
+  (#21), which is pointer-only for the same reason and carries My List, Play and
+  More info. The Playwright spec skips those two journeys in the keyboard-only
+  project for exactly that reason.
 
 ## My List
 
@@ -1124,9 +1130,11 @@ Three things about it are load-bearing, and all three were found by tests:
 
 **The control on a card** is `MyListToggle`: a real button with its own name
 ("Add Arrival to My List") and `aria-pressed`, passed to `Row` through
-`cardControl`, which is the slot Play and More info will share once the enlarged
-hover card (#21) arrives. `home-rows.tsx` passes it to every Row on Home, so
-there is one place that decides what a card on Home offers.
+`cardControl`. On Home that slot is now the enlarged hover card (#21), which
+carries this toggle beside Play and More info, and falls back to the toggle
+alone on every device with no hovering pointer. `home-rows.tsx` passes it to
+every Row on Home, so there is one place that decides what a card on Home
+offers.
 
 On a card in a Row that control is drawn **only while the pointer is over the
 card**, and that is not only a look: `spatial-navigation.ts` ignores anything
@@ -1192,6 +1200,95 @@ New Episodes.
   folding the label into it would rename every card (and every test that finds
   one by name), so the label is left in the document as text beside that name
   rather than hidden from a screen reader altogether.
+
+## The enlarged hover card
+
+`src/home/hover-card.ts` and `hover-card-panel.tsx` are #21, stories 52 and
+53: resting a mouse pointer on a card on Home grows it and offers Play, My List
+and More info, with the age rating, the length, the genres and the compact
+extra ratings. The rules are in the first file and have no DOM in them; the
+second is the card itself. It is a card's `cardControl` — the slot #13 opened
+and said this ticket would come and share.
+
+- **Two facts decide whether a card enlarges at all, and both must agree.**
+  `HOVER_POINTER_QUERY` in `src/shell/layout.ts` is `(hover: hover) and
+  (pointer: fine)`, which excludes every touch screen; `deviceForm() !== 'tv'`
+  is the half **no query can answer**, because an LG magic remote is a pointer
+  the browser reports as fine *and* hovering. Without it the one screen in the
+  house driven from across a room would be the one growing cards under a
+  cursor. There is deliberately no width in the query: a small window on a
+  laptop is still a mouse, and `WIDE_POINTER_QUERY` beside it is a different
+  question — which *layout* a title page takes.
+- **Where it does not apply, the card is exactly what #13 drew**: the plain My
+  List toggle. That is one `if` in `HoverCard` rather than two components Home
+  chooses between, so there is one place a card's controls are decided.
+- **`data-resting` on the card is what draws it, and `:hover` is not.** This is
+  the rule the suite argued hardest about. A panel drawn on bare `:hover` puts
+  three buttons across the middle of a card the instant the pointer crosses
+  it — and a card is a focus stop that opens the title page, so a press meant
+  for the card lands on Play instead. `arrow-key-navigation.spec.ts` is what
+  found it, reporting focus on "Play Severance" where it expected the card. It
+  is an **attribute written from JS**, not a class and not a rendered prop:
+  `Row` draws the card with a static `class="card"`, so a class here is a value
+  Preact also owns, and CSS cannot style an ancestor at all — `:has()` is
+  Chrome 105 against a floor of 68. `input-modality.ts` writes `data-input` on
+  the root element for the same reason.
+- **`HOVER_CARD_DELAY_MS` is Jellyflick's own 400ms**, like Quick Connect's
+  deadline and the next Episode's countdown (`decisions.md` §11 and §13):
+  nothing in Jellyfin or the spec says how long resting is. Every card the
+  pointer enters restarts the timer, so sweeping along a Row to reach its far
+  end opens none of the cards on the way, and scrolling a Row under a still
+  pointer opens nothing either (story 53).
+- **The delay is also the budget.** A `RowCard` carries a name, some artwork
+  and a progress bar and none of what an enlarged card says, so the card reads
+  the Title itself — `getTitles({ detail: true })`, and deliberately not
+  `loadTitlePage`, which also asks for More like this, the Collections and a
+  Series' every Episode. Held per Title as a promise, with a failure
+  **forgotten** rather than remembered, which is `src/ratings/`'s bargain for
+  the same reason. The key carries the Server's address as well as the id.
+- **`<ExtraRatings details compact />` and nothing else**, which is what "The
+  extra ratings" below asks for: it reads when it mounts, and it mounts only
+  once the card has been rested on. Eager reads would burn MDBList's thousand
+  requests a day on a User scrolling past.
+- **The facts line is narrower than the title page's and is not shared with
+  it.** `hoverCardFactsOf` is the age rating, the length and the genres; the
+  title page's `factsOf` opens with the year and closes with the Server's two
+  ratings. A title page is where a Title is read about, and the scores on a
+  card are the extra ratings underneath — four more numbers beside them would
+  be a wall of them.
+- **What Play is playing is Home's, not the card's.** The pointer leaves an
+  enlarged card the moment it moves towards the picture, so the player cannot
+  be held inside it; `home-screen.tsx` holds it and `card-actions.tsx` is how a
+  card asks. That is the call `use-billboard.ts` made for the featured Title
+  and `billboard.tsx` made for its own player. Home is also where "there is no
+  Episode to play" has somewhere to be said, which a card the pointer has
+  already left does not — and it says it with the Billboard's own message,
+  because it is one fact. Play **reads the details on the press** rather than
+  taking the state it drew the facts from: a press in the gap between the card
+  growing and its details landing would otherwise do nothing, and a Server that
+  will not say what a Title is sends Play to the title page, where that refusal
+  already has words.
+- **The strip grew vertical padding for it.** `.row__strip` is `overflow-x:
+  auto`, which clips on **both** axes, so a card scaled past the strip's own
+  padding has its top and bottom shaved off — and every assertion about what is
+  "visible" still passes, because Playwright scrolls an element into view before
+  looking at it.
+
+Where it is tested:
+
+| Where | What it covers |
+| --- | --- |
+| `test/unit/desktop-hover-cards.test.tsx` | The rules as rules: which devices, and which facts a card says. |
+| `test/unit/hover-cards-on-home.test.tsx` | The journey through the real app and a real Server — what appears, what does not appear until the pointer rests, and what the three buttons do. Real timers and the real delay: the open is a timer racing a pointer and two reads, and fake timers interleaved with those test the interleaving. |
+| `test/e2e/desktop-hover-cards.spec.ts` | Everything that is a measurement: that the card grows, that the grown card is not clipped by its Row, that the document does not overflow sideways at 375px, that a real touch device gets no enlarged card, and the compact ratings through the real container. |
+
+A trap worth knowing before writing another test against this: **a Row appears
+before the panels inside it have attached themselves to their cards**, and a
+Row that has just landed is about to re-render — the Title Labels and My List
+both arrive after it. A real pointer is moving and enters the card again by
+itself; a test fires `mouseenter` once and can fire it into that gap. Both test
+files put the pointer back on every attempt, which is the lesson
+`my-list.spec.ts` wrote down for this same Row.
 
 ## The title page
 
@@ -1365,11 +1462,11 @@ side; the container's route under it is "The ratings route" below.
   forgotten rather than remembered, so a blip does not switch a Title's ratings
   off for the rest of a visit — the container draws the same line, for the same
   reason.
-- **#21's enlarged hover card should use `<ExtraRatings details compact />`**,
-  and nothing else. It takes the Title's `TitleDetails` and needs no wiring:
-  the read happens when it mounts, which on a card means on hover rather than
-  eagerly for every card in a Row — `ratings-mdblist.md` is explicit that eager
-  reads would burn the free tier's 1,000 requests a day. `<ExtraRatingBadges
+- **#21's enlarged hover card uses `<ExtraRatings details compact />`**, and
+  nothing else. It takes the Title's `TitleDetails` and needed no wiring: the
+  read happens when it mounts, and the card mounts it only once the pointer has
+  rested, rather than eagerly for every card in a Row — `ratings-mdblist.md` is
+  explicit that eager reads would burn the free tier's 1,000 requests a day. `<ExtraRatingBadges
   ratings compact />` is the drawing alone, for a screen that already holds its
   ratings, and `useExtraRatings(details)` the reading alone.
 - **The badges wrap, and so does the facts line above them now.** A row of four

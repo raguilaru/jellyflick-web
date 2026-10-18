@@ -90,7 +90,7 @@ test('a card’s progress bar is drawn across the bottom of its art, as far as t
 test.describe('taking something off the Row', () => {
   test.skip(
     ({ keyboardOnly }) => keyboardOnly,
-    'a card’s controls are revealed by hover, so only a pointer reaches them until #21',
+    'a card’s controls are revealed by hover, and the enlarged card (#21) is pointer-only too, so only a pointer reaches them',
   );
 
   test('removing a part-watched Movie clears where the User got to and leaves their history', async ({
