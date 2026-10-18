@@ -59,12 +59,20 @@ async function signIn(page: Page, name = 'Rafael'): Promise<void> {
   await expect(page.getByRole('list', { name: 'New on Jellyflick' })).toBeVisible();
 }
 
-/** Opens one Title's page from Home, with Enter: no project has a pointer. */
-async function openFromHome(page: Page, name: string): Promise<void> {
+/**
+ * Opens one Title's page from Home, with Enter: no project has a pointer.
+ *
+ * **The address is what says the page arrived, not the heading.** Home's
+ * Billboard draws the featured Title's name as an `h1` too, and the sample
+ * Server features Arrival — so an assertion on the heading can pass against a
+ * screen that never changed. #21 and #29 both met that.
+ */
+async function openFromHome(page: Page, name: string, titleId: string): Promise<void> {
   await page
     .getByRole('list', { name: 'New on Jellyflick' })
     .getByRole('listitem', { name })
     .press('Enter');
+  await expect(page).toHaveURL(new RegExp(`/title/${titleId}$`));
   await expect(page.getByRole('heading', { name, level: 1 })).toBeVisible();
 }
 
@@ -83,7 +91,7 @@ test('plays the Server’s own trailer, and asks YouTube nothing (story 75)', as
 
   // Arrival has a trailer file beside it **and** a YouTube link, which is what
   // makes "the local one is preferred" a thing to see rather than to assume.
-  await openFromHome(page, 'Arrival');
+  await openFromHome(page, 'Arrival', 'movie-arrival');
   await page.getByRole('button', { name: 'Watch trailer' }).press('Enter');
 
   await expect(page.getByRole('region', { name: 'Playing Arrival (Trailer)' })).toBeVisible();
@@ -96,7 +104,7 @@ test('loads the YouTube embed only once it is asked for', async ({ page }) => {
   await signIn(page);
 
   // Paddington has the YouTube link and no file of its own.
-  await openFromHome(page, 'Paddington');
+  await openFromHome(page, 'Paddington', 'movie-paddington');
 
   // Nothing yet, with the button on the screen: this is the assertion the
   // whole story is about.
@@ -121,7 +129,7 @@ test('loads the YouTube embed only once it is asked for', async ({ page }) => {
 test('offers no trailer at all for a Title that has none', async ({ page }) => {
   await signIn(page);
 
-  await openFromHome(page, 'Heat');
+  await openFromHome(page, 'Heat', 'movie-heat');
 
   await expect(page.getByRole('button', { name: 'Watch trailer' })).toHaveCount(0);
 });
@@ -129,7 +137,7 @@ test('offers no trailer at all for a Title that has none', async ({ page }) => {
 test('the page still fits a 375px screen with the trailer open', async ({ page }) => {
   await interceptYouTube(page);
   await signIn(page);
-  await openFromHome(page, 'Paddington');
+  await openFromHome(page, 'Paddington', 'movie-paddington');
   await page.getByRole('button', { name: 'Watch trailer' }).press('Enter');
   await expect(page.locator('iframe')).toHaveCount(1);
 
@@ -147,7 +155,7 @@ test('downloads the original file, with the Server’s own authorisation', async
   page,
 }) => {
   await signIn(page);
-  await openFromHome(page, 'Arrival');
+  await openFromHome(page, 'Arrival', 'movie-arrival');
 
   const link = page.getByRole('link', { name: 'Download File' });
   const href = await link.getAttribute('href');
@@ -165,7 +173,7 @@ test('downloads the original file, with the Server’s own authorisation', async
 test('a remote reaches both new controls by direction alone', async ({ page }) => {
   await interceptYouTube(page);
   await signIn(page);
-  await openFromHome(page, 'Arrival');
+  await openFromHome(page, 'Arrival', 'movie-arrival');
 
   // Two more things in the actions row is exactly the change that can push
   // something out of a remote's reach, and the row wraps — so the route is
@@ -180,7 +188,7 @@ test('hides Download File from a User the Server does not allow (story 77)', asy
   // Nico is the sample User whose `Policy.EnableContentDownloading` is false.
   await signIn(page, 'Nico');
 
-  await openFromHome(page, 'Arrival');
+  await openFromHome(page, 'Arrival', 'movie-arrival');
 
   await expect(page.getByRole('link', { name: 'Download File' })).toHaveCount(0);
   // And the Server would refuse it anyway, which is what makes hiding the

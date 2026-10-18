@@ -46,8 +46,15 @@ async function signInAs(name: string): Promise<void> {
   await screen.findByText(`Signed in as ${name}.`);
 }
 
-/** Opens one Title's page by pressing its card on Home, as a User does. */
-async function openTitle(name: string): Promise<void> {
+/**
+ * Opens one Title's page by pressing its card on Home, as a User does.
+ *
+ * The address is checked as well as the heading: Home's Billboard draws the
+ * featured Title's name as an `h1` too, and the sample Server features
+ * Arrival — so the heading alone can be satisfied by a screen that never
+ * changed.
+ */
+async function openTitle(name: string, titleId: string): Promise<void> {
   const row = await screen.findByRole('list', { name: 'New on Jellyflick' });
   const card = Array.from(row.querySelectorAll('.card')).find(
     (candidate) => candidate.getAttribute('aria-label') === name,
@@ -55,6 +62,7 @@ async function openTitle(name: string): Promise<void> {
   if (card === undefined) throw new Error(`No card for ${name} on Home.`);
   fireEvent.click(card);
   await screen.findByRole('heading', { name, level: 1 });
+  expect(window.location.pathname).toBe(`/title/${titleId}`);
 }
 
 /** The trailer `<iframe>`, if the page has drawn one at all. */
@@ -65,7 +73,7 @@ function trailerFrame(): HTMLIFrameElement | null {
 describe('Watch trailer', () => {
   it('plays the Server’s own trailer file, not the YouTube one (story 75)', async () => {
     await signInAs('Rafael');
-    await openTitle('Arrival');
+    await openTitle('Arrival', 'movie-arrival');
 
     fireEvent.click(screen.getByRole('button', { name: en['title.watchTrailer'] }));
 
@@ -79,7 +87,7 @@ describe('Watch trailer', () => {
 
   it('loads the YouTube embed when the Server holds no trailer of its own', async () => {
     await signInAs('Rafael');
-    await openTitle('Paddington');
+    await openTitle('Paddington', 'movie-paddington');
 
     // Nothing is loaded until the User asks for it, which is the whole point
     // of story 75: a heavy third-party embed on every title page is what this
@@ -96,7 +104,7 @@ describe('Watch trailer', () => {
 
   it('takes the embed away again when the User closes it', async () => {
     await signInAs('Rafael');
-    await openTitle('Paddington');
+    await openTitle('Paddington', 'movie-paddington');
     fireEvent.click(screen.getByRole('button', { name: en['title.watchTrailer'] }));
 
     fireEvent.click(screen.getByRole('button', { name: en['title.closeTrailer'] }));
@@ -108,7 +116,7 @@ describe('Watch trailer', () => {
 
   it('is not offered for a Title with no trailer at all', async () => {
     await signInAs('Rafael');
-    await openTitle('Heat');
+    await openTitle('Heat', 'movie-heat');
 
     expect(screen.queryByRole('button', { name: en['title.watchTrailer'] })).toBeNull();
   });
@@ -117,7 +125,7 @@ describe('Watch trailer', () => {
 describe('Download File', () => {
   it('offers the Server’s download endpoint, carrying the token (story 76)', async () => {
     await signInAs('Rafael');
-    await openTitle('Arrival');
+    await openTitle('Arrival', 'movie-arrival');
 
     const link = screen.getByRole('link', { name: en['title.downloadFile'] });
     const href = new URL(link.getAttribute('href') ?? '');
@@ -139,14 +147,14 @@ describe('Download File', () => {
   it('is hidden from a User the Server does not allow to download (story 77)', async () => {
     // Nico is that User on the fake: the Server's own `Policy` says no.
     await signInAs('Nico');
-    await openTitle('Arrival');
+    await openTitle('Arrival', 'movie-arrival');
 
     expect(screen.queryByRole('link', { name: en['title.downloadFile'] })).toBeNull();
   });
 
   it('is hidden for a Title the Server holds no file for', async () => {
     await signInAs('Rafael');
-    await openTitle('The Unfinished');
+    await openTitle('The Unfinished', 'movie-unfinished');
 
     expect(screen.queryByRole('link', { name: en['title.downloadFile'] })).toBeNull();
   });
