@@ -393,6 +393,19 @@ export type JellyfinGateway = {
    */
   getSubtitleText(options: SubtitleStreamOptions): Promise<string>;
   /**
+   * `GET /Videos/{itemId}/{mediaSourceId}/Attachments/{index}` — one file
+   * muxed in beside the video, which for this app means an **embedded font**
+   * for the styled subtitle renderer (#29).
+   *
+   * A URL rather than the bytes, because the renderer fetches it itself: it
+   * runs in a worker and wants the font there, so handing it an address keeps
+   * the bytes off the main thread entirely. That makes this the one gateway
+   * method whose answer is fetched by something other than the gateway, and
+   * the token rides in the query as `ApiKey` for the same reason the video's
+   * does — nothing else can send a header for it.
+   */
+  attachmentUrl(options: AttachmentOptions): string;
+  /**
    * `GET /MediaSegments/{itemId}?includeSegmentTypes={csv}` — the intro and
    * credits markers a player offers to skip (#31).
    *
@@ -521,6 +534,32 @@ export type MediaSourceInfo = {
   HasSegments?: boolean | null;
   /** Every track in the file: what the picker offers (#27). */
   MediaStreams?: MediaStream[] | null;
+  /**
+   * The files muxed in beside the video, which for this app's purposes means
+   * **the fonts a styled subtitle file is drawn with** (#29, story 104). An
+   * ASS file names its typefaces by name and the library's own file is what
+   * carries them, so without these a typeset sign is drawn in whatever face
+   * the device happens to have.
+   */
+  MediaAttachments?: MediaAttachment[] | null;
+};
+
+/**
+ * The fields of `MediaAttachment` this app reads. `src/playback/
+ * styled-subtitles.ts` is the one place they are read, where `embeddedFontsOf`
+ * decides which of them is a font — a Server answers that inconsistently
+ * enough that it takes three fields to tell.
+ */
+export type MediaAttachment = {
+  /** What the Attachments URL is built from. */
+  Index?: number;
+  /** ffprobe's name for the attachment stream: `ttf`, `otf`, `mjpeg`, … */
+  Codec?: string | null;
+  /** Frequently null on a real Server, which is why it is not the only test. */
+  MimeType?: string | null;
+  FileName?: string | null;
+  /** The Server's own address for it, preferred where it gave one. */
+  DeliveryUrl?: string | null;
 };
 
 /**
@@ -730,6 +769,15 @@ export type VideoStreamOptions = {
   playSessionId: string;
   /** Put in the path, so the browser sees a sensible extension. */
   container?: string;
+};
+
+export type AttachmentOptions = {
+  itemId: string;
+  mediaSourceId: string;
+  /** `MediaAttachment.Index`, which is its own index and not a list position. */
+  index: number;
+  /** `MediaAttachment.DeliveryUrl`, preferred where the Server gave one. */
+  deliveryUrl?: string;
 };
 
 export type SubtitleStreamOptions = {
@@ -1337,6 +1385,7 @@ export function createJellyfinGateway(options: JellyfinGatewayOptions): Jellyfin
 
     subtitleStreamUrl: (options) => subtitleUrlFor(options),
     getSubtitleText: (options) => requestText(subtitleUrlFor(options)),
+    attachmentUrl: (options) => attachmentUrlFor(options),
 
     getMediaSegments: (itemId, types) =>
       request<MediaSegmentsQueryResult>(
@@ -1414,6 +1463,29 @@ export function createJellyfinGateway(options: JellyfinGatewayOptions): Jellyfin
     )}/Subtitles/${String(options.index)}/${String(startTicks)}/Stream.${encodeURIComponent(
       options.format,
     )}${query(apiKey)}`;
+  }
+
+  /**
+   * One attachment's address — an embedded font (#29). Shaped exactly like the
+   * subtitle one above, and for the same reasons: the Server's own
+   * `DeliveryUrl` wherever it gave one, the canonical path otherwise, and the
+   * token in the query because the renderer's worker fetches this and cannot
+   * send a header.
+   */
+  function attachmentUrlFor(options: AttachmentOptions): string {
+    const apiKey: Record<string, string> =
+      accessToken === undefined || accessToken === '' ? {} : { ApiKey: accessToken };
+
+    if (options.deliveryUrl !== undefined && options.deliveryUrl !== '') {
+      const given = options.deliveryUrl;
+      return /^https?:\/\//i.test(given)
+        ? given
+        : `${serverAddress}${given.startsWith('/') ? '' : '/'}${given}`;
+    }
+
+    return `${serverAddress}/Videos/${encodeURIComponent(options.itemId)}/${encodeURIComponent(
+      options.mediaSourceId,
+    )}/Attachments/${String(options.index)}${query(apiKey)}`;
   }
 }
 

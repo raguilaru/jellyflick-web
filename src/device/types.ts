@@ -60,6 +60,47 @@ export type SubtitleCapabilities = {
   readonly canRenderImage: boolean;
 };
 
+/**
+ * A loaded styled-subtitle renderer: libass, compiled to WebAssembly, drawing
+ * an ASS file's own fonts, colours and positions onto a canvas over the
+ * picture (#29).
+ *
+ * It is **two methods wide on purpose.** Everything else such a library offers
+ * — fonts, scaling, colour spaces, the worker it runs in — is settled when it
+ * is created, so what is left is the one thing that changes while a User
+ * watches (the Subtitle Offset) and the one thing that has to happen when they
+ * stop. A narrow seam is what lets the webOS port answer it with a different
+ * library (`decisions.md` §8) without anything above noticing.
+ */
+export type StyledSubtitleRenderer = {
+  /**
+   * Shift the subtitles, in seconds, positive for later (#28). It is the same
+   * number the app-drawn overlay subtracts from the element's position, and
+   * every library this seam is answered with takes one: libass has
+   * `timeOffset`, and so does `libpgs` for #30
+   * (`player-subtitles.md` §6a and §6b).
+   */
+  setTimeOffset(seconds: number): void;
+  /** Stop, free the worker and the WASM heap, and take the drawing away. */
+  destroy(): void;
+};
+
+export type StyledSubtitleRendererOptions = {
+  /** The element whose picture the subtitles are drawn over and timed against. */
+  readonly video: HTMLVideoElement;
+  /** The canvas to draw on, already sized and positioned by the caller. */
+  readonly canvas: HTMLCanvasElement;
+  /** The ASS or SSA file itself, as text. */
+  readonly content: string;
+  /**
+   * The embedded fonts the file names, as URLs for the renderer to fetch
+   * itself — in its worker, which is where it wants them (#29).
+   */
+  readonly fontUrls: readonly string[];
+  /** The Subtitle Offset in force when it starts, so it opens already shifted. */
+  readonly timeOffset: number;
+};
+
 /** Where playback can be sent, or windowed, on this device. */
 export type PlaybackTargets = {
   readonly cast: boolean;
@@ -119,6 +160,34 @@ export type DeviceLayer = {
   videoCapabilities(): VideoCapabilities;
   subtitleCapabilities(): SubtitleCapabilities;
   playbackTargets(): PlaybackTargets;
+
+  /**
+   * Load the styled-subtitle renderer this device can use, and start it on
+   * the file it is given (#29).
+   *
+   * **It is the device layer's because the answer differs per device**, which
+   * is `decisions.md` §8: JASSUB on the web, libass-wasm on the TV — the only
+   * one that runs on Chromium 68 — and the capability gate in
+   * `subtitleCapabilities().canRenderStyled` is what says whether to ask at
+   * all. Putting the choice here rather than at the call site is also what
+   * keeps `typeof OffscreenCanvas` out of `src/playback/`, the same rule that
+   * keeps `navigator` out of it.
+   *
+   * **It is a promise because the loading is lazy.** A libass build is a
+   * couple of megabytes of WebAssembly, and nobody watching a film with plain
+   * subtitles — or none — should download it. The `import()` that fetches it
+   * happens inside this call, so it happens the first time a User chooses a
+   * styled track and never otherwise.
+   *
+   * It **rejects** when the renderer cannot be had: a device whose capability
+   * said yes but whose engine would not load, a network that dropped the
+   * chunk, a WASM binary the engine refused. The caller falls back to drawing
+   * the words (`flattenAss`), because a User who asked for subtitles is owed
+   * the words far more than the styling.
+   */
+  loadStyledSubtitleRenderer(
+    options: StyledSubtitleRendererOptions,
+  ): Promise<StyledSubtitleRenderer>;
 
   /** Milliseconds since the epoch. Injected so tests can fix the clock. */
   now(): number;

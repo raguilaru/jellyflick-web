@@ -35,6 +35,19 @@ export function createBrowserDeviceLayer(): DeviceLayer {
     subtitleCapabilities,
     playbackTargets,
 
+    /**
+     * The styled-subtitle renderer (#29), loaded on demand. The `import()` is
+     * the lazy half of the ticket's first acceptance criterion: JASSUB, its
+     * worker and a couple of megabytes of WebAssembly live in a chunk nobody
+     * fetches until a User chooses a styled track. Which engine that is, and
+     * whether this browser can really run it, is
+     * `styled-subtitle-renderer.ts`'s to answer.
+     */
+    loadStyledSubtitleRenderer: async (options) => {
+      const { createStyledSubtitleRenderer } = await import('./styled-subtitle-renderer');
+      return await createStyledSubtitleRenderer(options);
+    },
+
     now: () => Date.now(),
     random: () => Math.random(),
   };

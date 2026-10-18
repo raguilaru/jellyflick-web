@@ -1687,8 +1687,9 @@ tracks, #28 the Subtitle Offset, #33 Cast and #34 Play On.
 
 The tracks a Title is watched with. #28 has since grown the Subtitle Offset on
 the seams noted below — see "The Subtitle Offset" after this section — and #29
-(styled ASS/SSA subtitles) and #30 (image ones) are still to come, with the
-seams they need noted rather than built.
+(styled ASS/SSA subtitles) has grown on them too, in "Styled subtitles" below.
+#30 (image ones) is still to come, with the seams it needs noted rather than
+built.
 
 - **The Server chooses the default tracks, and this app never matches a
   language.** `UserConfiguration` holds a User's `AudioLanguagePreference`,
@@ -1727,7 +1728,9 @@ seams they need noted rather than built.
   out of a media library, which §6c names as a genuine XSS vector. Every tag is
   stripped in `subtitle-cues.ts`, so no caller can turn one back into markup by
   reaching for the wrong property, and the overlay sets text rather than HTML on
-  top of that. #29 is where a *known* tag set earns its way back in.
+  top of that. **#29 did not change that**: a styled file's markup is drawn by
+  libass on a canvas of its own, never turned back into DOM, and the ASS tags
+  `flattenAss` understands it *removes*. No tag has earned its way back in.
 - **The cue cursor is the seam #28 took over.** `createCueCursor(cues).at(t)` is
   asked for a moment, keeps a moving index rather than filtering two thousand
   cues on every frame, and is correct for **any** position rather than only an
@@ -1744,7 +1747,8 @@ seams they need noted rather than built.
   so an app-drawn overlay has to be a sibling within whatever goes full-screen or
   it vanishes the moment it does — the player is that element. A `div` rather
   than a canvas gives text layout, wrapping, font fallback and a screen reader
-  for free; canvas is for #30's bitmaps and #29's libass, which need one. It
+  for free; canvas is for #30's bitmaps and #29's libass, which need one — see
+  "Styled subtitles" below for the one this app now draws. It
   shares the picture's grid cell rather than being positioned over it, so it can
   never sit on top of the controls.
 - **`kind` is `text` or `image`, and that is #30's seam.** The classification
@@ -1899,6 +1903,117 @@ the User**, so one a test started can land *after* the next test has reseeded
 the Server and hand it an offset nobody in it ever made. It is the same shape as
 the stop report that outlives a browser context, two sections down. That file's
 `afterEach` waits for the writes to stop arriving before reseeding.
+
+### Styled subtitles (#29)
+
+Story 104: an ASS/SSA track drawn with its own fonts, colours and positions
+where the device can, and as plain text with the same timing everywhere else.
+`src/playback/subtitle-presentation.ts` is the decision,
+`src/playback/ass.ts` the flattener, `src/playback/styled-subtitles.tsx` the
+drawing, and `src/device/styled-subtitle-renderer.ts` the engine.
+
+- **One decision, asked once.** `subtitlePresentationFor(track, capabilities)`
+  answers `styled`, `cues` or `none` and which file to fetch. The overlay and
+  the renderer loader would otherwise be free to disagree about a track, and
+  the player has to know the answer too, since it is what picks the component.
+- **The styled file is fetched even when it will be flattened.** The Server
+  would convert ASS to WebVTT if asked (§14), so the flattening could have been
+  left to it. Two reasons it is not: one flattener gives one answer, and a
+  **Subtitle Offset is remembered per subtitle file** (#28, story 102) — so the
+  same file flattened by the Server on a TV and by this app on a desktop whose
+  renderer failed would be remembered against two different sets of cue times.
+  And `subtitle-cues.ts` strips `<markup>`, not `{\overrides}`: anything
+  ASS-shaped the Server carried into its WebVTT would be drawn at a User
+  verbatim. `flattenAss` is the only thing here that speaks that language.
+- **`flattenAss` reads the `[Events]` `Format:` line rather than assuming it.**
+  SSA v4.00 opens a row with `Marked` where v4.00+ opens it with `Layer`, and a
+  flattener with the positions baked in reads every later field one place out.
+  A row that enters drawing mode with `{\p1}` is **given up whole**: what
+  follows is a path of coordinates, not speech, and a sign typeset that way —
+  common in exactly the material this ticket's styling exists for — would
+  otherwise draw a line of numbers over the picture.
+- **The engine is the device layer's, and the laziness lives inside it.**
+  `loadStyledSubtitleRenderer()` is a `DeviceLayer` method whose browser
+  implementation is an `import()`, so JASSUB, its worker and two WASM builds
+  are in a chunk nobody fetches until a User chooses a styled track. The choice
+  of engine differs per device (`decisions.md` §8): JASSUB needs
+  `OffscreenCanvas` and `transferControlToOffscreen`, both **Chrome 69**, so it
+  cannot run on the Chromium 68 floor webOS 5 sits on, and the TV's answer will
+  be its own module. Nothing may import `styled-subtitle-renderer.ts`
+  statically, and keeping the question there is what keeps
+  `typeof OffscreenCanvas` out of `src/playback/` — the rule that keeps
+  `navigator` out of it.
+- **The renderer seam is two methods wide**: `setTimeOffset` and `destroy`.
+  Everything else such a library offers is settled when it is created, leaving
+  the one thing that changes while a User watches and the one thing owed on
+  unmount. That is what lets the webOS port answer it with a different library
+  without anything above noticing.
+- **It rejects rather than returning something that draws nothing.** The
+  capability can only say whether asking is worth it; a dropped chunk or a WASM
+  binary the browser refused is known only after asking. The player then falls
+  back to `cues` — the same overlay, the same flattened file, the same offset —
+  because a User who asked for subtitles is owed the words far more than the
+  styling. The fallback **resets per subtitle file**: switching away and back is
+  the one thing a User does that most looks like asking again.
+- **This canvas is §6c's stated exception.** `player-subtitles.md` §6c argues
+  for a DOM overlay and `subtitles.tsx` takes that advice; libass rasterises its
+  own glyphs and needs somewhere to put the pixels. It is pinned to the
+  picture's own grid cell for the same reasons the text overlay is — never over
+  the controls, inside the element that goes full-screen — except that it
+  **fills** the cell rather than sitting at the bottom of it, because an ASS
+  file positions its own lines, signs at the top of the frame included.
+  `pointer-events: none`, and the width and height attributes are the
+  renderer's.
+- **Exactly one of the two draws.** Both at once is every line on the screen
+  twice, so the player renders `StyledSubtitles` or `Subtitles`, never both.
+- **The offset goes down and the cues come up**, which is the seam #28 left.
+  `offsetSeconds` becomes libass's `timeOffset`, as a **dependency rather than
+  a frame loop**: one cheap call into a worker, and the renderer keeps its own
+  time against the video element. It is read from a **ref** when the renderer is
+  created, so a file already shifted opens shifted and a held button does not
+  tear a WebAssembly engine down eight times a second. The same file is
+  flattened anyway and handed up through `onCues`, purely so **"Sync to this
+  line"** can say which line is on the screen — one pass over a file already in
+  hand, and the alternative is telling a User that the one feature this app adds
+  stops working on the subtitles it works hardest to draw.
+- **Embedded fonts are handled by handing over their URLs.** An ASS file names
+  its typefaces and the file carries them muxed in beside the video; without
+  them libass falls back to whatever the device has, which on a TV is
+  approximately nothing. `embeddedFontsOf` reads them off `MediaAttachments`
+  onto the plan — the one place a `MediaSourceInfo` becomes this app's
+  vocabulary — and the renderer fetches them itself, in its worker.
+  **What counts as a font is asked three ways** (`Codec`, `MimeType`, then the
+  file extension), because a real Server answers inconsistently and a TrueType
+  collection has no codec name at all. Being generous is the cheap direction: a
+  non-font handed to libass is ignored, while a font left out is a sign drawn
+  wrong.
+- **Local fonts are deliberately not queried.** `queryFonts: 'local'` is the
+  Local Font Access API: a permission prompt asking to enumerate a User's fonts,
+  in the middle of a film, is not a trade this app makes for a closer match to a
+  typesetter's intent.
+- **LGPL.** JASSUB bundles libass, and shipping the WASM binary is distribution.
+  The repo and image owe the licence texts; tracked as its own issue rather than
+  done here, since there is no licences screen yet to put them on.
+
+Where each thing is tested: the ASS grammar — the `Format:` line, override
+tags, `\N`, `\h`, `Comment:` rows and drawing mode — in
+`test/unit/flattening-styled-subtitles.test.ts` with the grammar as written-out
+literals; the presentation decision per capability profile and the font
+attachments in `test/unit/choosing-how-to-draw-subtitles.test.ts`; and the
+journey — the file and its fonts reaching the renderer, the canvas drawn
+instead of the overlay, the offset and "Sync to this line" crossing the seam,
+the renderer destroyed when the track is turned off, the fallback to the words
+when it will not load, and the renderer never loaded for a plain track or on a
+device that cannot draw the styling — in `test/unit/styled-subtitles.test.tsx`.
+The renderer itself is faked in `test/device/profiles.ts`, which is the device
+boundary like the rest of that file: no test runs a 2 MB WASM binary in
+happy-dom, and nothing in this project reads what libass draws.
+
+The fake serves a real styled track (`routes/subtitles.ts`): sections, a
+`Format:` line, a style naming an embedded font, override blocks and a
+`Comment:` row, at the same two cue times every other format it serves uses, so
+a test can switch tracks and compare like with like. `MediaAttachments` reaches
+the client and `GET …/Attachments/{index}` answers the font bytes.
 
 ### Skipping, and the next Episode (#31)
 

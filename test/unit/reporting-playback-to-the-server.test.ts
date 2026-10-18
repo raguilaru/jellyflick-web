@@ -34,6 +34,7 @@ const PLAN: PlaybackPlan = {
   // The reports carry the stream *indexes*, which are their own fields on the
   // plan; the track list the picker offers is not reported at all.
   tracks: { audio: [], subtitles: [] },
+  fonts: [],
   // This Server's detection plugin found nothing: #31's flag, and the state
   // every Server with no intro-detection plugin is in.
   hasSegments: false,

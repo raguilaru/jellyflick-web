@@ -4,6 +4,106 @@ State of the `/implement-spec` run on the integration branch `feat/jellyflick-v1
 (draft PR #38). Update this whenever a wave lands, so a fresh session can pick the work
 up without re-deriving anything.
 
+## NINTH SESSION — the paused wave resumed, #21 merged, #19 launched
+
+**Read this, then the eighth session's section below for the two paused branches, then the
+seventh's, which is still the standing guidance and has not been superseded.**
+
+The eighth session's pause was a clean one: everything it described was still true when
+this session opened it. Both paused worktrees were intact, both branches were exactly
+where the doc said on `origin`, and no dev server, fake Jellyfin or browser process was
+left running — all checked rather than assumed.
+
+### The tip's own gate, re-measured before anything was launched
+
+`2cbbf2d` had gained two commits since the numbers in the eighth session's section were
+taken, so they were re-measured on this worktree, each step its own exit code: `lint` 0,
+`typecheck` 0, `build` 0, **851 unit tests in 62 files**, main JS **161.22 kB /
+48.88 kB gz**. Identical to the recorded figures, so those two commits changed nothing the
+gate measures.
+
+### The screenshot tour moved the skip count, and nobody had written that down
+
+`2cbbf2d` added `test/e2e/screenshots.spec.ts`. Its single `tour` test is collected in
+**all three projects** and skips at runtime unless `SCREENSHOTS` is set, so the suite's
+baseline went **26 → 29 skipped** the moment that commit landed — before any ticket in
+this wave touched anything.
+
+This matters more than it sounds. Since the fourth session this doc has insisted that a
+moved skip count be justified by reading every name, and both implementers in this wave
+had been briefed to do exactly that. A baseline that moves for an unrecorded reason spends
+two agents' time proving the integrator's own commit innocent. Both were told as soon as
+it was found. **When you add a runtime-skipped test, record the new count here in the same
+commit.**
+
+### #21 merged at `a4ee6c8`, closed
+
+Resumed from `13ef239` per the eighth session's instruction. The integrator's WIP snapshot
+turned out to hold **only the half-finished docs edit** — no app logic was uncommitted, and
+the feature passed `lint`, `typecheck`, `build` and the unit suite untouched. So the
+snapshot's real cost was the gating and the merge, not lost work.
+
+Gate re-run by the integrator on the merge result, not taken from the report: `lint` 0,
+`typecheck` 0, `build` 0, **868 unit tests in 64 files**, main JS **164.36 kB /
+49.61 kB gz** (+3.14 kB raw, +0.73 kB gz), CSS 20.84 kB / 4.40 kB gz. Every number matched
+the implementer's exactly, as all of them have.
+
+**The merge tree was byte-identical to the branch tip the implementer had run Playwright
+on** (verified with `git rev-parse HEAD^{tree}`, not assumed from the log shape), so the
+e2e run was carried rather than repeated — the same exception #22's merge took. That run
+was **420 passed, 39 skipped, 0 failed** under `E2E_CPU_THROTTLE=4`.
+
+**Skips 29 → 39, legitimate:** all ten are `desktop-hover-cards.spec.ts` in the
+`keyboard-only` project, which disables pointer events, and the enlarged card is a
+pointer's to open by AC 1. All 39 names were read. No pre-existing skip moved.
+
+### Two defects #21 found that every assertion was green through
+
+Both are worth generalising, and neither was in #21's scope as written.
+
+- **Two e2e tests told Home from the title page by an `h1` reading "Arrival".** That
+  heading is the **Billboard's** — it draws the featured Title's name in an `h1`, and the
+  sample Server features Arrival. One test failed on Home itself; the other would have
+  passed against a screen that never changed. Both now assert `toHaveURL`. **The player is
+  an overlay over Home, not an address** (#40's lesson again), so on this app a screen's
+  identity is its URL or something only it draws, never a Title's name.
+- **`.button` wins on source order.** It is written *below* the component rules in
+  `base.css`, sets `font: inherit` — the shorthand, which resets font-size — and a
+  page-sized `padding`. At equal specificity it beat `.card__hover-more`, so More info was
+  drawn at the page's font size and broke across two lines on a 150px card. **Filed as
+  #49**, which lists three more rules losing the same way: `.user-list__sign-out`, and
+  `.genres__genre`/`.genres__leave`, the last two directly contradicting the comment above
+  them.
+
+The second was found by **rendering a rested card and looking at it**, with every e2e
+assertion green before and after. That is now three times on this run — #44, #40 and this
+— that looking found what the suite could not. `npm run screenshots` exists for it.
+
+### The frontier now
+
+- **In flight:** **#29** (`src/playback/`, resumed from the eighth session's pause, ports
+  8331/8332) and **#19** (`src/title/`, fresh, ports 8361/8362, worktree
+  `ticket-19-trailers-download` created and `npm ci`-ed **by the integrator**, never by the
+  agent). Two at a time remains the default.
+- **Free the moment a slot opens:** **#23** Movies and Series pages — `src/home/` was
+  freed by #21's merge.
+- **Still queued, all `src/playback/`, one at a time:** #30, #32, and #33/#34 in part.
+  **#30's first box is a research finding to record in the ticket before any code.**
+- **The run's own findings:** #41, #42, #46, **#49** open. #43, #44 closed.
+- **`needs-info`, both needing the host rather than an agent:** #45 and #47.
+- **Still owed at the end:** `code-review` over the whole branch, the git history rewrite
+  in `decisions.md` §10, and marking PR #38 ready.
+
+### Worktrees
+
+- `implement-spec-c273ce` — the integrator's own, on `feat/jellyflick-v1`.
+- `ticket-29-styled-subtitles` — **in flight, do not touch.**
+- `ticket-19-trailers-download` — **in flight, do not touch.**
+- `ticket-21-desktop-hover-cards` — **merged and removable** once checked to be a full
+  ancestor of the integration branch with nothing uncommitted and nothing unpushed.
+- `implement-spec-88c250` and `remote-setup-2e9b22` — **other Claude sessions, not this
+  run. Leave them alone.**
+
 ## EIGHTH SESSION — PAUSED FOR TOKENS, two branches snapshotted mid-flight
 
 **Read this, then the seventh session's section below, which is still the standing guidance
