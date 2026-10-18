@@ -41,8 +41,11 @@ A Jellyfin grouping of related Titles, such as a movie franchise.
 _Avoid_: Box set, franchise
 
 **Trailer**:
-A short preview video the Server holds alongside a Title. Only the trailers stored on the Server itself are used, never one fetched from the web.
+A short preview video for a Title. The Server may hold one as a file beside the Title, or carry a link to one on YouTube; where both exist, the Server's own file is the one used.
 _Avoid_: Preview, teaser, clip
+
+**Watch trailer**:
+The action on a title page that shows a Title's Trailer. The Server's own file plays in Jellyflick's player; a YouTube one is embedded, and is loaded only when a User presses the button. The Billboard is the other way round: it only ever autoplays a local Trailer, never a YouTube one.
 
 **Extra Ratings**:
 The Audience, Metacritic, Letterboxd and Trakt scores for a Title, shown beside the critic and community scores the Server sends. They need an MDBList key, and a Title without one shows none.
