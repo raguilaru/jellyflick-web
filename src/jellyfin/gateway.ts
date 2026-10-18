@@ -357,6 +357,21 @@ export type JellyfinGateway = {
    */
   absoluteUrl(serverRelativeUrl: string): string;
   /**
+   * `GET /Items/{itemId}/Download` — the Title's original file, as an address
+   * an anchor can be given (#19, stories 76 and 77).
+   *
+   * Unlike the video stream this endpoint **is** authorised, by exactly the
+   * `EnableContentDownloading` permission (`jellyfin-playback.md` §15), and an
+   * `<a href>` cannot send an `Authorization` header — so the token goes in
+   * the query as `ApiKey`, which is the same bargain `videoStreamUrl` makes
+   * and what the Server's own generated links do.
+   *
+   * It is a URL rather than a request on purpose: the browser's own download
+   * is what saves the file, and fetching a film into memory to hand it back
+   * would be a different and much worse feature.
+   */
+  downloadUrl(itemId: string): string;
+  /**
    * The URL of one subtitle stream, converted by the Server to the format
    * asked for (#27).
    *
@@ -772,7 +787,8 @@ const RESUMABLE_ITEM_TYPES = 'Movie,Episode';
  * the Server sends all four unasked (`jellyfin-api.md` §4/§17), and naming a
  * field that is not one would be a quiet lie about where they come from.
  */
-const TITLE_DETAIL_FIELDS = 'Overview,People,MediaStreams,ProviderIds';
+const TITLE_DETAIL_FIELDS =
+  'Overview,People,MediaStreams,ProviderIds,RemoteTrailers,LocalTrailerCount,CanDownload';
 
 /** Posters, and the artwork only a title page shows: a backdrop and a logo. */
 const TITLE_DETAIL_IMAGE_TYPES = 'Primary,Backdrop,Logo,Thumb';
@@ -1308,6 +1324,11 @@ export function createJellyfinGateway(options: JellyfinGatewayOptions): Jellyfin
         ...(accessToken === undefined || accessToken === '' ? {} : { ApiKey: accessToken }),
       })}`;
     },
+
+    downloadUrl: (itemId) =>
+      `${serverAddress}/Items/${encodeURIComponent(itemId)}/Download${query({
+        ...(accessToken === undefined || accessToken === '' ? {} : { ApiKey: accessToken }),
+      })}`,
 
     absoluteUrl: (serverRelativeUrl) =>
       serverRelativeUrl.startsWith('/')

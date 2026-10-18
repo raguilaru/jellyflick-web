@@ -26,6 +26,8 @@ function title(
     audioLanguages: [],
     subtitleLanguages: [],
     providerIds: {},
+    localTrailerCount: 0,
+    remoteTrailers: [],
     watched: has.watched === true,
     ...(has.backdrop === false
       ? {}

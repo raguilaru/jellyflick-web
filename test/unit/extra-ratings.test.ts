@@ -35,6 +35,8 @@ function movie(providerIds: TitleDetails['providerIds']): TitleDetails {
     subtitleLanguages: [],
     watched: false,
     providerIds,
+    localTrailerCount: 0,
+    remoteTrailers: [],
   };
 }
 

@@ -123,6 +123,27 @@ export type TitleDetails = {
   readonly audioLanguages: readonly string[];
   /** The same from the subtitle streams. */
   readonly subtitleLanguages: readonly string[];
+  /**
+   * `LocalTrailerCount`: how many trailer files sit beside the Title on the
+   * Server (#19, story 75). It is read here rather than by asking
+   * `/Items/{id}/LocalTrailers` on every page, so a title page knows whether
+   * to draw Watch trailer without a request, and asks which trailer only when
+   * the button is pressed. Zero when the Server did not say.
+   */
+  readonly localTrailerCount: number;
+  /**
+   * `RemoteTrailers`: the trailer links the metadata provider gave the Server,
+   * which in practice are YouTube pages. Only used when the Server holds no
+   * file of its own — `src/title/trailer.ts` is the rule — and the URLs alone
+   * are kept, because nothing this app draws uses their names.
+   */
+  readonly remoteTrailers: readonly string[];
+  /**
+   * `CanDownload`: whether the Server would serve this Title's original file
+   * (story 76). Absent rather than false when the Server did not say, which is
+   * every query that did not ask for the field.
+   */
+  readonly canDownload?: boolean;
   /** `UserData.Played`: whether this User has marked the Title watched. */
   readonly watched: boolean;
   /**
@@ -296,6 +317,18 @@ export function titleDetailsFrom(dto: BaseItemDto): TitleDetails | undefined {
     ...prefixed('logo', artworkOf(item.itemId, dto.ImageTags?.Logo)),
     audioLanguages: languagesOf(streams, 'Audio'),
     subtitleLanguages: languagesOf(streams, 'Subtitle'),
+    // The trailers (#19). A count the Server did not send is no trailers, and
+    // a `RemoteTrailers` entry with no URL is not a trailer either.
+    localTrailerCount:
+      typeof dto.LocalTrailerCount === 'number' && dto.LocalTrailerCount > 0
+        ? dto.LocalTrailerCount
+        : 0,
+    remoteTrailers: (dto.RemoteTrailers ?? [])
+      .map((trailer) => trailer.Url)
+      .filter((url): url is string => typeof url === 'string' && url !== ''),
+    // Left out rather than defaulted, because "the Server says no" and "no
+    // query asked" are different things to the button that reads it.
+    ...(typeof dto.CanDownload === 'boolean' ? { canDownload: dto.CanDownload } : {}),
     watched: dto.UserData?.Played === true,
     ...positiveNumberOf('resumePositionTicks', dto.UserData?.PlaybackPositionTicks),
   };

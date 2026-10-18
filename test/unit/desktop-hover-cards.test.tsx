@@ -51,6 +51,8 @@ const ARRIVAL: TitleDetails = {
   audioLanguages: [],
   subtitleLanguages: [],
   providerIds: {},
+  localTrailerCount: 0,
+  remoteTrailers: [],
   watched: false,
 };
 
@@ -81,6 +83,8 @@ describe('what an enlarged card says about a Title', () => {
       audioLanguages: [],
       subtitleLanguages: [],
       providerIds: {},
+      localTrailerCount: 0,
+      remoteTrailers: [],
       watched: false,
     };
 
@@ -96,6 +100,8 @@ describe('what an enlarged card says about a Title', () => {
       audioLanguages: [],
       subtitleLanguages: [],
       providerIds: {},
+      localTrailerCount: 0,
+      remoteTrailers: [],
       watched: false,
     };
 

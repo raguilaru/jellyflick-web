@@ -97,6 +97,8 @@ describe('a Title there is nothing to ask MDBList about', () => {
       audioLanguages: [],
       subtitleLanguages: [],
       providerIds: {},
+      localTrailerCount: 0,
+      remoteTrailers: [],
       watched: false,
     };
 
