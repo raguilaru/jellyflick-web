@@ -29,7 +29,7 @@ import {
   subtitleOffsetFor,
   withSubtitleOffset,
 } from './subtitle-offset';
-import { subtitlePresentationFor } from './subtitle-presentation';
+import { subtitlePresentationFor, type SubtitlePresentation } from './subtitle-presentation';
 import { StyledSubtitles } from './styled-subtitles';
 import { Subtitles } from './subtitles';
 import { SubtitleTiming } from './subtitle-timing';
@@ -234,7 +234,7 @@ export function Player({
    * back lands on `cues`: the same overlay, the same flattened file and the
    * same offset the Chromium 68 floor gets.
    */
-  const draw: 'styled' | 'cues' | 'none' =
+  const draw: SubtitlePresentation['draw'] =
     presentation === undefined
       ? 'none'
       : presentation.draw !== 'styled'
