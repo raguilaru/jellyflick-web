@@ -148,6 +148,15 @@ export const en = {
   'myList.remove': (p: { name: string }) => `Remove ${p.name} from My List`,
   'home.empty': 'No Rows are shown on Home. Edit Home to choose some.',
 
+  // The enlarged hover card (#21, story 52). Each button is named after its own
+  // Title, because a Row of twenty cards would otherwise be twenty buttons
+  // called "Play"; what a User *reads* on a 150px card is the short label
+  // beside each key, which is why the name and the label are separate messages.
+  'home.card.play': (p: { name: string }) => `Play ${p.name}`,
+  'home.card.playLabel': 'Play',
+  'home.card.moreInfo': (p: { name: string }) => `More info about ${p.name}`,
+  'home.card.moreInfoLabel': 'More info',
+
   // A Row's name, wherever it is shown: on Home as its heading, and in the
   // Home Layout editor as the thing being moved. New on Jellyflick already had
   // a key of its own, above, and keeps it.

@@ -56,10 +56,10 @@ export type RowProps = {
   /** What pressing a card does. A Row with no handler is browsable, not pressable. */
   onCardPress?: (card: RowCard) => void;
   /**
-   * A control drawn over each card's artwork — the My List toggle (#13), and
-   * Play and More info once the enlarged hover card (#21) arrives. It is given
-   * per card rather than built here, because a Row knows nothing about what can
-   * be done to a Title.
+   * A control drawn over each card's artwork: the My List toggle (#13), and
+   * on Home the enlarged hover card (#21), which carries that toggle beside
+   * Play and More info. It is given per card rather than built here, because a
+   * Row knows nothing about what can be done to a Title.
    */
   cardControl?: (card: RowCard) => ComponentChildren;
 };

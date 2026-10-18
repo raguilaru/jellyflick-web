@@ -103,6 +103,10 @@ _Avoid_: Franchise row, box set row
 A short tag on a Title's card art saying what's new about it: Recently Added, New Season, or New Episodes.
 _Avoid_: Badge, tag, ribbon
 
+**Enlarged Card**:
+The bigger version of a card that a resting mouse pointer opens, carrying Play, My List and More info beside the Title's age rating, length, genres and Extra Ratings. It appears only where there is a pointer that can rest on something, so never on a touch screen and never on a TV, and it never plays video.
+_Avoid_: Hover preview, preview card, popover, tooltip, expanded card
+
 ## Playback
 
 **Subtitle Offset**:
