@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { titleDetailsFrom, type TitleDetails } from '../../src/catalogue/catalogue';
 import { createJellyfinGateway } from '../../src/jellyfin/gateway';
 import { canDownloadFile, trailerOffer, youTubeEmbedUrl } from '../../src/title/trailer';
+import { fakeJellyfinUrl } from '../fake-jellyfin/url';
 
 /**
  * The two rules behind the title page's Watch trailer and Download File
@@ -118,6 +119,47 @@ describe('whether the Download File button is offered', () => {
 
   it('is not offered when the Server did not say', () => {
     expect(canDownloadFile(detailsOf({}), true)).toBe(false);
+  });
+});
+
+describe('what the Server answers the download endpoint with', () => {
+  /** A gateway signed in as one of the fake's sample Users. */
+  const gatewayFor = (userId: string) =>
+    createJellyfinGateway({
+      serverAddress: fakeJellyfinUrl(),
+      token: `token-${userId}-download-test`,
+      deviceId: 'download-test',
+      client: 'Jellyflick',
+      device: 'Test Device',
+      appVersion: '0.1.0',
+    });
+
+  it('serves the file to a User the Server allows, with a name to save it as', async () => {
+    const response = await fetch(gatewayFor('user-rafael').downloadUrl('movie-arrival'));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-disposition')).toContain('Arrival.webm');
+    expect((await response.arrayBuffer()).byteLength).toBeGreaterThan(0);
+  });
+
+  it('refuses a User whose policy forbids downloading', async () => {
+    // Nico is the sample User the Server does not allow to download. A 403
+    // rather than a 404: the Title is there, the permission is not.
+    const response = await fetch(gatewayFor('user-nico').downloadUrl('movie-arrival'));
+
+    expect(response.status).toBe(403);
+  });
+
+  it('refuses a request carrying no token at all', async () => {
+    const response = await fetch(`${fakeJellyfinUrl()}/Items/movie-arrival/Download`);
+
+    expect(response.status).toBe(401);
+  });
+
+  it('has nothing to send for a Title the Server holds no file for', async () => {
+    const response = await fetch(gatewayFor('user-rafael').downloadUrl('movie-unfinished'));
+
+    expect(response.status).toBe(404);
   });
 });
 

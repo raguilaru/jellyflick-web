@@ -170,8 +170,19 @@ export function userForToken(
   authorization: string,
   state: Pick<FakeJellyfinState, 'users' | 'revokedTokens'>,
 ): FakeUser | undefined {
-  const token = tokenFromAuthorization(authorization);
-  if (token === undefined) return undefined;
+  return userForAccessToken(tokenFromAuthorization(authorization) ?? '', state);
+}
+
+/**
+ * The same question asked of a bare access token rather than a header, which
+ * is how a token arrives in a `?ApiKey=` query: an `<a href>` and a
+ * `<video src>` cannot send an `Authorization` header at all (#19).
+ */
+export function userForAccessToken(
+  token: string,
+  state: Pick<FakeJellyfinState, 'users' | 'revokedTokens'>,
+): FakeUser | undefined {
+  if (token === '') return undefined;
   if (state.revokedTokens.includes(token)) return undefined;
   return state.users.find((user) => token.startsWith(`token-${user.Id}-`));
 }

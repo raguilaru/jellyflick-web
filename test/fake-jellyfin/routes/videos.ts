@@ -25,11 +25,15 @@ import type { FakeJellyfinState } from '../data.ts';
  * anyway, as the Server's own generated URLs do.
  */
 
-const TEST_VIDEO = readFileSync(
+/**
+ * The bytes every source serves. Exported because Download File (#19) serves
+ * the same file: one read, one copy in memory, whatever asks for it.
+ */
+export const TEST_VIDEO = readFileSync(
   fileURLToPath(new URL('../media/test-video.webm', import.meta.url)),
 );
 
-const WEBM = 'video/webm';
+export const WEBM = 'video/webm';
 
 export const videoRoutes: readonly FakeRoute[] = [
   // `/Videos/{id}/stream` and `/Videos/{id}/stream.{container}` are both real
