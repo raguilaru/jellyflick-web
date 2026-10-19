@@ -215,6 +215,43 @@ Two boundaries are faked, and only these two: **the Jellyfin HTTP API** and
 Vitest runs test files one at a time (`fileParallelism: false`), because one fake
 Jellyfin holds mutable sample data for the whole run.
 
+**A test that changes a Client Setting must `await savesHaveSettled()` before it
+reseeds the Server.** This is a rule, not a precaution, and it has no
+exceptions. A Client Settings save is written *behind* the User — the screen
+shows the change at once and the round trip happens after it, which is what
+makes pressing "move up" four times on a remote bearable (`settings-provider.tsx`)
+— so a save one test started can land **after** the next test has reseeded the
+fake, handing it a setting nobody in it ever chose. One shared fake and one file
+at a time is what makes the blast radius a whole run rather than one `describe`.
+
+It is worth being this firm about because of how it fails. The victim fails
+**only in sequence, never in isolation**, it is usually in a *different file*
+from the test that caused it, and the symptom need not look like settings at
+all: #28 met it as a subtitle that silently refused to draw, and it cost an
+afternoon. A rerun of the failing file alone will always be green, which is the
+most expensive way to be told nothing.
+
+`savesHaveSettled()` lives in `test/fake-jellyfin/control.ts`, beside the
+`fakeWrites` log it reads, and goes in `afterEach` immediately before
+`resetFakeState()`. **One ordering fact decides where it goes**: `cleanup` is
+registered in `test/setup.ts`, so Vitest runs it *after* a file's own
+`afterEach`. A write a press started is already queued by then and the
+`afterEach` catches it; a write **unmounting** starts — a playback stop report
+is the one that does this — has not happened yet, and only a settle in the next
+`beforeEach`, before that test forgets the write log or reseeds, can catch it. It returns once two readings of that log in a row are equal,
+which is a quiet gap rather than a proof — a save the app has issued but whose
+request has not reached the fake yet is invisible to it. That holds because the
+fake is on this machine and saves are chained, so the gap is many round trips
+wide; it would not hold against a deliberately slow Server, and nothing should
+make it shorter. `test/unit/a-save-outliving-its-test.test.tsx` is the guard held
+against the failure it exists for, and is where to look if any of this changes:
+take the guard out of its `afterEach` and the file goes red every time.
+
+Three playback journeys — `shifting-the-subtitles`, `styled-subtitles` and
+`image-subtitles` — still carry their own private copy of the guard, left alone
+only because #32 is in flight in that territory. Fold them into the shared one
+when it lands.
+
 **A green e2e run on your own machine is not evidence that it is green.** CI's
 hardware is about half the speed, and every timing bug this suite has had was
 green here and red there. `E2E_CPU_THROTTLE=4 npm run test:e2e` throttles the
@@ -2027,11 +2064,12 @@ say is `test/e2e/the-subtitle-offset.spec.ts`: the panel's box measured against
 the cue's and the seek bar's at both widths, a remote reaching and adjusting it,
 and a button really held down.
 
-One hazard that journey had to learn: **a Client Settings save is written behind
-the User**, so one a test started can land *after* the next test has reseeded
-the Server and hand it an offset nobody in it ever made. It is the same shape as
-the stop report that outlives a browser context, two sections down. That file's
-`afterEach` waits for the writes to stop arriving before reseeding.
+One hazard that journey met first, and the reason the rule in "Running the
+tests" exists: **a Client Settings save is written behind the User**, so one a
+test started can land *after* the next test has reseeded the Server and hand it
+an offset nobody in it ever made. It is the same shape as the stop report that
+outlives a browser context, two sections down. `savesHaveSettled()` in that
+file's `afterEach` is what stops it (#46).
 
 ### Styled subtitles (#29)
 

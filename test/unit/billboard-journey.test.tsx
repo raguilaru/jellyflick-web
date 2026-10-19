@@ -4,7 +4,7 @@ import { App } from '../../src/app';
 import { BILLBOARD_TRAILER_DELAY_MS } from '../../src/home/billboard';
 import { en } from '../../src/i18n/en';
 import { inMemoryDeviceStorage, testDeviceLayer } from '../device/profiles';
-import { resetFakeState, setFakeState } from '../fake-jellyfin/control';
+import { resetFakeState, savesHaveSettled, setFakeState } from '../fake-jellyfin/control';
 import { SAMPLE_PASSWORD } from '../fake-jellyfin/data';
 import { fakeJellyfinUrl } from '../fake-jellyfin/url';
 
@@ -27,7 +27,12 @@ const FEATURES_ARRIVAL = 0;
 const FEATURES_PADDINGTON = 0.5;
 const FEATURES_SEVERANCE = 0.9;
 
-afterEach(resetFakeState);
+afterEach(async () => {
+  // The Billboard reads Client Settings and a test here can leave a save of
+  // one behind it, which would land after the reseed below (#46).
+  await savesHaveSettled();
+  await resetFakeState();
+});
 
 beforeEach(async () => {
   window.history.replaceState(null, '', '/');
