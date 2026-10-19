@@ -189,11 +189,81 @@ carry/repeat decision has taken on this run: byte-identical (#21, #22), docs-onl
 a test telling a title page from Home by an `h1` that is really the Billboard's. Three
 tickets in a row. It is now in every implementer brief.
 
+### #30 resumed and finished on `ticket/30-image-subtitles` — read this before merging it
+
+Resumed from the integrator's WIP `d6078a8`. That snapshot held **only** the
+`libpgs@0.9.0` install, exactly as its message said, and the three authored commits below
+it were real work and were kept. The install stayed where it was rather than being folded
+into the first commit that uses it: it sits below a merge already on `origin`, and
+rewriting published history to move an `npm install` two commits later is the worse trade.
+
+**The research box was already answered on the ticket** by the predecessor, before the
+limit, and it closes two of the three bitmap families for two independent reasons: no
+maintained client-side VobSub renderer runs on the Chromium 68 floor (the one new
+candidate, `libbitsub`, needs Chrome 75 and Chrome 96 WASM proposals by its own binary),
+**and** Jellyfin's graphical passthrough never hands over the `.idx` a VobSub renderer
+needs for its palette — so even a perfect one would have the bitmaps and no colours.
+VobSub and DVB are burned in everywhere. PGS is drawn here with `libpgs`.
+
+**The scope grew by one thing the ticket implies but does not list.** Choosing a burned-in
+track has to **re-negotiate** — the Server produces a different transcode — so it moved to
+the sound's side of #27's "switching subtitles never touches the media element" line.
+Leaving one re-negotiates too, which is the half easy to miss: the words are in the
+picture until a new stream replaces it, so a client that only asked on the way in would
+strand a User with subtitles they had just switched off. Without this, choosing a VobSub
+track would have done nothing visible at all, which is worse than #27's honest "cannot
+draw".
+
+**#29's lesson was spent rather than repeated.** `test/e2e/image-subtitles.spec.ts` was
+written before the ticket could be called done, and checked against the failure it exists
+for: with `workerUrl` removed, the two decoding tests fail and the two box tests still
+pass. That is exactly #29's signature — a canvas in the right place drawing nothing — and
+it confirms presence-and-geometry could not have caught either ticket's bug. libpgs has
+the **same `workerUrl` trap as JASSUB**, in a different shape: it defaults to a bare
+relative string that resolves against the document, so the SPA answers `index.html` and
+the worker parses HTML as JavaScript and never replies.
+
+**Looking found three things every suite was green through**, which is now the fifth time
+on this run:
+
+- **Nothing was drawn.** libpgs renders only when the display-set *index* changes, and the
+  index it compares against starts at **0**, which is also a valid index — so a stream
+  whose first set is already on screen when the renderer starts draws nothing, silently.
+  The fake now leads with an empty display set at zero.
+- **The picture grew and pushed the controls out of the window.** A grid item's
+  `min-height` is `auto`, and libpgs sets the canvas's `height` attribute to the stream's
+  1080. `.player__video` has carried `min-height: 0` since #26 for exactly this reason.
+  Every box assertion compared the canvas with the picture and the two grew together, so
+  none of them moved.
+- **The disabled control did not look disabled.** The only `aria-disabled` dimming rule was
+  scoped to the undrawable tracks #27 added, which #30 removed — so the rule matched
+  nothing and the Subtitle timing button looked pressable.
+
+**Baseline moved, deliberately and recorded here in the same commit**, per this doc's own
+rule: **70 unit files, 974 tests** (was 69/938 at `42a596f`; the predecessor's three
+commits account for 23 of those and `image-subtitles.test.tsx` for 13). Playwright gains
+**12** (4 tests × 3 projects) with **no new runtime skip**, so the skip count must stay at
+**39**.
+
+**`libpgs` is MIT**, a notice obligation rather than LGPL's source one. Added to **#48**
+beside libass's rather than filed separately, as the brief asked. **#50 filed**: #28's
+"Sync to this line" carries `aria-disabled` with nothing dimming it either — the same
+defect, in a panel outside #30's scope, so it was reported rather than fixed.
+
+**What the integrator should know:** `DeviceLayer` gained `loadImageSubtitleRenderer`, so
+**any branch merging this needs `npm ci`** for `libpgs@0.9.0`; `StyledSubtitleRenderer`
+and `ImageSubtitleRenderer` are now aliases of one `SubtitleRenderer`;
+`deviceProfileFor` takes subtitle capabilities as a second argument; `TrackPicker` gained
+`subtitlesBurnedIn`; and **Arrival gained two subtitle streams**, `pgssub` at 6 and
+`dvdsub` at 7, in languages nothing else prefers.
+
 ### Bundle trend
 
 147.05 → 149.46 (#22) → 153.13 (#31) → 155.95 (#20) → 161.22 (#28) → 164.36 (#21) →
 169.00 (#29) → **171.64 kB** raw. Still feature code, still nothing newly split beyond
-hls.js and #29's entirely-lazy libass payload.
+hls.js and #29's entirely-lazy libass payload — and #30's libpgs, which is lazy in the
+same way: the decoder chunk and its 65.95 kB worker are fetched only when a User chooses a
+PGS track, and none of it is in the main-bundle number.
 
 ### Current state — ninth session, third wave in flight
 

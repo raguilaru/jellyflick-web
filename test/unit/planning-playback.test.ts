@@ -285,13 +285,22 @@ describe('planning how to play a Title', () => {
       expect(plan.outcome).toBe('play');
       if (plan.outcome !== 'play') return;
       expect(plan.plan.tracks.audio.map((track) => track.index)).toEqual([1, 2]);
-      // `jpn` is the styled ASS track (#29). It is offered like any other:
-      // which of them can be drawn *with their styling* is a question asked
-      // per device in `styled-subtitles.ts`, not one that filters this list.
+      /*
+       * Every track, whatever it is and whatever this device can do with it.
+       *
+       * `jpn` is the styled ASS track (#29), `por` is PGS and `deu` is VobSub
+       * (#30) — and the point of listing all five is that **none** of them is
+       * filtered out here. How a track is drawn is asked per device, in
+       * `subtitle-presentation.ts`, and answers `styled`, `cues`, `image` or
+       * `burned-in`; every one of those is a track a User can choose and see,
+       * so none of them is a reason to leave it off the list.
+       */
       expect(plan.plan.tracks.subtitles.map((track) => track.language)).toEqual([
         'eng',
         'spa',
         'jpn',
+        'por',
+        'deu',
       ]);
     });
 
