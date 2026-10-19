@@ -428,3 +428,41 @@ press while a thumb is down — saves nothing, and the file keeps the offset it
 had. That is the right way round. The alternative is a timer whose window is
 either too short to help or long enough to save a number the User was still
 dragging through.
+
+## 18. The glossary said no trailer ever comes from the web, and story 75 says one does
+
+#19. `GLOSSARY.md`'s **Trailer** entry, added by #43, read: "Only the trailers
+stored on the Server itself are used, never one fetched from the web." That is
+true of the Billboard (#16, story 24), which is where the vocabulary came from,
+and it is **false of the title page**: story 75 asks in so many words for a
+Watch trailer button that "loads a YouTube trailer only when I press it".
+
+The entry has been corrected rather than worked around, and a **Watch trailer**
+entry added beside it that says which half is which — the Billboard autoplays a
+local trailer and only a local one, the title page prefers the local one and
+falls back to the embed. Writing code that contradicted the stated vocabulary
+would have been the worse of the two, and the Billboard's own rule is unchanged.
+
+Worth knowing for #43's successors: the entry was wrong because it was written
+from one feature's behaviour, before the feature that needed the other half
+existed.
+
+## 19. Download File needs two yeses, and only one of them is in the ticket
+
+#19, stories 76 and 77. The acceptance box says the button is shown "only when
+the User's policy allows content downloading", and that is implemented:
+`Policy.EnableContentDownloading`, which is exactly the permission
+`Policies.Download` maps to on the Server (`jellyfin-playback.md` §15), rides on
+the signed-in User and is refreshed from `GET /Users/Me` at every resume.
+
+**`BaseItemDto.CanDownload` is checked as well**, which the ticket does not ask
+for. `jellyfin-api.md` §4 and `jellyfin-playback.md` §15 both recommend both,
+and the reason is visible in the sample library: The Unfinished has no file
+behind it, so the download endpoint answers 404 however generous the policy is.
+A button that could only fail is worse than no button, so a Title the Server
+says cannot be downloaded is not offered one. This narrows what is shown and
+never widens it, so the box is still ticked on its own terms.
+
+The permission is a courtesy and not the security of the thing: the Server
+refuses a download either way, with a **403**, which the end-to-end spec
+asserts for the User whose policy forbids it.

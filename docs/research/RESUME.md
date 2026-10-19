@@ -4,7 +4,7 @@ State of the `/implement-spec` run on the integration branch `feat/jellyflick-v1
 (draft PR #38). Update this whenever a wave lands, so a fresh session can pick the work
 up without re-deriving anything.
 
-## NINTH SESSION — the paused wave resumed, #21 merged, #19 launched
+## NINTH SESSION — the paused wave resumed, #21 and #29 merged, #19 and #30 in flight
 
 **Read this, then the eighth session's section below for the two paused branches, then the
 seventh's, which is still the standing guidance and has not been superseded.**
@@ -79,30 +79,86 @@ The second was found by **rendering a rested card and looking at it**, with ever
 assertion green before and after. That is now three times on this run — #44, #40 and this
 — that looking found what the suite could not. `npm run screenshots` exists for it.
 
-### The frontier now
+### #29 merged at `44de7fa`, closed — and it was not finished when it was paused
 
-- **In flight:** **#29** (`src/playback/`, resumed from the eighth session's pause, ports
-  8331/8332) and **#19** (`src/title/`, fresh, ports 8361/8362, worktree
-  `ticket-19-trailers-download` created and `npm ci`-ed **by the integrator**, never by the
-  agent). Two at a time remains the default.
-- **Free the moment a slot opens:** **#23** Movies and Series pages — `src/home/` was
-  freed by #21's merge.
-- **Still queued, all `src/playback/`, one at a time:** #30, #32, and #33/#34 in part.
-  **#30's first box is a research finding to record in the ticket before any code.**
-- **The run's own findings:** #41, #42, #46, **#49** open. #43, #44 closed.
-- **`needs-info`, both needing the host rather than an agent:** #45 and #47.
-- **Still owed at the end:** `code-review` over the whole branch, the git history rewrite
-  in `decisions.md` §10, and marking PR #38 ready.
+The eighth session paused #29 looking complete: five authored commits, every unit test
+green. **libass had never started in a browser, and nothing said so.** Two faults, the
+second hiding the first:
 
-### Worktrees
+- `workerUrl` pointed at `jassub/dist/wasm/jassub-worker.js`, the Emscripten glue loaded
+  *inside* the worker. The worker is `dist/worker/worker.js` and imports bare specifiers,
+  so it has to be bundled. The fix is to pass **neither** `workerUrl` nor the WASM URLs and
+  let Vite resolve JASSUB's own `new Worker(new URL(…), {type:'module'})` — it already
+  emitted the worker, both binaries and the default font.
+- **`renderer.ready` was never awaited**, so `loadStyledSubtitleRenderer` resolved for a
+  renderer that would never draw and `onUnsupported` could not fire. A User would have got
+  a blank canvas: no words, no error.
 
-- `implement-spec-c273ce` — the integrator's own, on `feat/jellyflick-v1`.
-- `ticket-29-styled-subtitles` — **in flight, do not touch.**
-- `ticket-19-trailers-download` — **in flight, do not touch.**
-- `ticket-21-desktop-hover-cards` — **merged and removable** once checked to be a full
-  ancestor of the integration branch with nothing uncommitted and nothing unpushed.
-- `implement-spec-88c250` and `remote-setup-2e9b22` — **other Claude sessions, not this
-  run. Leave them alone.**
+**No unit test could have found this**, and that is the part to carry forward. The unit
+journey fakes the device layer, and nothing runs a 2 MB WASM binary in happy-dom — the
+same blind spot `#40` found in the navigator, where happy-dom gives every box a zero size.
+`test/e2e/styled-subtitles.spec.ts` is what found it. It asserts on **requests and boxes,
+never pixels**: that no WebAssembly is fetched while a plain track draws, that the engine
+really loads, that both embedded fonts are really fetched — read off the fake's
+`/__fake/requests`, because **a worker's requests are not the page's** — and that the
+canvas fills the picture without reaching the controls.
+
+So: **a paused branch's green unit suite is not evidence that its feature works.** Both
+branches this session were resumed with the brief "finish and gate", and only one of them
+was actually finished.
+
+Gate re-run by the integrator on the merge result, after an `npm ci` for the new runtime
+dependency: `lint` 0, `typecheck` 0, `build` 0, **911 unit tests in 67 files**, **429
+Playwright passed / 39 skipped / 0 failed** under `E2E_CPU_THROTTLE=4`, main JS **169.00 kB
+/ 51.07 kB gz** (+4.64 kB raw, +1.46 kB gz), CSS 20.92 kB. Every number matched the
+implementer's. The merge tree was byte-identical to the gated branch tip, but the e2e run
+was **repeated rather than carried** — this changes the player and adds a worker and a WASM
+path the whole suite leans on, which is the exception #31's merge established.
+
+Skips **39, unchanged**; all nine new tests run.
+
+**The libass payload is entirely lazy and none of it is in the main-bundle number:**
+`jassub` 15.15 kB, the bundled worker 112.75 + 30.02 kB, two WASM builds at 2,105.59 and
+2,176.54 kB, and a 145.97 kB default woff2. Do not read the build listing as a regression.
+
+**What later tickets inherit:** `src/playback/styled-subtitles.ts` is now
+`subtitle-presentation.ts` and `styled-subtitles.tsx` is a new, different component;
+`test/unit/choosing-a-subtitle-renderer.test.ts` is now
+`choosing-how-to-draw-subtitles.test.ts`; **`PlaybackPlan` gained a required `fonts`
+field**, so every plan literal in a test needs it; `DeviceLayer` gained
+`loadStyledSubtitleRenderer`, which the webOS port will answer with libass-wasm because
+JASSUB needs Chrome 69; and `jassub@2.5.20` is in `dependencies`, so **any branch merging
+this needs `npm ci`**.
+
+**#48 filed:** libass is LGPL-2.1 and the build now ships 4.3 MB of its WebAssembly. The
+repo and the image owe the licence texts and there is no licences screen to put them on —
+tangled with the spec's own "choosing a licence" item, so it is the host's call.
+
+**#42 moved rather than being duplicated.** It recurred once during #29's run and the
+recurrence contradicts the original report twice: it was **`[desktop]`, not `[phone]`**,
+and it failed on **line 151, which is already an `expect.poll`**, sitting at 3 for the
+full five seconds. So "make the first assertion a poll" is probably not the fix; both
+assertions want to know whether `reveal.ts` is meant to land exactly on 0. It passed
+10/10 on `--repeat-each` and did not recur in the integrator's own run.
+
+### State at the end of the ninth session's second wave
+
+Integration tip **`44de7fa`**, pushed and verified with `git ls-remote`. Draft PR #38
+still draft.
+
+- **In flight:** **#19** (`src/title/`, ports 8361/8362) and **#30** (`src/playback/`,
+  ports 8371/8372, **its first acceptance box is a research finding to record in the
+  ticket before any code**). Both worktrees created and `npm ci`-ed by the integrator.
+- **Free when a slot opens:** **#23** (`src/home/`), then **#32**, **#33**, **#34** in the
+  player, one at a time.
+- **Findings open:** #41, #42, #46, #48, #49. Closed: #43, #44.
+- **`needs-info`, host not agent:** #45, #47.
+- **Worktrees:** the integrator's, `ticket-19-trailers-download`,
+  `ticket-30-image-subtitles`, and the two belonging to **other Claude sessions**
+  (`implement-spec-88c250`, `remote-setup-2e9b22`) — leave those alone. #21's and #29's
+  were removed after checking each was a full ancestor of the integration branch with
+  nothing uncommitted and nothing unpushed. No stray dev server, fake Jellyfin or browser
+  process is running.
 
 ## EIGHTH SESSION — PAUSED FOR TOKENS, two branches snapshotted mid-flight
 

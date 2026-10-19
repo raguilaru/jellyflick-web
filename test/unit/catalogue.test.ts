@@ -121,6 +121,11 @@ describe('a Title’s details', () => {
       ],
       // The join key MDBList is asked by (#20). Jellyfin's own spellings.
       ProviderIds: { Imdb: 'tt2543164', Tmdb: '329865', Tvdb: 'ignored' },
+      // The trailers and the download (#19). A `RemoteTrailers` entry with no
+      // URL is not a trailer, so it is dropped rather than carried as empty.
+      LocalTrailerCount: 1,
+      RemoteTrailers: [{ Name: 'Arrival (Trailer)', Url: 'https://youtu.be/tFMo3UJ4B4g' }, { Name: 'Nameless' }],
+      CanDownload: true,
       UserData: { Key: 'movie-arrival', Played: true },
     });
 
@@ -148,6 +153,9 @@ describe('a Title’s details', () => {
       subtitleLanguages: ['eng'],
       // Only the two MDBList is asked by, under this app's own spellings.
       providerIds: { imdb: 'tt2543164', tmdb: '329865' },
+      localTrailerCount: 1,
+      remoteTrailers: ['https://youtu.be/tFMo3UJ4B4g'],
+      canDownload: true,
       watched: true,
     });
   });
@@ -204,6 +212,10 @@ describe('a Title’s details', () => {
       audioLanguages: [],
       subtitleLanguages: [],
       providerIds: {},
+      // No trailer of either kind, and no `CanDownload` at all: "the Server
+      // did not say" is not "the Server said no" (#19).
+      localTrailerCount: 0,
+      remoteTrailers: [],
       watched: false,
     });
   });

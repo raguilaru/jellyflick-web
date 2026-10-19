@@ -3,6 +3,7 @@ import { attachmentRoutes } from './attachments.ts';
 import { displayPreferencesRoutes } from './display-preferences.ts';
 import { genreRoutes } from './genres.ts';
 import { itemRoutes } from './items.ts';
+import { libraryRoutes } from './library.ts';
 import { quickConnectRoutes } from './quick-connect.ts';
 import { mediaInfoRoutes } from './media-info.ts';
 import { mediaSegmentRoutes } from './media-segments.ts';
@@ -38,6 +39,10 @@ export const jellyfinRoutes: readonly FakeRoute[] = [
   ...movieRoutes,
   ...mediaInfoRoutes,
   ...mediaSegmentRoutes,
+  // Before the item routes: `/Items/{id}/Download` is three segments and so
+  // cannot be shadowed, but keeping the narrower family first is the rule the
+  // subtitle routes already follow.
+  ...libraryRoutes,
   ...itemRoutes,
   // Before the video routes: both live under `/Videos`, and keeping the more
   // specific family first means a later `/Videos/…` pattern cannot shadow it.

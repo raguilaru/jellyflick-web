@@ -348,6 +348,10 @@ const GATED_BY_FIELDS: Readonly<Record<string, keyof FakeItem>> = {
   People: 'People',
   MediaStreams: 'MediaStreams',
   ProviderIds: 'ProviderIds',
+  // The YouTube trailer links (#19). Gated here because the real Server gates
+  // them: a title page that forgot `fields=RemoteTrailers` would otherwise
+  // offer a Watch trailer button against this fake and none against a Server.
+  RemoteTrailers: 'RemoteTrailers',
   // What a Title Label is derived from (#14), and what merging the libraries
   // needs (#4). A query that forgot to ask for it would otherwise see dates
   // here and none at all from a real Server.
@@ -371,6 +375,23 @@ export function asAskedFor(
 
   for (const [field, property] of Object.entries(GATED_BY_FIELDS)) {
     if (!fields.includes(field)) delete dto[property];
+  }
+
+  // Two gated fields the Server **computes** rather than stores, so they are
+  // added when asked for instead of deleted when not (#19).
+  //
+  // `LocalTrailerCount` counts the trailer files beside the Title, which this
+  // fake keeps in `state.localTrailers` as the real Server keeps them beside
+  // the item rather than on it. `CanDownload` is the real Server's own
+  // conjunction: this User's `EnableContentDownloading` permission *and* a
+  // real file to serve — an item with no file answers the download endpoint
+  // with a 404, so the Server says up front that it cannot be downloaded.
+  if (fields.includes('LocalTrailerCount')) {
+    dto.LocalTrailerCount = (state.localTrailers[item.Id] ?? []).length;
+  }
+  if (fields.includes('CanDownload')) {
+    const user = state.users.find((candidate) => candidate.Id === userId);
+    dto.CanDownload = user?.Policy.EnableContentDownloading === true && item.media !== undefined;
   }
 
   // `enableImages=false` is the Server sending no artwork at all, which a query

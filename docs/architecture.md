@@ -138,7 +138,10 @@ src/
                         Its Play button opens `playback/`'s player. A Series
                         (#18): `series.ts` is the Seasons, the Episodes and
                         which one Play means, and `series-episodes.tsx` the
-                        picker and the list.
+                        picker and the list. The trailer and the file (#19):
+                        `trailer.ts` is which kind of trailer a Title offers,
+                        what a YouTube link becomes, and whether Download File
+                        is offered at all — no DOM in any of it.
   title-labels/         What is new about a Title, on its card art (#14):
                         `title-labels.ts` is the rules and the one read,
                         `use-title-labels.ts` the context the shell holds and
@@ -296,7 +299,9 @@ can reach rather than one it has to patch in. Their local trailers are
 themselves ordinary items of Type `Trailer` carrying a `media` file: Arrival and
 Severance have one and Paddington deliberately has none. `/Items/Latest` leaves
 a `Trailer` out, as the real endpoint leaves out an extra, and no query for
-`Movie,Series` reaches one. `/Items/{id}/LocalTrailers` answers a **bare array**
+`Movie,Series` reaches one. Arrival and Paddington also carry `RemoteTrailers` — a YouTube link each, so
+"the Title has both and the local one wins" and "the Title has only the remote
+one" are both reachable (#19). `/Items/{id}/LocalTrailers` answers a **bare array**
 and gives a Title with no trailer an **empty** one rather than a 404; it goes
 quiet with `failRelatedQueriesWith`, beside `/Similar` and `/Collections`.
 
@@ -1425,6 +1430,60 @@ file, as a pure function of what the Server said.
   this one aired-order list. It is kept beside the Seasons for exactly that,
   and nothing of #31 is built here — `nextEpisodeIn` is in `play-target.ts`,
   beside what pressing Play means, and reads this list.
+
+### The trailer and the file (#19)
+
+Stories 75–77, and the two rules behind them are `src/title/trailer.ts` — a
+pure function of what the Server said, beside `play-target.ts` and for the same
+reason. `title-screen.tsx` draws them.
+
+- **One Watch trailer, whichever kind the Server holds.** A User asking to see
+  a trailer does not care which of the two it is, so there is one button and
+  the rule behind it is `trailerOffer`. **Local is preferred**, which is the
+  first half of story 75: a file the Server holds goes through this app's own
+  player (negotiated, reported, closable, with the keys and the controls), and
+  a YouTube trailer is a third party's page in an `<iframe>`. A Title with
+  neither gets no button — a disabled control explaining itself is worse than
+  an action that is simply not offered, which is the facts line's rule too.
+- **Nothing heavy happens before the press, which is the rest of story 75.**
+  `LocalTrailerCount` and `RemoteTrailers` ride along on the title page's
+  detail `fields`, so the page knows what it has without a request;
+  `/Items/{id}/LocalTrailers` is asked **when the button is pressed**, and the
+  embed is not in the document at all until then. `test/e2e/trailers-and-download.spec.ts`
+  counts requests to YouTube around the press, which is the only place that
+  claim can be checked — and intercepts YouTube, so the suite never leaves the
+  machine.
+- **The embed is in the page's own flow, not over it.** #40 is what happens
+  when something focusable is put over a screen that is already
+  `position: fixed`, and an iframe holding another site's page is as focusable
+  as anything gets. Closing it **removes** it rather than hiding it: an iframe
+  left in the document goes on being another site running in the page. The
+  shape is the padding-ratio box ADR 0002 names, because `aspect-ratio` is
+  Chrome 88.
+- **The URL this app builds is checked, not copied.** `youTubeEmbedUrl` reads
+  the three spellings Jellyfin holds (`watch?v=`, `youtu.be/`, `/embed/`),
+  insists on YouTube's own eleven-character id, keeps `t=` and drops everything
+  else, and answers `undefined` for anything that is not a YouTube video — so a
+  Server's metadata cannot decide what this app loads. `youtube-nocookie.com`
+  is YouTube's own privacy-preserving host and costs nothing.
+- **Download File is an `<a download>`, and it takes two yeses.**
+  `Policy.EnableContentDownloading` is what the endpoint is authorised by
+  (`jellyfin-playback.md` §15), so **the session carries it** — read from
+  `AuthenticationResult.User` at sign-in and refreshed from `GET /Users/Me` on
+  every resume, because an admin can withdraw it between visits — and
+  `CanDownload` is what the Server says about *this* Title, which also accounts
+  for there being a file at all. Both, or no button. The Server is still the
+  one that says yes: this decides only what is offered.
+- **The token goes in the query as `ApiKey`.** An `<a href>` cannot send an
+  `Authorization` header, which is the same bargain `videoStreamUrl` makes, and
+  it is what "the current auth method" means on this endpoint.
+- The fake's `GET /Items/{itemId}/Download` is `test/fake-jellyfin/routes/library.ts`,
+  and it keeps the real endpoint's three awkward habits: a **403** for a User
+  the policy forbids (not a 404), a token accepted from the query, and a 404
+  for an item with no file. **Nico is the sample User the Server does not allow
+  to download**; Arrival carries a YouTube link as well as its trailer file, so
+  "the local one is preferred" is observable, and Paddington carries the link
+  alone.
 
 ## The extra ratings
 
