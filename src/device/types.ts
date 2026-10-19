@@ -147,6 +147,67 @@ export type PlaybackTargets = {
 };
 
 /**
+ * What a Cast sender is started with (#33).
+ *
+ * Both fields come from **above** this layer, and that split is the point of
+ * the seam. `src/device/` owns the Cast SDK — the `<script>` off gstatic,
+ * `window.__onGCastApiAvailable`, `cast.framework` — and knows nothing about
+ * Jellyfin; `src/playback/cast.ts` owns which receiver application to launch
+ * and which protocol to speak on it, because both of those are Jellyfin facts
+ * and one of them is read from the User's own account at runtime
+ * (`decisions.md` §8).
+ */
+export type CastSenderOptions = {
+  /**
+   * The receiver application to launch, which is the User's
+   * `Configuration.CastReceiverId` or Jellyfin's published fallback. Never a
+   * constant of this layer's: a Server admin can change the list.
+   */
+  readonly receiverId: string;
+  /**
+   * The custom namespace the receiver's own protocol speaks on, registered
+   * when the session opens so `send` has somewhere to go.
+   */
+  readonly namespace: string;
+};
+
+/**
+ * A live Cast session: a receiver a User chose, connected, with the app's
+ * messages going to it.
+ *
+ * **Three members wide**, and like the subtitle renderers' two that is a
+ * finding rather than a shape chosen in advance. What is left once the SDK has
+ * done its work is where the picture went (so the player can say so), the one
+ * thing that happens repeatedly while a User watches, and the one thing owed
+ * when they stop.
+ */
+export type CastSession = {
+  /**
+   * The receiver's own friendly name — "Living Room" — so a User can see
+   * where their Title went. It is the receiver's name and never this device's.
+   */
+  readonly receiverName: string;
+  /**
+   * One message on the namespace the sender was loaded with. It **rejects**
+   * when the receiver would not take it, which is a cast that did not happen.
+   */
+  send(message: unknown): Promise<void>;
+  /** End the session, which hands the Title back to this device. */
+  end(): void;
+};
+
+export type CastSender = {
+  /**
+   * Open the **device's own** Cast picker and connect to what the User chose.
+   *
+   * `undefined` is a User who dismissed it, which is deliberately not a
+   * rejection: a dismissed picker is a decision rather than a failure, and the
+   * two are shown to a User completely differently.
+   */
+  connect(): Promise<CastSession | undefined>;
+};
+
+/**
  * Durable key/value storage on this device, holding what must survive a reload:
  * the Server address, and each signed-in User's token and DeviceId.
  *
@@ -260,6 +321,30 @@ export type DeviceLayer = {
   loadImageSubtitleRenderer(
     options: ImageSubtitleRendererOptions,
   ): Promise<ImageSubtitleRenderer>;
+
+  /**
+   * Load the Cast sender SDK and connect to a receiver (#33).
+   *
+   * **The third of this layer's lazy loaders, and the only one that needs the
+   * internet.** The styled and image subtitle renderers are chunks of this
+   * app's own build; this is a `<script>` off `gstatic.com`, which is a
+   * genuine difference: the rest of Jellyflick works on a LAN with no internet
+   * at all, so a load that cannot happen must cost a User nothing but the
+   * press they made. It rejects, and the player says so beside the picture.
+   *
+   * **It is the device layer's because the SDK is.** Nothing outside this
+   * folder may read `window.chrome`, and `window.__onGCastApiAvailable` — a
+   * global the script calls back on — is of exactly that kind. The webOS port
+   * answers it by rejecting: a television does not Cast to itself.
+   *
+   * **And it is lazy because availability cannot be known without it.**
+   * `decisions.md` §8 is explicit that there is no API which answers "is there
+   * a Chromecast here" without loading the SDK and letting it discover
+   * devices. So `playbackTargets().cast` is the cheap gate that decides
+   * whether to draw a control, and this call — made from the press on that
+   * control and never from an effect — is the real answer.
+   */
+  loadCastSender(options: CastSenderOptions): Promise<CastSender>;
 
   /** Milliseconds since the epoch. Injected so tests can fix the clock. */
   now(): number;

@@ -598,6 +598,35 @@ export const en = {
    */
   'player.pictureInPictureRefused': 'This browser would not open a picture-in-picture window.',
 
+  /**
+   * Cast (#33), which `GLOSSARY.md` fixes as Chromecast **or** AirPlay — so
+   * the Chromecast control says "Cast" and the Apple one says "AirPlay",
+   * because that is what each picker is called where a User meets it. Neither
+   * is "Play On": that is #34, and it is a different feature.
+   */
+  'player.cast': 'Cast',
+  'player.stopCasting': 'Stop casting',
+  'player.airPlay': 'AirPlay',
+  /**
+   * Where the Title went, said beside the picture: the control that started
+   * the cast is inside a menu that closed behind it, so this is the only thing
+   * on the screen that says a Chromecast is playing.
+   */
+  'player.castingTo': (p: { name: string }) =>
+    p.name === '' ? 'Casting to a Cast device.' : `Casting to ${p.name}.`,
+  /**
+   * A cast that could not happen, said the way every other player failure is:
+   * beside the picture, because the Title is still playing here and the press
+   * that failed also closed the menu.
+   *
+   * It is deliberately **one message for every cause** — a browser with no
+   * Cast in it, a `gstatic.com` the LAN cannot reach, a receiver that would
+   * not start, a message it refused. A User can do the same one thing about
+   * all of them, and naming which would be telling them about this app's
+   * internals rather than about their television.
+   */
+  'player.castUnavailable': 'Jellyflick could not reach a Cast device.',
+
   'nav.sections': 'Sections',
   'nav.home': 'Home',
   'nav.movies': 'Movies',

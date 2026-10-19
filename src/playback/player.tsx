@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
-import type { DeviceLayer } from '../device/types';
+import type { CastSession, DeviceLayer } from '../device/types';
 import { useTranslate } from '../i18n/index';
 import type { JellyfinGateway } from '../jellyfin/gateway';
 import { usePlaybackPreferences } from '../settings/playback-preferences-provider';
@@ -7,6 +7,8 @@ import { useSettings } from '../settings/settings-provider';
 import { useBackClaim } from '../shell/back';
 import type { PlayTarget } from '../title/play-target';
 import { resolveNextEpisode } from '../title/play-target';
+import { showAirPlayPicker, watchAirPlayTargets } from './air-play';
+import { castReceiverId, JELLYFIN_CAST_NAMESPACE, playNowMessage } from './cast';
 import { useIdleControls } from './controls-visibility';
 import { readMediaSegments, skipOffered, type MediaMarker } from './media-segments';
 import { NextEpisodeOffer } from './next-episode';
@@ -238,6 +240,27 @@ export function Player({
   /** Whether the picture is in its own window, and whether one was refused. */
   const [inPictureInPicture, setInPictureInPicture] = useState(false);
   const [pictureInPictureRefused, setPictureInPictureRefused] = useState(false);
+  /**
+   * The Chromecast this Title is playing on, by its own name, or `undefined`
+   * for the ordinary case of playing here (#33).
+   *
+   * It is a **name rather than a flag** because it is what the notice beside
+   * the picture says, and the live session is held in a ref beside it: a
+   * session is not state a render reads, and re-rendering because one exists
+   * would be a render for something nothing draws.
+   */
+  const [castingTo, setCastingTo] = useState<string | undefined>(undefined);
+  const castSession = useRef<CastSession | undefined>(undefined);
+  /** Whether a press could not reach a receiver, so it can be said once. */
+  const [castUnavailable, setCastUnavailable] = useState(false);
+  /**
+   * Whether the element says there is somewhere to AirPlay to (#33).
+   *
+   * The capability can only say Safari has the API, which is why this is
+   * watched rather than assumed: a house with no Apple TV in it would
+   * otherwise get a control that opens an empty picker. See `air-play.ts`.
+   */
+  const [airPlayAvailable, setAirPlayAvailable] = useState(false);
 
   // Back closes the player, through the one Back handler rather than a key
   // listener of this screen's own. A layout effect, which is why #8 made it one.
@@ -615,6 +638,166 @@ export function Player({
     };
   }, [pictureInPictureOffered, plan]);
 
+  /**
+   * Cast (#33): sending the Title to a Chromecast, with this app as the
+   * remote.
+   *
+   * **The press is the whole of the feature's cost.** `decisions.md` §8 says
+   * Cast availability cannot be known without loading the SDK, so
+   * `playbackTargets().cast` is the cheap gate that decides whether to draw a
+   * control and this is the only thing that ever fetches anything — which
+   * matters more here than for any other lazy load in the app, because the
+   * script comes off `gstatic.com` and most Jellyfin Servers are on a LAN.
+   *
+   * The receiver application is the User's **own account's**, read through the
+   * Playback Preferences provider that is already above the player, and
+   * `castReceiverId` falls back to Jellyfin's published Stable id — which is
+   * the ordinary case rather than an edge, because the Server seeds that list
+   * in a migration most installs have not run.
+   *
+   * That account is read once at sign-in by a provider above the router, so it
+   * has long since answered by the time a player exists and has a plan — this
+   * never waits on it. A press that somehow beat the read would reach the
+   * published receiver rather than the account's, which is what every
+   * pre-migration Server gets anyway.
+   *
+   * **Then it hands over rather than playing in both places**, and that is the
+   * half that keeps the fourth acceptance criterion honest. Jellyfin's
+   * receiver is a Jellyfin client in its own right: handed the address, the
+   * User and the token it signs in and reports progress itself. Two clients
+   * reporting the same playback would leave the Server with two sessions and a
+   * resume point belonging to whichever stopped last, so this device closes
+   * its own session at the position the User reached and that position is
+   * where the receiver picks the Title up.
+   */
+  const castOffered = device.playbackTargets().cast;
+  const startCast = useCallback(async (): Promise<void> => {
+    setOptionsOpen(false);
+    setCastUnavailable(false);
+    if (plan === undefined) return;
+
+    const at = video.current?.currentTime ?? position;
+    try {
+      const sender = await device.loadCastSender({
+        receiverId: castReceiverId(preferences.castReceiverId),
+        namespace: JELLYFIN_CAST_NAMESPACE,
+      });
+      const session = await sender.connect();
+      /*
+       * **No session is a User who dismissed the picker**, which is a decision
+       * and not a failure: nothing is said, because telling them something
+       * went wrong would be telling them their own choice was an error.
+       */
+      if (session === undefined) return;
+
+      /*
+       * The Server's own id, asked for here rather than beside every playback:
+       * it is one anonymous call, and only a User who presses Cast ever pays
+       * for it. A Server that will not say leaves it empty — the receiver
+       * signs in with the address and the token, which are the two it cannot
+       * do without.
+       */
+      let serverId = '';
+      try {
+        serverId = (await gateway.getPublicSystemInfo()).Id ?? '';
+      } catch {
+        serverId = '';
+      }
+
+      await session.send(
+        playNowMessage({
+          itemId: plan.itemId,
+          userId,
+          deviceId: gateway.identity.deviceId,
+          accessToken: gateway.identity.accessToken,
+          serverAddress: gateway.serverAddress,
+          serverId,
+          startPositionTicks: ticksOfSeconds(at),
+        }),
+      );
+
+      castSession.current = session;
+      setCastingTo(session.receiverName);
+      // The handover, after the receiver has taken it and never before: a
+      // message that was refused leaves the Title playing here.
+      playing.handOver();
+    } catch {
+      /*
+       * One message for every cause — an SDK that would not load, a
+       * `gstatic.com` the LAN cannot reach, a receiver that would not start,
+       * a message it refused. It is said beside the picture, like every other
+       * player failure: the Title is still playing here, and the press that
+       * failed also closed the menu, so a message only the menu showed would
+       * be a message nobody saw.
+       */
+      setCastUnavailable(true);
+    }
+  }, [device, gateway, plan, position, preferences.castReceiverId, userId]);
+
+  /**
+   * Stopping brings the Title back to this device, where it is paused and
+   * where the User left it. Ending a cast is **not** closing the player, the
+   * same way leaving a picture-in-picture window is not: the Title is still
+   * what they are watching, and the controls are still theirs.
+   */
+  const stopCast = useCallback((): void => {
+    setOptionsOpen(false);
+    castSession.current?.end();
+    castSession.current = undefined;
+    setCastingTo(undefined);
+  }, []);
+
+  /**
+   * **One button for both**, saying the opposite thing while a cast is
+   * running — which is `enterPip`'s shape from #32 and is the same width
+   * argument: the controls row and this menu have no space for a second
+   * control that is only ever useful when the first one is not.
+   */
+  const toggleCast = useCallback((): void => {
+    if (castingTo === undefined) void startCast();
+    else stopCast();
+  }, [castingTo, startCast, stopCast]);
+
+  /**
+   * A player that goes away while a cast is running ends the session with it.
+   * Without this, Back out of the player would leave a receiver playing with
+   * nothing driving it and no control anywhere in the app to stop it.
+   */
+  useEffect(
+    () => () => {
+      castSession.current?.end();
+      castSession.current = undefined;
+    },
+    [],
+  );
+
+  /**
+   * AirPlay (#33), which is the opposite shape to Cast in every respect worth
+   * noting: no SDK, no protocol, no handover. Safari routes the element it is
+   * already decoding, so this session keeps playing and keeps reporting — and
+   * the app's only parts are knowing whether there is a target and asking for
+   * the picker.
+   */
+  const airPlayOffered = device.playbackTargets().airPlay;
+  useEffect(() => {
+    const element = video.current;
+    if (element === null || !airPlayOffered) return;
+    const stop = watchAirPlayTargets(element, setAirPlayAvailable);
+    return () => {
+      stop();
+    };
+    // `plan` is in here for the reason the picture-in-picture listeners have
+    // it: a re-negotiation attaches a new source, and a watch on the old one
+    // is Safari holding a callback into a player that has moved on.
+  }, [airPlayOffered, plan]);
+
+  const showAirPlay = useCallback((): void => {
+    setOptionsOpen(false);
+    const element = video.current;
+    if (element === null) return;
+    showAirPlayPicker(element);
+  }, []);
+
   /** Which skip is on the screen, if any: one reading of one moment. */
   const skip = skipOffered(markers, position);
 
@@ -903,6 +1086,29 @@ export function Player({
       ) : null}
 
       {/*
+        Where the Title went (#33). The press that started the cast was inside
+        a menu that closed behind it, so this is the only thing on the screen
+        that says a Chromecast is playing — and it is a plain notice rather
+        than a problem, because nothing has gone wrong.
+      */}
+      {castingTo === undefined ? null : (
+        <p class="notice" role="status">
+          {t('player.castingTo', { name: castingTo })}
+        </p>
+      )}
+
+      {/*
+        A cast that could not happen, said beside the picture for the reason
+        every other player failure is: the Title is still playing here, and
+        the press that failed also closed the menu.
+      */}
+      {castUnavailable ? (
+        <p class="notice notice--problem" role="alert">
+          {t('player.castUnavailable')}
+        </p>
+      ) : null}
+
+      {/*
         Skip Intro and Skip Credits (#31). Deliberately **outside** the controls
         and drawn whenever the Server says there is a marker here: the controls
         get out of the way after a few seconds, and an offer good only for the
@@ -1016,6 +1222,8 @@ export function Player({
           {...(pictureInPictureOffered
             ? { onPictureInPicture: togglePictureInPicture, inPictureInPicture }
             : {})}
+          {...(castOffered ? { onCast: toggleCast, ...(castingTo === undefined ? {} : { castingTo }) } : {})}
+          {...(airPlayOffered && airPlayAvailable ? { onAirPlay: showAirPlay } : {})}
           onClose={() => setOptionsOpen(false)}
         />
       ) : null}
@@ -1095,7 +1303,12 @@ function usePlayback(options: {
   onFailure: () => void;
   onUnreported: () => void;
   onEnded: () => void;
-}): { toggle: () => void; seekTo: (seconds: number) => void; seekBy: (seconds: number) => void } {
+}): {
+  toggle: () => void;
+  seekTo: (seconds: number) => void;
+  seekBy: (seconds: number) => void;
+  handOver: () => void;
+} {
   const { plan } = options;
   // The newest callbacks, so nothing below calls a stale one and the effect
   // does not re-run because a parent re-rendered.
@@ -1265,6 +1478,34 @@ function usePlayback(options: {
       const element = options.video.current;
       if (element === null) return;
       seekTo(element.currentTime + seconds);
+    },
+
+    /**
+     * Give this playback up to something else that will report it (#33).
+     *
+     * **The one case is Cast**, and it is a stop rather than a pause because
+     * of what is on the other end: Jellyfin's Chromecast receiver signs in to
+     * the Server and opens a session of its own, so leaving this one alive
+     * would give the Server two sessions for one Title and a resume point
+     * belonging to whichever stopped last.
+     *
+     * The picture is paused as well, because a User watching a television is
+     * not also watching their laptop — and because a `<video>` left running
+     * would go on decoding a stream nobody is looking at.
+     *
+     * `stopped` is once-only by design (see `reporting.ts`), so the effect
+     * cleanup that reports the stop when the player closes becomes a no-op
+     * after this: handing over cannot be reported twice.
+     */
+    handOver: () => {
+      const element = options.video.current;
+      const at = element?.currentTime ?? position.current;
+      element?.pause();
+      const sending = reporter.current;
+      if (sending === undefined) return;
+      void sending.stopped(at).then(() => {
+        if (sending.unreported()) options.onUnreported();
+      });
     },
   };
 }

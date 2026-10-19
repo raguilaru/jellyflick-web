@@ -26,6 +26,24 @@ export type JellyfinGateway = {
    * lifetime: a new token means a new gateway.
    */
   authorizationHeader(): string;
+  /**
+   * The DeviceId and token this gateway carries, for the one case where
+   * **another** Jellyfin client has to report against this device's session:
+   * Jellyfin's Chromecast receiver (#33).
+   *
+   * That receiver is a Jellyfin client in its own right — handed an address,
+   * a User and a token it signs in and reports progress itself, which is what
+   * keeps a cast Title in Continue Watching. It cannot send an `Authorization`
+   * header on this app's behalf, so the two values go in the message instead:
+   * the same bargain `videoStreamUrl` makes when it puts the token in the
+   * query as `ApiKey`, for the same reason — something that is not this app's
+   * `fetch` has to carry them.
+   *
+   * It is **not** a general way to read the token. Nothing else needs one, and
+   * a second caller here would be a sign that something is building requests
+   * outside this module.
+   */
+  readonly identity: { readonly deviceId: string; readonly accessToken: string };
   /** `GET /System/Info/Public` — anonymous, and the source of the version gate. */
   getPublicSystemInfo(): Promise<PublicSystemInfo>;
   /**
@@ -1080,6 +1098,7 @@ export function createJellyfinGateway(options: JellyfinGatewayOptions): Jellyfin
   return {
     serverAddress,
     authorizationHeader: () => authorization,
+    identity: { deviceId: options.deviceId, accessToken: accessToken ?? '' },
     getPublicSystemInfo: () => request<PublicSystemInfo>('GET', '/System/Info/Public'),
     getPublicUsers: () => request<UserDto[]>('GET', '/Users/Public'),
     getCurrentUser: () => request<UserDto>('GET', '/Users/Me'),

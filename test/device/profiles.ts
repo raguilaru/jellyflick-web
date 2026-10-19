@@ -7,6 +7,9 @@
  * replace anything of ours.
  */
 import type {
+  CastSender,
+  CastSenderOptions,
+  CastSession,
   DeviceForm,
   DeviceLayer,
   DeviceStorage,
@@ -60,6 +63,20 @@ export type TestDeviceOptions = {
    * to fall back to.
    */
   imageRenderer?: FakeImageRenderer;
+  /**
+   * The Cast sender this device loads (#33). It stands in for the Google Cast
+   * SDK, which is a system boundary of the plainest kind: a `<script>` off
+   * `gstatic.com`, a global it calls back on, and a receiver on the network.
+   * None of those exist in happy-dom, and the one that matters least is the
+   * one a test could fake convincingly.
+   *
+   * Pass `failing` for a browser whose SDK would not load — offline, blocked,
+   * or `__onGCastApiAvailable(false)` — and `dismissed` for the far more
+   * common case of a User who opened the picker and changed their mind. The
+   * two are deliberately separate: one is a failure and the other is a
+   * decision, and a User is shown them completely differently.
+   */
+  castSender?: FakeCastSender;
 };
 
 /**
@@ -120,6 +137,53 @@ export function fakeImageRenderer(options: { failing?: boolean } = {}): FakeImag
   };
 }
 
+/**
+ * The fake Cast sender, and the record of what was asked of it (#33).
+ *
+ * It records rather than casts, because what a test can meaningfully assert is
+ * the **contract**: that nothing was loaded until a User pressed, that the
+ * sender was started with the receiver the User's own Jellyfin account names,
+ * that the receiver was told to play the Title from where they had got to, and
+ * that the session was ended when they stopped. What a Chromecast makes of the
+ * message is Jellyfin's receiver's business and a real browser's, which is
+ * `test/e2e/cast-and-airplay.spec.ts` — the lesson #29 paid for.
+ */
+export type FakeCastSender = {
+  /** One entry per sender loaded, in order. Empty is an SDK never fetched. */
+  readonly loads: CastSenderOptions[];
+  /** Every message sent to a connected receiver, in order. */
+  readonly messages: unknown[];
+  /** How many sessions were ended from this app. */
+  ended: number;
+  /** The receiver's friendly name, which the player says out loud. */
+  receiverName: string;
+  /** Set to make loading reject: a browser whose SDK will not load. */
+  failing: boolean;
+  /** Set to make the picker come back empty: a User who changed their mind. */
+  dismissed: boolean;
+  /** Set to make the receiver refuse the message it is sent. */
+  refusesMessages: boolean;
+};
+
+export function fakeCastSender(
+  options: {
+    receiverName?: string;
+    failing?: boolean;
+    dismissed?: boolean;
+    refusesMessages?: boolean;
+  } = {},
+): FakeCastSender {
+  return {
+    loads: [],
+    messages: [],
+    ended: 0,
+    receiverName: options.receiverName ?? 'Test Receiver',
+    failing: options.failing ?? false,
+    dismissed: options.dismissed ?? false,
+    refusesMessages: options.refusesMessages ?? false,
+  };
+}
+
 /** 2026-06-15T12:00:00Z — a fixed instant, so date-derived behaviour is stable. */
 export const FIXED_NOW = Date.UTC(2026, 5, 15, 12, 0, 0);
 
@@ -152,6 +216,7 @@ export function testDeviceLayer(options: TestDeviceOptions = {}): DeviceLayer {
   // One per device layer, for a test that does not care to look at it.
   const styledRenderer = fakeStyledRenderer();
   const imageRenderer = fakeImageRenderer();
+  const castSender = fakeCastSender();
   let randomIndex = 0;
   let deviceIdCount = 0;
   // Unique per device layer as well as per call, so two device layers in one
@@ -205,6 +270,33 @@ export function testDeviceLayer(options: TestDeviceOptions = {}): DeviceLayer {
         },
         destroy: () => {
           record.destroyed += 1;
+        },
+      });
+    },
+
+    loadCastSender: (senderOptions) => {
+      const record = options.castSender ?? castSender;
+      if (record.failing) {
+        return Promise.reject(new Error('The test device layer cannot load a Cast sender.'));
+      }
+      record.loads.push(senderOptions);
+      return Promise.resolve<CastSender>({
+        connect: () => {
+          // A dismissed picker, which is a decision rather than a failure.
+          if (record.dismissed) return Promise.resolve(undefined);
+          return Promise.resolve<CastSession>({
+            receiverName: record.receiverName,
+            send: (message) => {
+              if (record.refusesMessages) {
+                return Promise.reject(new Error('The test receiver refused the message.'));
+              }
+              record.messages.push(message);
+              return Promise.resolve();
+            },
+            end: () => {
+              record.ended += 1;
+            },
+          });
         },
       });
     },

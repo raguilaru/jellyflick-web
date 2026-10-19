@@ -386,6 +386,15 @@ export const es: Messages = {
   'player.pictureInPictureRefused':
     'Este navegador no ha abierto una ventana de imagen en imagen.',
 
+  // Cast (#33). «Cast» y «AirPlay» se dejan sin traducir: son los nombres con
+  // los que un usuario se encuentra el selector en su propio navegador.
+  'player.cast': 'Cast',
+  'player.stopCasting': 'Dejar de enviar',
+  'player.airPlay': 'AirPlay',
+  'player.castingTo': (p: { name: string }) =>
+    p.name === '' ? 'Enviando a un dispositivo Cast.' : `Enviando a ${p.name}.`,
+  'player.castUnavailable': 'Jellyflick no ha podido conectar con un dispositivo Cast.',
+
   'nav.sections': 'Secciones',
   'nav.home': 'Inicio',
   'nav.movies': 'Películas',

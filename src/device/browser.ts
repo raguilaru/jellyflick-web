@@ -61,6 +61,25 @@ export function createBrowserDeviceLayer(): DeviceLayer {
       return await createImageSubtitleRenderer(options);
     },
 
+    /**
+     * The Cast sender (#33), loaded on demand — and of the three lazy loaders
+     * here this is the one where "on demand" is not only about weight.
+     *
+     * The subtitle renderers are chunks of this app's own build, so a User who
+     * never needs one has saved a download. This is a `<script>` off
+     * `gstatic.com`, and the rest of Jellyflick works against a Server on a
+     * LAN with no route to the internet at all: fetching it eagerly would make
+     * every such page load ask the outside world for something it cannot have,
+     * and `decisions.md` §8 says there is no way to know whether Cast is
+     * really available without paying that price. So the `import()` is inside
+     * the press, and `playbackTargets().cast` is what decides whether there is
+     * a press to make.
+     */
+    loadCastSender: async (options) => {
+      const { createCastSender } = await import('./cast-sender');
+      return await createCastSender(options);
+    },
+
     now: () => Date.now(),
     random: () => Math.random(),
   };
@@ -241,9 +260,35 @@ function playbackTargets(): PlaybackTargets {
     remote?: unknown;
   };
   return {
-    // The Cast SDK is loaded on demand, so this only reports whether the
-    // browser has the hook the SDK needs.
-    cast: 'chrome' in window && typeof (window as { chrome?: unknown }).chrome === 'object',
+    /*
+     * Whether this browser could Cast at all, which is **a cheap gate and not
+     * an answer** — `decisions.md` §8 is explicit that availability cannot be
+     * detected without loading the SDK and letting it discover devices. So
+     * this decides whether to draw a control; the press is what finds out, and
+     * `player.tsx` has one message for every way that can go wrong.
+     *
+     * **`PresentationRequest` rather than `window.chrome`**, and #33's e2e is
+     * what settled it. The research recorded that Jellyfin's own plugin bails
+     * on `if (!chrome)`, and this layer copied that — but `window.chrome` is a
+     * **branding object**, not a platform feature: it is absent in plain
+     * Chromium builds (Playwright's included, which is how this was found) and
+     * in several Chromium derivatives where the Cast SDK works perfectly well.
+     * A gate on it hides the feature from browsers that have it.
+     *
+     * The Presentation API is the standard this is really asking about —
+     * "can this browser send media to a second screen" — and it is present in
+     * exactly the family where Cast works: Chrome, Edge and Chromium, and
+     * neither Firefox nor Safari. `window.chrome` stays behind it for an older
+     * Chromium that has the branding object but not the API.
+     *
+     * A slightly generous gate is the right trade in both directions: a
+     * control that turns out to lead nowhere costs a User one press and one
+     * clear message, where a missing one costs them the feature with nothing
+     * said at all.
+     */
+    cast:
+      typeof (window as { PresentationRequest?: unknown }).PresentationRequest === 'function' ||
+      ('chrome' in window && typeof (window as { chrome?: unknown }).chrome === 'object'),
     airPlay: video.remote !== undefined || typeof video.webkitShowPlaybackTargetPicker === 'function',
     // Picture-in-picture is Chrome 69, one version above the floor.
     pictureInPicture:
