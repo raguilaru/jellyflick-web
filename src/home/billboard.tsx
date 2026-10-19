@@ -175,7 +175,7 @@ function FeaturedTitle({
           <button
             type="button"
             class="button button--quiet billboard__more-info"
-            onClick={() => openTitle({ titleId: title.itemId, name: title.name })}
+            onClick={() => openTitle({ titleId: title.itemId })}
           >
             {t('billboard.moreInfo')}
           </button>

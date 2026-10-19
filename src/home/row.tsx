@@ -35,6 +35,14 @@ import { CardLabel } from '../title-labels/card-label';
 export type RowCard = {
   readonly titleId: string;
   readonly name: string;
+  /**
+   * Whether the card is a Movie's or a Series'. Nothing a Row draws reads it;
+   * it is here for a Row of cards that already exist being narrowed to one
+   * kind — the My List Row in the Movies or Series section (#23), which is a
+   * filter over the store the shell holds rather than a question to the
+   * Server.
+   */
+  readonly kind: Title['kind'];
   /** Absent when the Server has no artwork for the Title. */
   readonly artworkUrl?: string;
   /**
@@ -85,6 +93,7 @@ export function cardForTitle(gateway: JellyfinGateway, title: Title): RowCard {
   return {
     titleId: title.itemId,
     name: title.name,
+    kind: title.kind,
     ...(title.artwork === undefined
       ? {}
       : {

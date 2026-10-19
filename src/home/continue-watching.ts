@@ -1,6 +1,6 @@
 import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models/base-item-dto';
 import { catalogueItemFrom, playbackStateOf, titleOf, type Title } from '../catalogue/catalogue';
-import type { JellyfinGateway } from '../jellyfin/gateway';
+import type { JellyfinGateway, TitleKind } from '../jellyfin/gateway';
 import { cardForTitle, type RowCard } from './row';
 
 /**
@@ -108,6 +108,16 @@ export type ContinueWatchingRead =
     }
   | { outcome: 'unavailable' };
 
+export type ContinueWatchingLoadOptions = {
+  limit?: number;
+  /**
+   * One kind of Title only, for the Movies or Series section (#23). What a
+   * User resumes of a Series is an Episode, which the gateway maps; what the
+   * Row then draws is still the Series' own card.
+   */
+  kind?: TitleKind;
+};
+
 /** The Row itself: the cards to draw, and the hidden records now spent. */
 export type ContinueWatchingRow = {
   readonly entries: readonly ContinueWatchingEntry[];
@@ -199,13 +209,26 @@ export function mergeContinueWatching(options: {
  */
 export async function loadContinueWatching(
   gateway: JellyfinGateway,
-  limit: number = CONTINUE_WATCHING_LIMIT,
+  options: ContinueWatchingLoadOptions = {},
 ): Promise<ContinueWatchingRead> {
+  const limit = options.limit ?? CONTINUE_WATCHING_LIMIT;
+  /**
+   * A section about Movies makes **one** read where Home makes three (#23).
+   * The other two are both questions about Series — which Episode comes next
+   * in each, and when each was last watched — so asking them for a Row that
+   * can only hold Movies would be two round trips whose answers are thrown
+   * away. Not an optimisation of the merge: the merge is given nothing to
+   * merge, which is the honest shape of "this section has no Series in it".
+   */
+  const aboutSeries = options.kind !== 'Movie';
+
   try {
     const [resume, nextUp, playedEpisodes] = await Promise.all([
-      gateway.getResumeItems({ limit }),
-      gateway.getNextUpItems({ limit }),
-      gateway.getPlayedEpisodes({ limit: PLAYED_EPISODES_LIMIT }),
+      gateway.getResumeItems({ limit, ...(options.kind === undefined ? {} : { kind: options.kind }) }),
+      aboutSeries ? gateway.getNextUpItems({ limit }) : Promise.resolve([]),
+      aboutSeries
+        ? gateway.getPlayedEpisodes({ limit: PLAYED_EPISODES_LIMIT })
+        : Promise.resolve([]),
     ]);
     return { outcome: 'read', resume, nextUp, playedEpisodes };
   } catch {

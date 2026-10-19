@@ -35,8 +35,8 @@ function names(myList: MyList): readonly string[] {
 }
 
 /** A card for a Title the Server holds, as a Row would hand one over. */
-const ARRIVAL = { titleId: 'movie-arrival', name: 'Arrival' };
-const PADDINGTON = { titleId: 'movie-paddington', name: 'Paddington' };
+const ARRIVAL = { titleId: 'movie-arrival', kind: 'Movie' as const, name: 'Arrival' };
+const PADDINGTON = { titleId: 'movie-paddington', kind: 'Movie' as const, name: 'Paddington' };
 
 describe('My List', () => {
   it('starts out as not yet read, so nothing claims the list is empty', () => {

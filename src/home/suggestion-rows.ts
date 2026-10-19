@@ -1,6 +1,6 @@
 import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models/base-item-dto';
 import { catalogueItemFrom, titleOf, type Title } from '../catalogue/catalogue';
-import type { JellyfinGateway } from '../jellyfin/gateway';
+import type { JellyfinGateway, TitleKind } from '../jellyfin/gateway';
 import { cardForTitle, type RowCard } from './row';
 
 /**
@@ -53,14 +53,28 @@ export function loadWatchAgain(
     .catch(unavailable);
 }
 
+export type GenreRowOptions = {
+  limit?: number;
+  /**
+   * One kind only, for a genre Row in the Movies or Series section (#23).
+   * The same Row on Home holds both kinds, which is what makes this the
+   * section's question rather than the Row's.
+   */
+  kind?: TitleKind;
+};
+
 /** The Titles in one genre, by the genre's name (story 44). */
 export function loadGenreRow(
   gateway: JellyfinGateway,
   genre: string,
-  limit: number = SUGGESTION_ROW_LIMIT,
+  options: GenreRowOptions = {},
 ): Promise<SuggestionRowResult> {
   return gateway
-    .getTitles({ genre, limit })
+    .getTitles({
+      genre,
+      limit: options.limit ?? SUGGESTION_ROW_LIMIT,
+      ...(options.kind === undefined ? {} : { kind: options.kind }),
+    })
     // The genre's own name heads the Row, as it does on the Search screen.
     .then((items) => rowOf(gateway, items, genre))
     .catch(unavailable);

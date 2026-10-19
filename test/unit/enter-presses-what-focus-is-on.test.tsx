@@ -19,8 +19,8 @@ import { testDeviceLayer } from '../device/profiles';
  */
 
 const CARDS: readonly RowCard[] = [
-  { titleId: 'bluey', name: 'Bluey' },
-  { titleId: 'severance', name: 'Severance' },
+  { titleId: 'bluey', kind: 'Movie' as const, name: 'Bluey' },
+  { titleId: 'severance', kind: 'Movie' as const, name: 'Severance' },
 ];
 
 /** A screen with the navigation installed, as the app installs it once. */
