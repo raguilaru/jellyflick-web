@@ -4,7 +4,7 @@ State of the `/implement-spec` run on the integration branch `feat/jellyflick-v1
 (draft PR #38). Update this whenever a wave lands, so a fresh session can pick the work
 up without re-deriving anything.
 
-## NINTH SESSION — the paused wave resumed, #21 and #29 merged, #19 and #30 in flight
+## NINTH SESSION — #21, #29 and #19 merged; #30 and #23 in flight
 
 **Read this, then the eighth session's section below for the two paused branches, then the
 seventh's, which is still the standing guidance and has not been superseded.**
@@ -150,24 +150,93 @@ full five seconds. So "make the first assertion a poll" is probably not the fix;
 assertions want to know whether `reveal.ts` is meant to land exactly on 0. It passed
 10/10 on `--repeat-each` and did not recur in the integrator's own run.
 
-### State at the end of the ninth session's second wave
+### A session limit stopped both implementers at once — and neither branch had ever been pushed
 
-Integration tip **`44de7fa`**, pushed and verified with `git ls-remote`. Draft PR #38
-still draft.
+The third interruption of this run, and it exposed a gap the earlier two had hidden.
 
-- **In flight:** **#19** (`src/title/`, ports 8361/8362) and **#30** (`src/playback/`,
-  ports 8371/8372, **its first acceptance box is a research finding to record in the
-  ticket before any code**). Both worktrees created and `npm ci`-ed by the integrator.
-- **Free when a slot opens:** **#23** (`src/home/`), then **#32**, **#33**, **#34** in the
-  player, one at a time.
+Both agents had **committed as they went**, which is what the seventh session's lesson
+asked for and it worked: #19 had five authored commits and a clean tree, #30 had three and
+a one-file dependency install uncommitted. Nothing was mid-thought.
+
+**But neither branch existed on `origin`.** Every commit lived only inside a worktree, one
+`git worktree remove` away from being gone. Worse, it *looked* fine: `git log
+origin/ticket/19-…..HEAD | wc -l` printed `0`, which reads as "nothing unpushed" and
+actually meant the range was empty because **the remote ref did not exist at all**. The
+integrator nearly accepted that number.
+
+So the standing advice was half a rule. Commit at each green step **and push the branch**;
+the commit is what survives the agent, the push is what survives the worktree. Implementer
+briefs now say both. And when checking whether a branch is safe, **verify the remote ref
+exists** with `git ls-remote` before reading any count of unpushed commits — an empty range
+against a missing ref is indistinguishable from a clean one.
+
+Recovery was cheap because of the commits: #19's branch was pushed as-is, and #30's
+dependency install was committed as a WIP snapshot whose message says what it is and tells
+the next agent to keep the three authored commits beneath it rather than reset past them.
+
+### #19 merged at `42a596f`, closed — finished, and stopped mid-gate
+
+Its implementer's last act was re-running the gate; the work itself was done. The
+integrator pushed the branch, ran the gate from the ticket's own worktree after an
+`npm ci`, and merged.
+
+`lint` 0, `typecheck` 0, `build` 0, **938 unit tests in 69 files** (+27 tests, +2 files),
+**450 Playwright passed / 39 skipped / 0 failed** under `E2E_CPU_THROTTLE=4` (+21 tests,
+all new), main JS **171.64 kB / 51.92 kB gz** (+2.64 kB raw), CSS 21.26 kB.
+
+**Skips 39, unchanged** — all 21 new tests run, the keyboard-only ones included, so both
+new controls are reachable by direction alone rather than excused from that project.
+
+The merge result differed from the gated branch tip in `docs/research/RESUME.md` **alone** —
+checked with a diff rather than assumed from the log shape — so the e2e run was carried
+and the fast steps and unit suite re-run on the merge result. That is the third shape this
+carry/repeat decision has taken on this run: byte-identical (#21, #22), docs-only delta
+(#19), and repeat-anyway because the change is something the whole suite leans on (#29,
+#31).
+
+#19's implementer had independently hit and fixed the **same heading trap** as #21 and #29:
+a test telling a title page from Home by an `h1` that is really the Billboard's. Three
+tickets in a row. It is now in every implementer brief.
+
+### Bundle trend
+
+147.05 → 149.46 (#22) → 153.13 (#31) → 155.95 (#20) → 161.22 (#28) → 164.36 (#21) →
+169.00 (#29) → **171.64 kB** raw. Still feature code, still nothing newly split beyond
+hls.js and #29's entirely-lazy libass payload.
+
+### Current state — ninth session, third wave in flight
+
+Integration tip **`42a596f`** plus this commit, pushed and verified with `git ls-remote`
+rather than with a quiet push. Draft PR #38 still draft.
+
+**Merged this session:** #21, #29, #19 — all closed, each gated by the integrator on the
+merge result rather than on the implementer's report. Every implementer's numbers have
+matched the integrator's exactly, on this session and on every earlier one.
+
+- **In flight:** **#30** Image subtitles (`src/playback/`, resumed from the interruption,
+  ports 8371/8372, three authored commits plus an integrator WIP holding only a
+  `libpgs@0.9.0` install) and **#23** Movies and Series pages (`src/home/`, fresh, ports
+  8381/8382). Both worktrees created and `npm ci`-ed **by the integrator**, never by the
+  agent — that remains the single most expensive thing that went wrong in this run.
+- **Queued, all `src/playback/`, one at a time:** #32 Trickplay, speed,
+  picture-in-picture and quality; #33 Cast, which `decisions.md` §8 says must read
+  `user.Configuration.CastReceiverId` at runtime; #34 Play On.
 - **Findings open:** #41, #42, #46, #48, #49. Closed: #43, #44.
-- **`needs-info`, host not agent:** #45, #47.
-- **Worktrees:** the integrator's, `ticket-19-trailers-download`,
-  `ticket-30-image-subtitles`, and the two belonging to **other Claude sessions**
-  (`implement-spec-88c250`, `remote-setup-2e9b22`) — leave those alone. #21's and #29's
-  were removed after checking each was a full ancestor of the integration branch with
-  nothing uncommitted and nothing unpushed. No stray dev server, fake Jellyfin or browser
-  process is running.
+- **`needs-info`, both needing the host rather than an agent:** #45 (MDBList's ratings
+  shape — no key available to make one real call) and #47 (`MediaStream.Path` for
+  subtitles against a real Jellyfin). **#48 is also effectively the host's**: libass is
+  LGPL-2.1, the build ships 4.3 MB of its WebAssembly, and where the licence texts go is
+  tangled with the spec's own "choosing a licence" item.
+- **Still owed at the end of the run:** `code-review` over the whole branch, the git
+  history rewrite in `decisions.md` §10 (after which the host must ask GitHub Support to
+  purge the stale objects), and marking PR #38 ready.
+- **Worktrees:** the integrator's `implement-spec-c273ce`, plus
+  `ticket-30-image-subtitles` and `ticket-23-movies-series`, both **in flight — do not
+  touch**. #21's and #29's were removed after checking each was a full ancestor of the
+  integration branch with nothing uncommitted and nothing unpushed; #19's is still present
+  and is now removable on the same check. `implement-spec-88c250` and `remote-setup-2e9b22`
+  belong to **other Claude sessions, not this run — leave them alone.** No stray dev
+  server, fake Jellyfin or browser process is running (checked with `pgrep`).
 
 ## EIGHTH SESSION — PAUSED FOR TOKENS, two branches snapshotted mid-flight
 
