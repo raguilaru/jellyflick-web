@@ -1723,6 +1723,13 @@ Where it is tested:
 to a `<video>` that reports what it is doing. #26 grows the controls, #27 the
 tracks, #28 the Subtitle Offset, #33 Cast and #34 Play On.
 
+> **#32 — trickplay, the playback speed, picture-in-picture and the maximum
+> quality — has no section of its own here.** It was merged without one, and
+> writing it is issue #55 rather than #33's to do. Its code is
+> `src/playback/trickplay.ts`, `trickplay-preview.tsx`, `playback-speed.ts`,
+> `max-quality.ts` and `playback-options.tsx`, and its reasoning is in the
+> comments at the head of each.
+
 - **The DeviceProfile is the whole negotiation**, and it is built from the
   device layer and nothing else (`device-profile.ts`). The Server reads it and
   decides between the file untouched, a remux and a transcode, so a profile that
@@ -2403,6 +2410,124 @@ Episode — in `test/unit/skipping-and-the-next-episode.test.tsx`. What only a
 browser can say is `test/e2e/skipping-and-the-next-episode.spec.ts`: the picture
 really moving, an Episode really running out, a remote reaching every new button
 by direction, and the two offers measured against the viewport.
+
+### Cast: Chromecast and AirPlay (#33)
+
+Sending the Title somewhere else, with this app as the remote. **Cast is
+Chromecast or AirPlay** — `GLOSSARY.md` is explicit, and it is explicit because
+the neighbouring feature is a different one: **Play On** (#34) is telling
+another running Jellyfin app on the same Server to play something, which goes
+through the Server's session endpoints and touches no receiver at all.
+
+The two halves of Cast share a User's intention and nothing else, which is why
+they are two files:
+
+| | Chromecast (`src/playback/cast.ts`) | AirPlay (`src/playback/air-play.ts`) |
+| --- | --- | --- |
+| What loads | the Cast SDK, off `gstatic.com`, on the press | nothing |
+| Who plays | Jellyfin's receiver, a Jellyfin client in its own right | the `<video>` Safari is already decoding, routed |
+| Who reports progress | **the receiver** | this app, as before |
+| This device | hands its session over and pauses | keeps playing and keeps reporting |
+
+- **The receiver application is read from the User's account at runtime**, never
+  hardcoded (`decisions.md` §8). It rides in on `usePlaybackPreferences()` —
+  #35's provider is already above the player, so there is no second path to the
+  Server — as a **read-only** field: `castReceiverId` has no case in
+  `configurationFor`, so a save from this app carries the stored value through
+  untouched, and choosing a receiver stays a thing a User does in Jellyfin's own
+  dashboard. `castReceiverId()` falls back to Jellyfin's published Stable id,
+  `F007D354`, and that is the **ordinary** case rather than an edge: the Server
+  seeds `CastReceiverApplications` in a 12.x migration, so every install that
+  has not run it — the fake included — names nothing.
+- **The SDK load is the device layer's, and it is the one lazy load that needs
+  the internet.** `loadCastSender` sits beside the two subtitle renderers in
+  `src/device/types.ts` for the same reasons — the SDK is `window.chrome` and
+  `window.__onGCastApiAvailable`, which only `src/device/` may read, and the
+  webOS port answers by rejecting — but with one of its own: the subtitle
+  renderers are chunks of this app's own build, where this is a `<script>` off
+  `gstatic.com`, and most Jellyfin Servers are on a LAN with no route out. An
+  eager fetch would have every page load ask the outside world for something it
+  cannot have. So the `import()` is inside the press, and
+  `test/e2e/cast-and-airplay.spec.ts` watches a real browser make no request
+  for it until one is made.
+- **`playbackTargets().cast` is a cheap gate, not an answer**, because
+  `decisions.md` §8 says there is no API that answers "is there a Chromecast
+  here" without loading the SDK and letting it discover devices. The press is
+  the real answer, and the player has **one message for every way it can fail**
+  — no SDK, a `gstatic.com` the LAN cannot reach, `isAvailable(false)`, a
+  receiver that would not start, a message it refused. A User can do the same
+  one thing about all of them.
+- **The gate is `PresentationRequest`, and `window.chrome` was wrong.** The
+  research recorded that Jellyfin's own plugin bails on `if (!chrome)` and this
+  layer copied it; #33's e2e found that `window.chrome` is a Chrome **branding**
+  object rather than a platform feature, absent in plain Chromium builds
+  (Playwright's included) and in derivatives where the SDK works. The
+  Presentation API is the standard the question is really about, and it is
+  present in exactly Chrome, Edge and Chromium and in neither Firefox nor
+  Safari. `window.chrome` stays behind it for an older Chromium. A generous
+  cheap gate is the right trade in both directions: a control that leads
+  nowhere costs one press and one clear message, where a missing one costs the
+  feature with nothing said.
+- **Casting hands over rather than playing in both places**, and that is what
+  keeps progress reported. Jellyfin's receiver signs in to the Server with the
+  address, User, token and DeviceId the `PlayNow` carries and reports progress
+  itself — which is the whole reason to use it rather than hand the default
+  receiver a `MediaInfo`, which would play and be invisible to Jellyfin. Two
+  Jellyfin clients reporting one playback would leave the Server with two
+  sessions and a resume point belonging to whichever stopped last, so
+  `usePlayback` gained `handOver`: pause the element, report the stop at the
+  position the User reached, and that position is where the receiver picks the
+  Title up. `reporting.ts`'s `stopped` is once-only, so the close that follows
+  reports nothing twice.
+- **The token and DeviceId come off `gateway.identity`**, which is the one
+  reason that exists. A receiver cannot send an `Authorization` header on this
+  app's behalf, so the two go in the message — the same bargain `videoStreamUrl`
+  makes when it puts the token in the query as `ApiKey`, and for the same
+  reason. A second caller there would be a sign something is building requests
+  outside the gateway.
+- **A dismissed picker is a decision, not a failure**, and says nothing. The
+  SDK rejects `requestSession()` for both a cancel and a receiver that would
+  not start, and telling the two apart means depending on an error string — so
+  `cast-sender.ts` reads what it already knows instead: a session exists after
+  a connection and does not after a cancel. The absence answers both, and
+  silence is right for the common one.
+- **AirPlay's availability is watched, not assumed.** The capability can only
+  say Safari has the API; a house with no Apple TV in it would otherwise get a
+  control that opens an empty picker. `decisions.md` §8's order is followed —
+  the standard Remote Playback API first, `webkitShowPlaybackTargetPicker()`
+  behind it — and a browser that will not watch continuously shows the button
+  anyway, which is MDN's own pattern and the right way round. The fallback's
+  trap is that `event.availability` is the **string** `"not-available"`, which
+  is truthy: read as a boolean, the control appears in a house with nothing to
+  send to and looks exactly like a working one.
+- **Both controls are presses in the playback options menu**, beside
+  picture-in-picture, for #32's width reason: three more buttons in the control
+  row is a row wider than a phone. Neither is ever drawn disabled — a feature
+  the browser does not have is not something a User can be told about usefully
+  — so on the Chromium 68 floor the menu is the two groups and Done.
+
+**The seam left for #34 Play On.** Play On wants the same place in the menu and
+the same shape of press, and nothing it needs is taken: `PlaybackOptions` grows
+one more optional handler beside `onCast` and `onAirPlay`, and the row it lands
+in already wraps. What it must **not** reuse is `loadCastSender` or
+`cast.ts` — a Jellyfin session on the same Server is `POST /Sessions/{id}/Playing`
+and needs no receiver, no SDK and no credentials in a message, since the Server
+is already authenticated. The part that is genuinely shared is **`handOver`** on
+`usePlayback`: telling another Jellyfin app to play something raises the same
+two-sessions question Cast does, and the answer is the same call. Whether Play
+On should hand over at all is #34's to decide — a Title sent to the television
+in the next room is the Cast case, but a User may well mean "and keep it here
+too" — so `handOver` is deliberately a thing the player calls rather than
+something `usePlayback` does on its own.
+
+Where it is tested:
+
+| Where | What it covers |
+| --- | --- |
+| `test/unit/casting-a-title.test.ts` | The arithmetic: which receiver, read from the account with Jellyfin's published fallback, and every field of the `PlayNow` the receiver reports progress with. |
+| `test/unit/airplay-on-the-element.test.ts` | Which of the two APIs an element has and which wins, the watch and its cancellation, the string availability, and a dismissed picker. Elements shaped by hand, because happy-dom has neither API and a real element would have `remote` in Chromium and nothing here. |
+| `test/unit/casting-a-title.test.tsx` | The journey: the control only where the device layer says so, nothing loaded until the press, the account's receiver reaching the sender, the handover leaving one session, the notice, stopping again, a failure said beside the picture, and a dismissed picker saying nothing. |
+| `test/e2e/cast-and-airplay.spec.ts` | What needs a browser: that nothing asks `gstatic.com` for anything until the press, that a real `<script>`, a real `error` event and a real `__onGCastApiAvailable` behave as `cast-sender.ts` assumes, that the `<video>` really pauses and the Server records exactly one stop, and AirPlay's WebKit fallback against a real element and a real event. |
 
 ## The fake Jellyfin serves real video
 
