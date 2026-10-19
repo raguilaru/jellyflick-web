@@ -6,6 +6,8 @@ import { Player } from '../playback/player';
 import type { Session, SignedInUser } from '../session/session';
 import { HOME_LAYOUT_PATH } from '../settings/home-layout-screen';
 import { useSettings } from '../settings/settings-provider';
+import { useWideScreen } from '../shell/layout';
+import { HOME_SECTION_IDS, sectionsFor } from '../shell/sections';
 import { resolvePlayTarget, type PlayTarget } from '../title/play-target';
 import { Billboard } from './billboard';
 import { CardActionsProvider } from './card-actions';
@@ -47,6 +49,12 @@ export function HomeScreen({ user, session, device }: HomeScreenProps) {
   const t = useTranslate();
   const gateway = session.gateway();
   const { settings, loaded } = useSettings();
+  /**
+   * Whether the bar on the screen already carries Movies and Series. Below
+   * 768px it is the bottom bar, which carries neither, so Home carries the
+   * pair itself (#51).
+   */
+  const wide = useWideScreen();
 
   /** What the player over Home is playing, and nothing when there is none. */
   const [playing, setPlaying] = useState<PlayTarget | undefined>(undefined);
@@ -60,6 +68,24 @@ export function HomeScreen({ user, session, device }: HomeScreenProps) {
       <Billboard gateway={gateway} userId={user.userId} device={device} />
 
       <p class="notice">{t('home.signedInAs', { name: user.name })}</p>
+
+      {/* The way to Movies and Series at phone width (#51). The bottom bar
+          carries four items and neither is among them (story 61), so without
+          this a phone User can only reach either by typing its address. On a
+          wide screen the top bar carries both and this is left out, so no link
+          is ever in the document twice. Deliberately not a `<nav>`: there is
+          already one on the screen, and a second landmark called Sections
+          would give a screen reader two answers to "where can I go".
+          Addresses still come from `src/shell/sections.ts` alone. */}
+      {wide ? null : (
+        <p class="home__sections">
+          {sectionsFor(HOME_SECTION_IDS).map((section) => (
+            <a key={section.id} class="button button--quiet" href={section.path}>
+              {t(section.labelKey)}
+            </a>
+          ))}
+        </p>
+      )}
 
       <p class="home__edit">
         <a class="button button--quiet" href={HOME_LAYOUT_PATH}>
