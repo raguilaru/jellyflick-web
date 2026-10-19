@@ -113,6 +113,31 @@ this session opened it. Both paused worktrees were intact, both branches were ex
 where the doc said on `origin`, and no dev server, fake Jellyfin or browser process was
 left running — all checked rather than assumed.
 
+### #51's branch moved the e2e skip count 45 → 42, by removing three
+
+Recorded here in the same commit, which is this doc's own rule — and this is the one
+direction the rule has not had to cover before.
+
+`test/e2e/movies-and-series.spec.ts` kept the six tests #23 gave it. The three that walk
+into a section through the navigation — `the Movies section holds the Movies…`, `each
+section is headed by the genres its own library earned` and `the section names the page
+and the Billboard names a Title under it` — **skipped on `phone` only because a phone
+could not reach either section**. Home now carries the pair of links at that width, so
+`skipWithoutTheLinks` is gone and all three run in all three projects: **−3 skips, +3
+passes**.
+
+The fourth skip, the 375px measurement, is unchanged in kind and still skips in `desktop`
+and `keyboard-only` — **2 skips, as before**. It gained Home's own scroll-width
+assertion rather than a second test, deliberately: a new runtime-skipped test would have
+moved the count again for a measurement rather than for a gap. Its name changed from
+`[phone] a section fits a 375px screen` to `[phone] the way into a section, and the
+section, fit a 375px screen`.
+
+**The 42 skips are therefore: 26 original, 3 the screenshot tour, 10
+`desktop-hover-cards.spec.ts` in `keyboard-only`, 2 in `movies-and-series.spec.ts` (the
+375px measurement, outside `phone`) and 1 in `trickplay-speed-and-quality.spec.ts`.**
+Nothing pre-existing moved.
+
 ### #32's branch moved the e2e skip count 44 → 45, and this is the one
 
 Recorded here in the same commit, which is this doc's own rule.

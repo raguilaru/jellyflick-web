@@ -634,6 +634,10 @@ do not already have.
   the bottom bar below it — chosen in JavaScript in `src/shell/layout.ts`, so
   there is never a second copy of every link for a screen reader or a test to
   find. ADR 0002 bans container queries; this is a page-level breakpoint anyway.
+  The bottom bar carries three of the five sections and the User's picture, so
+  **Home draws the other two sections' links itself at that width** (#51) —
+  see "Movies and Series" below. They are gated on the same query, so no link
+  is in the document twice at any width.
 - **Back is one handler**, `src/shell/back.ts`. The Back key — a remote's, or
   `Escape` — does nothing of its own: it calls `history.back()`, which is the
   browser's back button, so the two cannot drift apart. The entry the app was
@@ -956,10 +960,23 @@ two screens rather than one, which is why one component answers both addresses.
   Title under it; on Home it is the other way round, because there the
   Billboard *is* what the screen is about. Two level-1 headings in one `<main>`
   would leave a screen reader with two answers to what the page is.
-- **A phone has no link to either of them.** The bottom bar carries four items
-  and neither is among them (story 61), so at that width a section is reached
-  by its address. Nothing in #23 owns fixing that; the Playwright spec skips
-  its three navigation journeys on `phone` and says so.
+- **A phone reaches them from Home** (#51). The bottom bar carries four items
+  and neither is among them (story 61), so Home draws the pair of links
+  itself, below its greeting and above the Edit Home link —
+  `HOME_SECTION_IDS` in `src/shell/sections.ts`, which is the other half of
+  `BOTTOM_BAR_SECTION_IDS`: between them the two lists are the whole of how a
+  phone reaches every section. They are drawn **at phone width only**, because
+  above 768px the top bar carries both and no link is ever in the document
+  twice. They are deliberately a `<p>` of quiet buttons rather than a `<nav>`:
+  the bottom bar is already the page's navigation landmark, and a second one
+  called Sections would give a screen reader two answers to "where can I go"
+  — and make `getByRole('navigation')` ambiguous in three existing specs. The
+  host chose this over a fifth bar item, which `moving-around-the-app` asserts
+  against in both suites, and over a phone header, which is new chrome on the
+  smallest screen. `movies-and-series.spec.ts` therefore runs its three
+  navigation journeys in all three projects; the hop from one section to the
+  other goes back through Home on `phone`, which is the real journey at that
+  width.
 
 ## The suggestion Rows
 
