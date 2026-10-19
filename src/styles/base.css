@@ -224,7 +224,10 @@ body {
   align-content: start;
 }
 
-.user-list__sign-out {
+/* Doubled with .button on purpose: .button is written below this and would
+   otherwise win on source order at equal specificity, taking the font-size
+   with it through its `font` shorthand (#49). */
+.button.user-list__sign-out {
   font-size: 12px;
   padding: var(--space-1);
 }
@@ -850,9 +853,12 @@ body {
   margin: var(--space-1) var(--space-2);
 }
 
-/* The chip is a quiet button without the primary action's top margin. */
-.genres__genre,
-.genres__leave {
+/* The chip is a quiet button without the primary action's top margin.
+   Doubled with .button for the same reason as above: .button sets margin-top
+   and is written below this, so at equal specificity it won and this rule did
+   nothing (#49). */
+.button.genres__genre,
+.button.genres__leave {
   margin-top: 0;
 }
 

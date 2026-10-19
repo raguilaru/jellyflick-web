@@ -110,6 +110,14 @@ _Avoid_: Badge, tag, ribbon
 The bigger version of a card that a resting mouse pointer opens, carrying Play, My List and More info beside the Title's age rating, length, genres and Extra Ratings. It appears only where there is a pointer that can rest on something, so never on a touch screen and never on a TV, and it never plays video.
 _Avoid_: Hover preview, preview card, popover, tooltip, expanded card
 
+**Movies section**, **Series section**:
+Two screens that are Home narrowed to one kind of Title: the same Billboard and the same Rows, drawn by the same registry, showing only Movies or only Series. Each has its own address. They are not the Home Layout — a Row the User hid on Home is still here, because the layout of a section is fixed and nothing stores or edits it.
+_Avoid_: Movies page, Series page, TV page, library, tab
+
+**Top genres**:
+The three Genre Rows a section ends with, chosen by how many Titles of that section's kind each genre holds, most first, ties broken by name. Derived each time the section loads; nothing stores them and the User does not choose them.
+_Avoid_: Popular genres, your genres, recommended genres
+
 ## Playback
 
 **Subtitle Offset**:
@@ -143,3 +151,15 @@ _Avoid_: Cast (that's for Chromecast or AirPlay), remote control
 **Download File**:
 Saving a Title's original video file to the device. Only Users the Server allows to download see it. It isn't an offline mode.
 _Avoid_: Download (alone), offline, save
+
+**Styled subtitles**:
+A subtitle track that carries its own typography, positioning and effects rather than plain lines of text, drawn here with those styles intact where the device can manage it and flattened to its words where it cannot.
+_Avoid_: ASS subtitles, SSA, fancy subtitles, karaoke
+
+**Image subtitles**:
+A subtitle track that is pictures rather than text. Some are drawn here over the picture; the rest the Server draws into the video itself before sending it, which is the only way they can be shown at all.
+_Avoid_: Bitmap subtitles, PGS (that's one of several formats), graphical subs
+
+**Burned in**:
+Said of subtitles the Server has drawn into the video itself. They cannot be turned off, moved or re-timed without asking the Server for a different stream, which is why choosing or leaving such a track reloads the video where switching any other subtitle does not.
+_Avoid_: Hardcoded, hardsubbed, baked in
