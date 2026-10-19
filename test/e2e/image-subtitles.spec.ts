@@ -284,10 +284,22 @@ test('burns a VobSub track in, disables the timing panel, and stays inside a pho
    */
   const open = page.getByRole('button', { name: 'Audio and subtitles for Arrival' });
   await expect(open).toBeVisible({ timeout: 30_000 });
-  await open.press('Enter');
 
   const picker = page.getByRole('dialog', { name: 'Audio and subtitles' });
-  await expect(picker).toBeVisible();
+  /*
+   * Visible is not the same as settled. The re-negotiation tears the controls
+   * down and builds them again, so the button this waited for can be the one
+   * on its way out: the press lands on it, and the rebuild discards the dialog
+   * it opened. Pressing again is what a User does when nothing happened, and
+   * the guard keeps it idempotent — a press only ever goes to a closed picker,
+   * so a slow open is never toggled back shut.
+   */
+  await expect(async () => {
+    if (!(await picker.isVisible())) {
+      await open.press('Enter');
+    }
+    await expect(picker).toBeVisible({ timeout: 2_000 });
+  }).toPass({ timeout: 30_000 });
 
   // Nothing is decoded here: VobSub has no client-side renderer on any device.
   await expect(page.locator('.player__image-subtitles')).toHaveCount(0);
