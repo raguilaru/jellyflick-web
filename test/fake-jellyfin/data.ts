@@ -773,15 +773,27 @@ const SAMPLE_ITEMS: readonly FakeItem[] = [
     Overview: 'A detective and a thief recognise each other.',
     CommunityRating: 8.3,
     People: [{ Name: 'Al Pacino', Type: 'Actor', Role: 'Vincent Hanna' }],
-    // A **graphical** subtitle track, which is the one kind this app cannot
-    // draw: `pgssub` is a Blu-ray bitmap, so #27's picker has to say so rather
-    // than offer a track that would show nothing, and #30 is where it becomes
-    // drawable. Heat is the right Title for it — a 4K Blu-ray rip is exactly
-    // where PGS comes from.
+    // **Both graphical subtitle families**, which is what makes Heat the Title
+    // #30 is tested against — and a 4K Blu-ray rip is exactly where they come
+    // from. The two take opposite paths and the pair is the point:
+    //
+    // - `pgssub` is drawn **here**, by libpgs, on a device that can, so the
+    //   track turns on and off without re-negotiating and the Subtitle Offset
+    //   still reaches it. On a device that cannot, it is burned in.
+    // - `dvdsub` is a VobSub bitmap and is burned in by the Server on **every**
+    //   device, which is #30's first finding: there is no maintained
+    //   client-side renderer that runs on this app's floor, and Jellyfin's
+    //   graphical passthrough never hands over the `.idx` a renderer would
+    //   need for the palette.
+    //
+    // `dvdsub` is also the codec spelling that catches the widening noted in
+    // `media-tracks.ts`: the Server's own predicate reads `dvd_subtitle` as
+    // text, and this app deliberately does not.
     MediaStreams: [
       { Index: 0, Type: 'Video', Codec: 'hevc', Language: 'und' },
       { Index: 1, Type: 'Audio', Codec: 'eac3', Language: 'eng', DisplayTitle: 'English', IsDefault: true },
       { Index: 2, Type: 'Subtitle', Codec: 'pgssub', Language: 'eng', DisplayTitle: 'English (PGS)' },
+      { Index: 3, Type: 'Subtitle', Codec: 'dvdsub', Language: 'spa', DisplayTitle: 'Spanish (VobSub)' },
     ],
     // 4K HEVC in Matroska with Dolby audio: the file nothing modest plays, so
     // the Server has to be asked to transcode it.
