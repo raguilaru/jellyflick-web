@@ -48,6 +48,19 @@ export function createBrowserDeviceLayer(): DeviceLayer {
       return await createStyledSubtitleRenderer(options);
     },
 
+    /**
+     * The image-subtitle renderer (#30), loaded on demand, for the same
+     * reason and in the same shape as the styled one above: libpgs and its
+     * worker live in a chunk nobody fetches until a User chooses a PGS track.
+     * It is a far smaller payload than libass — plain JavaScript, no
+     * WebAssembly — and it is still lazy, because a User watching with the
+     * sound on owes it nothing.
+     */
+    loadImageSubtitleRenderer: async (options) => {
+      const { createImageSubtitleRenderer } = await import('./image-subtitle-renderer');
+      return await createImageSubtitleRenderer(options);
+    },
+
     now: () => Date.now(),
     random: () => Math.random(),
   };
@@ -204,7 +217,21 @@ function subtitleCapabilities(): SubtitleCapabilities {
     // A styled-subtitle renderer needs WebAssembly and a worker. Which renderer
     // is chosen is settled where it is loaded, not here.
     canRenderStyled: typeof WebAssembly !== 'undefined' && typeof Worker !== 'undefined',
-    canRenderImage: typeof WebAssembly !== 'undefined' && typeof Worker !== 'undefined',
+    /*
+     * PGS asks for much less than the styled renderer, and the difference is
+     * load-bearing rather than pedantic (#30). libpgs is **plain JavaScript**:
+     * no WebAssembly to validate, and it falls back from a worker with an
+     * offscreen canvas, to a worker without one, to the main thread — so a
+     * canvas is genuinely all it needs. Repeating `canRenderStyled`'s test
+     * here would have told a Server to burn PGS into the picture on devices
+     * that could have drawn it, which costs a transcode and the Subtitle
+     * Offset both.
+     *
+     * This is also the one claim the DeviceProfile makes on the strength of
+     * (`device-profile.ts`), so it must mean "this device can really decode a
+     * PGS stream" and nothing looser.
+     */
+    canRenderImage: typeof HTMLCanvasElement !== 'undefined',
   };
 }
 

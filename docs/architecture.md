@@ -1839,6 +1839,11 @@ built.
   looks like a Title with no subtitles; a track that draws nothing when pressed
   is worse. It carries `aria-disabled` rather than `disabled`, so a remote can
   still reach it and read why — a `disabled` button is not a focus stop at all.
+  **#30 retired the undrawable track**: every subtitle track is now one a User
+  can press and see, drawn here or burned into the picture by the Server, so
+  the `aria-disabled` choices and the "cannot draw picture subtitles yet"
+  notice are both gone. The *shape* survived and moved — see "Image subtitles"
+  below, where the Subtitle timing control gets exactly this treatment.
 - **Every choice is a `<button>` with `aria-pressed`, never a radio group**, and
   "off" is a choice like any other. Same call as the settings screen (#11, #35)
   and the Home Layout editor (#10), for the same reason: native radios take Left
@@ -2087,6 +2092,143 @@ The fake serves a real styled track (`routes/subtitles.ts`): sections, a
 `Comment:` row, at the same two cue times every other format it serves uses, so
 a test can switch tracks and compare like with like. `MediaAttachments` reaches
 the client and `GET …/Attachments/{index}` answers the font bytes.
+
+### Image subtitles (#30)
+
+Story 105: a bitmap subtitle track drawn where the device can decode one, and
+burned into the picture by the Server everywhere else.
+`src/playback/subtitle-presentation.ts` is the decision (shared with #29),
+`src/playback/image-subtitles.tsx` the drawing, and
+`src/device/image-subtitle-renderer.ts` the decoder.
+
+- **The ticket's first box was research, and it closed two of three
+  families.** Recorded on #30 before any code: there is no maintained
+  client-side VobSub renderer that runs on this app's floor — the one new
+  candidate, `libbitsub`, needs WASM bulk-memory (Chrome 75) and
+  reference-types (Chrome 96) by its own binary, so a Chromium 68 engine
+  rejects the module outright. And **even a perfect renderer would have
+  nothing to render**: every VobSub renderer needs the `.idx` for its palette
+  beside the `.sub`, and Jellyfin's graphical passthrough
+  (`GetGraphicalSubtitlePath`) hands over a raw PGS payload or an extracted
+  `.mks` and nothing else — with no route that takes a file name, and no
+  `.idx` on disk at all for a track muxed into an MKV. So **VobSub and DVB are
+  burned in on every device**, for two independent reasons.
+- **PGS is the one family drawn here**, with `libpgs` — MIT, and **plain
+  JavaScript**, which is the reverse of #29's situation and worth keeping
+  straight. JASSUB needs `transferControlToOffscreen` (Chrome 69) and so
+  cannot run on the floor at all; libpgs picks
+  `workerWithoutOffscreenCanvas` by itself on a browser without it, decoding
+  in a worker and drawing on the main thread. So the webOS port is expected to
+  answer `loadImageSubtitleRenderer` with this same module, where it must
+  answer the styled one with something else.
+- **The renderer seam is the same two methods**, `setTimeOffset` and
+  `destroy`, and `StyledSubtitleRenderer` and `ImageSubtitleRenderer` now
+  alias one `SubtitleRenderer`. That is a finding rather than a tidy-up: #29
+  cut those two because they are the one thing that changes while a User
+  watches and the one thing owed on unmount, and a different library for an
+  unrelated format needed neither more nor less.
+- **Burn-in is asked for by omission, and there is no other way to ask.**
+  `StreamBuilder.GetSubtitleProfile` matches a declared `Format` against the
+  stream's own `MediaStream.Codec`, exactly and case-insensitively, and falls
+  back to `SubtitleDeliveryMethod.Encode` when nothing matches. So the
+  DeviceProfile is the whole mechanism: a device that can decode PGS declares
+  all three codec spellings §14 lists (`pgssub`, `hdmv_pgs_subtitle`, `sup`),
+  because claiming only one would quietly burn in a track the Server reports
+  under another and look like a device that cannot draw PGS. Nobody declares
+  VobSub or DVB.
+- **Choosing a burned-in track re-negotiates, which puts it on the *sound's*
+  side of #27's line.** The Server has to produce a different transcode, so
+  the track is named as `SubtitleStreamIndex` on the next `PlaybackInfo` and
+  the User is owed their place, exactly as a change of sound owes it.
+  `chooseSubtitle` compares the **old and new burn-in states** rather than
+  testing the new track: leaving a burned-in track matters as much as
+  entering one, because the words are in the picture until a new stream
+  replaces it — a client that only re-negotiated on the way in would strand a
+  User with subtitles they had just switched off and no way to remove them.
+  Where neither side is burned in, nothing is negotiated and the picture does
+  not move, which is still every case this app had before #30.
+- **The Subtitle timing panel is disabled, not hidden** (#28's note made good).
+  It is `track-picker.tsx`'s `subtitlesBurnedIn`, deliberately *not* the
+  absence of `onOpenTiming`: a track that is off has nothing to time and
+  nothing to say about it, so the control simply is not there; a burned-in
+  track is one a User is watching and may well want to shift, so the control
+  stays, carries `aria-disabled`, and the group says why in words. The player
+  is what knows, because the same PGS track is shiftable on one device and
+  baked in on the next.
+- **There is no longer any undrawable subtitle track.** #27 offered bitmaps
+  with `aria-disabled` and a notice saying Jellyflick could not draw them,
+  which was honest while it was true. Every track is now one a User can press
+  and see, so those are gone; what remains `aria-disabled` in that menu is the
+  timing control above, and it is dimmed as well as labelled — `aria-disabled`
+  tells a screen reader, and a sighted User otherwise finds out by pressing it
+  and watching nothing happen.
+- **No cues go up, and that is honest rather than missing.** The other two
+  overlays hand cues up so "Sync to this line" can say which line is on the
+  screen; a PGS stream has no line, only pictures. So the button stays
+  unoffered while a bitmap is drawn. The Subtitle Offset itself still crosses
+  the seam, which is the half a User came for.
+- **No fallback either.** A styled track that cannot be styled still has words
+  underneath, so #29 falls back to the overlay. Here the bitmap *is* the
+  subtitle, so a decoder that will not load leaves nothing to draw and the
+  player says so beside the picture, like a track the Server refused.
+- **Two traps, one shared with #29 and one its own.** `libpgs` defaults
+  `workerUrl` to the bare string `'libpgs.worker.js'`, which `new Worker()`
+  resolves against the *document* — so the app would ask for
+  `/libpgs.worker.js`, the SPA would answer `index.html`, and the worker would
+  parse HTML as JavaScript and never reply, leaving `ready` unsettled with no
+  error anywhere. It is JASSUB's trap in a second library, and a bundler would
+  not have saved it: a runtime string is not the
+  `new URL(…, import.meta.url)` form Vite rewrites, so the file would never
+  have been emitted at all. Hence a `?url` import, which both emits and
+  addresses it. The second is CSS: a grid item's `min-height` is `auto`, and
+  libpgs sets the canvas's `height` attribute to the stream's own 1080, so
+  without `min-height: 0` the picture's row stretches to fit a 1080-pixel
+  canvas and pushes the controls out of the window.
+
+Where each thing is tested: the decision per capability profile and per codec
+family in `test/unit/choosing-how-to-draw-subtitles.test.ts`; the profile's
+claims in `test/unit/the-device-profile.test.ts`; the capabilities reaching
+the negotiation in `test/unit/planning-playback.test.ts`; the codec families
+in `test/unit/the-tracks-of-a-title.test.ts`; and the journey — the decoder
+started on the raw stream, the offset crossing the seam, the decoder destroyed
+when the track is turned off, the notice when it will not load, the panel
+disabled with its reason, and both directions of the burn-in re-negotiation —
+in `test/unit/image-subtitles.test.tsx`.
+
+**What only a browser can say is `test/e2e/image-subtitles.spec.ts`, and this
+file is where #29's lesson is spent.** No unit test can find a worker that
+never replies: the device layer is faked, and nothing in happy-dom boots one.
+It asserts on requests, the canvas's own size and boxes, **never pixels** —
+the `.sup` in the *Server's* request log, because a worker's requests are not
+the page's; the canvas resized from a browser's default 300×150 to the stream's
+own 1920×1080, which is bytes fetched, parsed and drawn; the canvas inside the
+picture and clear of the controls; and the document's scroll width at 375px.
+It was checked against the failure it exists for: with `workerUrl` removed the
+two decoding tests fail and the two box tests still pass, which is exactly
+#29's signature and exactly why presence-and-geometry could not have caught
+either ticket's bug.
+
+The fake serves a **real PGS stream** (`routes/subtitles.ts`), which is the
+third place it owes a client real data rather than a shape. `pgsFile()` writes
+an actual `.sup`: segment headers with the `PG` magic and 90 kHz timestamps, a
+presentation composition carrying the frame size, a window, a palette in YCrCb
+with a transparent entry 0, and a run-length-encoded object. **It leads with an
+empty display set at zero, and that is load-bearing**: libpgs only draws when
+the active display-set *index* changes and the index it compares against starts
+at 0, which is also a valid index — so a stream whose first set is the one
+already on screen draws nothing, silently. An empty set at zero makes index 0
+mean "nothing on screen", which is what the sentinel means too.
+
+The #30 fixtures are on **Arrival**, not on Heat, which has carried a PGS track
+since #27 and keeps it: Heat is 4K HEVC in Matroska and so always a transcode,
+and the fake has no transcoder, so no browser test can get it playing. Arrival
+gained `pgssub` at stream 6 and `dvdsub` at stream 7, in languages nothing else
+prefers so they cannot change which track the Server picks by default.
+
+**Licence.** `libpgs` is MIT, a notice obligation rather than LGPL's source
+one, and shipping the decoder means shipping its copyright line. Added to the
+existing licences issue beside libass's rather than filed separately, since
+both want the same screen that does not exist yet.
 
 ### Skipping, and the next Episode (#31)
 

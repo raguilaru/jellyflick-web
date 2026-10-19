@@ -285,13 +285,22 @@ describe('planning how to play a Title', () => {
       expect(plan.outcome).toBe('play');
       if (plan.outcome !== 'play') return;
       expect(plan.plan.tracks.audio.map((track) => track.index)).toEqual([1, 2]);
-      // `jpn` is the styled ASS track (#29). It is offered like any other:
-      // which of them can be drawn *with their styling* is a question asked
-      // per device in `styled-subtitles.ts`, not one that filters this list.
+      /*
+       * Every track, whatever it is and whatever this device can do with it.
+       *
+       * `jpn` is the styled ASS track (#29), `por` is PGS and `deu` is VobSub
+       * (#30) — and the point of listing all five is that **none** of them is
+       * filtered out here. How a track is drawn is asked per device, in
+       * `subtitle-presentation.ts`, and answers `styled`, `cues`, `image` or
+       * `burned-in`; every one of those is a track a User can choose and see,
+       * so none of them is a reason to leave it off the list.
+       */
       expect(plan.plan.tracks.subtitles.map((track) => track.language)).toEqual([
         'eng',
         'spa',
         'jpn',
+        'por',
+        'deu',
       ]);
     });
 
@@ -315,6 +324,39 @@ describe('planning how to play a Title', () => {
           (entry.headers.authorization ?? '').includes('asks-for-tracks'),
       );
       expect(asked?.body).toMatchObject({ AudioStreamIndex: 2, SubtitleStreamIndex: 4 });
+    });
+
+    /**
+     * Burn-in is requested through the profile in the request (#30), and the
+     * request is the only place it can be: the Server decides per track from
+     * what the client claimed it can take, and a device that cannot draw a
+     * bitmap claims no image format at all. A profile built from one device's
+     * video capabilities and another's subtitle ones would ask for a burn-in
+     * the User's own device never needed, so this pins that the *posted*
+     * profile follows the device the plan was made for.
+     */
+    it('posts a profile claiming PGS from a device that draws it, and none from one that cannot', async () => {
+      for (const [deviceId, profile, expected] of [
+        ['draws-pgs', 'modern-desktop-browser', true],
+        ['burns-in', 'webos-5-like', false],
+      ] as const) {
+        await planPlayback(gatewayFor(deviceId), {
+          itemId: 'movie-arrival',
+          userId: RAFAEL,
+          device: testDeviceLayer({ profile }),
+        });
+
+        const asked = (await fakeRequests()).find(
+          (entry) =>
+            entry.path.startsWith('/Items/movie-arrival/PlaybackInfo') &&
+            (entry.headers.authorization ?? '').includes(deviceId),
+        );
+        const posted = (asked?.body as { DeviceProfile?: { SubtitleProfiles?: { Format?: string }[] } })
+          .DeviceProfile?.SubtitleProfiles?.map((entry) => entry.Format);
+
+        expect(posted).toContain('vtt');
+        expect(posted?.includes('pgssub')).toBe(expected);
+      }
     });
   });
 });

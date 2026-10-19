@@ -147,6 +147,34 @@ export function subtitleKindOf(codec: unknown): SubtitleKind {
   return image ? 'image' : 'text';
 }
 
+/**
+ * Which family of bitmap an image track is (#30).
+ *
+ * `subtitleKindOf` above answers whether a track is a picture at all, which is
+ * all #27 needed. This answers **which** picture, and it is a different
+ * question because only one of the three can be drawn here: PGS has a
+ * client-side renderer (`libpgs`), and VobSub and DVB have none — see the
+ * research finding recorded on #30, which is the ticket's own first box. So
+ * the family is what decides between drawing a track on this device and
+ * asking the Server to burn it into the picture.
+ *
+ * The split is §14's table rather than a new rule: `pgssub`,
+ * `hdmv_pgs_subtitle` and `sup` are PGS; `dvdsub`, `dvd_subtitle`, `vobsub`
+ * and a bare `sub` are VobSub; `dvbsub` and `dvb_subtitle` are DVB. It is
+ * asked **through** `subtitleKindOf`, so the two can never disagree about
+ * whether something is a bitmap — `microdvd` is text there and is therefore no
+ * family here, which is the trap that would otherwise be spelt out twice.
+ */
+export type ImageSubtitleFormat = 'pgs' | 'vobsub' | 'dvb';
+
+export function imageSubtitleFormatOf(codec: unknown): ImageSubtitleFormat | undefined {
+  if (subtitleKindOf(codec) !== 'image') return undefined;
+  const name = (codec as string).toLowerCase();
+  if (name.includes('pgs') || name === 'sup') return 'pgs';
+  if (/dvb_?sub/.test(name)) return 'dvb';
+  return 'vobsub';
+}
+
 function textOf<K extends string>(key: K, value: unknown): { [P in K]?: string } {
   if (typeof value !== 'string' || value === '') return {};
   return { [key]: value } as { [P in K]?: string };

@@ -200,11 +200,20 @@ describe('the track picker', () => {
   });
 
   /**
-   * A bitmap track is offered and said to be undrawable rather than left out:
-   * leaving it out would look like a Title with no subtitles, and offering it
-   * silently would be a press that showed nothing. #30 is what makes it work.
+   * **#30 retired the undrawable track.** This test used to assert the
+   * opposite: that a bitmap was offered, carried `aria-disabled` and was
+   * explained by a "Jellyflick cannot draw picture subtitles yet" notice,
+   * which was the honest thing to say while it was true.
+   *
+   * It is no longer true of any track. A picture track is either decoded here
+   * (PGS, on a device that can) or burned into the picture by the Server
+   * (VobSub and DVB, everywhere), and both of those are the words arriving on
+   * the screen — so every track in the list is now one a User can press and
+   * see the result of. The test is kept rather than deleted because what it
+   * guards is still worth guarding: that a bitmap track is *offered*, which
+   * is the half #27 got right and which leaving it out would break.
    */
-  it('says which subtitle tracks it cannot draw, rather than hiding or lying about them', async () => {
+  it('offers a picture subtitle track like any other, now that one can be drawn', async () => {
     // Heat carries a PGS track, which is a picture rather than text.
     await play('Heat');
     fireEvent.click(screen.getByRole('button', { name: 'Audio and subtitles for Heat' }));
@@ -213,8 +222,7 @@ describe('the track picker', () => {
     const track = within(groupNamed(en['player.subtitleTracks'])).getByRole('button', {
       name: /English \(PGS\)/,
     });
-    expect(track.getAttribute('aria-disabled')).toBe('true');
-    expect(screen.getByText(en['player.subtitlesImage'])).toBeTruthy();
+    expect(track.getAttribute('aria-disabled')).toBeNull();
   });
 });
 

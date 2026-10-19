@@ -1,7 +1,7 @@
 import type { SubtitleCapabilities } from '../device/types';
 import type { MediaSourceInfo } from '../jellyfin/gateway';
 import { isStyledSubtitleCodec } from './ass';
-import type { SubtitleTrack } from './media-tracks';
+import { imageSubtitleFormatOf, type SubtitleTrack } from './media-tracks';
 
 /**
  * How a subtitle track is going to be drawn on **this** device (#29).
@@ -20,8 +20,15 @@ import type { SubtitleTrack } from './media-tracks';
  * styling is drawn, and `ass-renderer.ts` answers *with what*.
  */
 
-/** Which file is fetched, as the extension the Server converts by (§14). */
-export type SubtitleFormat = 'vtt' | 'ass';
+/**
+ * Which file is fetched, as the extension the Server converts by (§14).
+ *
+ * `sup` is the odd one out and is not a conversion at all: the Server refuses
+ * to parse or rewrite a graphical track and hands the raw file over whatever
+ * extension is asked for, so asking for the honest one is the only way the
+ * response's content type matches what arrives.
+ */
+export type SubtitleFormat = 'vtt' | 'ass' | 'sup';
 
 export type SubtitlePresentation = {
   /**
@@ -29,10 +36,16 @@ export type SubtitlePresentation = {
    *   fonts, colours and positions.
    * - `cues` — parsed into cues and drawn by the overlay, which is #27's path
    *   and the one #28's offset is a subtraction on.
-   * - `none` — nothing this app can draw. A bitmap, which is #30's.
+   * - `image` — a bitmap this device can decode, drawn on a canvas of its own
+   *   (#30). The offset still applies: the renderer takes one.
+   * - `burned-in` — a bitmap nothing here can decode, so the **Server** draws
+   *   it into the picture (#30). Nothing is fetched and nothing can be
+   *   shifted, which is what the Subtitle timing panel has to say out loud.
+   * - `none` — a device that cannot draw subtitles at all.
    */
-  readonly draw: 'styled' | 'cues' | 'none';
-  readonly format: SubtitleFormat;
+  readonly draw: 'styled' | 'cues' | 'image' | 'burned-in' | 'none';
+  /** Absent when this app fetches nothing: burned in, or nothing drawn. */
+  readonly format?: SubtitleFormat;
 };
 
 export function subtitlePresentationFor(options: {
@@ -41,13 +54,34 @@ export function subtitlePresentationFor(options: {
 }): SubtitlePresentation {
   const { track, capabilities } = options;
 
-  // A bitmap, which needs a decoder this app does not have until #30. The
-  // picker already says so rather than hiding the track (#27).
-  if (track.kind === 'image') return { draw: 'none', format: 'vtt' };
+  /**
+   * A bitmap (#30), and the only question is who draws it.
+   *
+   * **PGS is the one family with a client-side renderer**, which is the
+   * finding recorded on #30: `libpgs` decodes it, and there is no maintained
+   * VobSub or DVB renderer at all — nor could there be one that worked here,
+   * because Jellyfin's graphical passthrough hands over a raw PGS payload and
+   * never a VobSub `.idx`, so a renderer would have the bitmaps and no
+   * palette. Those two are therefore burned in on every device there is.
+   *
+   * Drawing it here rather than letting the Server burn it in is worth the
+   * trouble for the same reason text is: a burned-in track is a transcode the
+   * Server pays for, it cannot be turned off without re-negotiating, and the
+   * Subtitle Offset (#28) cannot touch it. `libpgs` takes a `timeOffset`, so
+   * the one drawn here keeps all three.
+   */
+  if (track.kind === 'image') {
+    const family = imageSubtitleFormatOf(track.codec);
+    if (family === 'pgs' && capabilities.canRenderImage) {
+      return { draw: 'image', format: 'sup' };
+    }
+    // No format: nothing is fetched, because the words arrive in the picture.
+    return { draw: 'burned-in' };
+  }
   // Nothing can be drawn at all. The browser layer answers `true` always and
   // the comment there says why, so this is the webOS port's room rather than a
   // case that happens today.
-  if (!capabilities.canRenderText) return { draw: 'none', format: 'vtt' };
+  if (!capabilities.canRenderText) return { draw: 'none' };
 
   if (!isStyledSubtitleCodec(track.codec)) return { draw: 'cues', format: 'vtt' };
 

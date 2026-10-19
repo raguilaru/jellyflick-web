@@ -477,11 +477,22 @@ export const en = {
   'player.trackUnnamed': (p: { index: number }) => `Track ${String(p.index)}`,
   'player.subtitlesLabel': 'Subtitles',
   /*
-   * Picture subtitles are offered and said to be undrawable rather than left
-   * out: a track missing from the list looks like a Title that has none, and a
-   * track that draws nothing when pressed is worse. #30 is what makes them work.
+   * Picture subtitles used to be offered and said to be undrawable, because a
+   * track missing from the list looks like a Title that has none and a track
+   * that draws nothing when pressed is worse. **#30 made them work**, so that
+   * message is gone: every track in the list is now one a User can choose and
+   * see.
+   *
+   * What replaced it is said only about the track being watched, and only when
+   * the Server is the one drawing it. It has two jobs in one sentence: to
+   * explain why the Subtitle timing control beside it will not open, and to
+   * say whose doing that is — the words are in the video itself, so there is
+   * no separate thing left to move. It deliberately does not mention
+   * transcoding or formats; what a User can act on is that these particular
+   * subtitles cannot be re-timed.
    */
-  'player.subtitlesImage': 'Jellyflick cannot draw picture subtitles yet.',
+  'player.subtitlesBurnedIn':
+    'The Server is drawing these subtitles into the picture, so their timing cannot be changed.',
   'player.subtitlesUnavailable': 'Jellyflick could not read those subtitles from the Server.',
 
   /*

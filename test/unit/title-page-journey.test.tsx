@@ -93,9 +93,13 @@ describe('a User opening a title page', () => {
     expect(screen.getByText('7.9 from the community')).toBeTruthy();
     // The languages there are to watch and read it in.
     expect(screen.getByText('English, French')).toBeTruthy();
-    // Japanese is Arrival's styled ASS track (#29), which is a subtitle
-    // language like any other on this page.
-    expect(screen.getByText('English, Spanish, Japanese')).toBeTruthy();
+    // Japanese is Arrival's styled ASS track (#29); Portuguese and German are
+    // its PGS and VobSub ones (#30). All three are subtitle languages like any
+    // other on this page: **how** a track is drawn — styled, as cues, decoded
+    // from a bitmap, or burned in by the Server — is a question the player
+    // asks per device, and none of the answers is a reason to leave a language
+    // off the list of what a Title can be read in.
+    expect(screen.getByText('English, Spanish, Japanese, Portuguese, German')).toBeTruthy();
     // The Collection it belongs to, which is `/Items/{id}/Collections`.
     expect(screen.getByText('Crime Classics')).toBeTruthy();
     // And a Play button, for the player tickets to wire up.

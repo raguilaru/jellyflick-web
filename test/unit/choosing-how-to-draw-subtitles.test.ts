@@ -87,14 +87,70 @@ describe('choosing how a subtitle track is drawn', () => {
     ).toBe('ass');
   });
 
-  /** #30's territory: a bitmap needs a decoder this app does not have yet. */
-  it('draws nothing for an image track, which is #30’s to render', () => {
-    expect(
-      subtitlePresentationFor({
-        track: subtitleTrack({ kind: 'image', codec: 'pgssub' }),
-        capabilities: DESKTOP,
-      }),
-    ).toEqual({ draw: 'none', format: 'vtt' });
+  /**
+   * Image subtitles (#30), where the same decision splits three ways rather
+   * than two. The expected values follow the finding recorded on the ticket:
+   * PGS has a client-side renderer and so can be drawn here and shifted;
+   * VobSub and DVB have none on any device, so the Server burns them into the
+   * picture and there is nothing left to shift.
+   */
+  describe('image subtitles, which split by family and by device', () => {
+    it('draws a PGS track itself where the device can, asking for the raw file', () => {
+      for (const capabilities of [DESKTOP, PHONE]) {
+        expect(
+          subtitlePresentationFor({
+            track: subtitleTrack({ kind: 'image', codec: 'pgssub' }),
+            capabilities,
+          }),
+        ).toEqual({ draw: 'image', format: 'sup' });
+      }
+    });
+
+    /**
+     * `Stream.sup`, not `Stream.vtt`: §14 says the Server hands a graphical
+     * track over as the raw file whatever extension is asked for, so asking
+     * for WebVTT would get bytes labelled as text — the exact mistake
+     * `media-tracks.ts`'s widening exists to stop.
+     */
+    it('asks for the raw PGS file rather than a conversion the Server cannot do', () => {
+      expect(
+        subtitlePresentationFor({
+          track: subtitleTrack({ kind: 'image', codec: 'hdmv_pgs_subtitle' }),
+          capabilities: DESKTOP,
+        }).format,
+      ).toBe('sup');
+    });
+
+    it('has the Server burn a PGS track in on a device that cannot draw it', () => {
+      expect(
+        subtitlePresentationFor({
+          track: subtitleTrack({ kind: 'image', codec: 'pgssub' }),
+          capabilities: TV,
+        }).draw,
+      ).toBe('burned-in');
+    });
+
+    /** No renderer exists for either, on any device, so neither ever asks. */
+    for (const codec of ['vobsub', 'dvdsub', 'sub', 'dvbsub', 'dvb_subtitle']) {
+      it(`has the Server burn ${codec} in even where the device could draw PGS`, () => {
+        expect(
+          subtitlePresentationFor({
+            track: subtitleTrack({ kind: 'image', codec }),
+            capabilities: DESKTOP,
+          }).draw,
+        ).toBe('burned-in');
+      });
+    }
+
+    /** Nothing is fetched for a burned-in track: the words are in the picture. */
+    it('asks for no file at all when the track is burned in', () => {
+      expect(
+        subtitlePresentationFor({
+          track: subtitleTrack({ kind: 'image', codec: 'vobsub' }),
+          capabilities: DESKTOP,
+        }).format,
+      ).toBeUndefined();
+    });
   });
 
   /**
