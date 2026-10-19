@@ -655,6 +655,12 @@ export function Player({
    * the ordinary case rather than an edge, because the Server seeds that list
    * in a migration most installs have not run.
    *
+   * That account is read once at sign-in by a provider above the router, so it
+   * has long since answered by the time a player exists and has a plan — this
+   * never waits on it. A press that somehow beat the read would reach the
+   * published receiver rather than the account's, which is what every
+   * pre-migration Server gets anyway.
+   *
    * **Then it hands over rather than playing in both places**, and that is the
    * half that keeps the fourth acceptance criterion honest. Jellyfin's
    * receiver is a Jellyfin client in its own right: handed the address, the
