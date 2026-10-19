@@ -170,6 +170,21 @@ export type JellyfinGateway = {
    */
   getBillboardCandidates(options?: BillboardCandidatesOptions): Promise<BaseItemDto[]>;
   /**
+   * `GET /Items` once more, for the genres of one kind of Title and nothing
+   * else — which is how the Movies and Series sections rank theirs (#23).
+   *
+   * Deliberately not `getTitles({ kind })`: the ranking is a count over the
+   * whole of one kind, and asking that question through a Row's query would
+   * pull a poster tag for every Title in the library to count words. This one
+   * asks for no artwork and no user data, and for `Genres` by name — which
+   * the Server does **not** send unasked (`jellyfin-api.md` §4).
+   *
+   * `/Genres` is the wrong endpoint for it, however close it sounds: it
+   * answers the distinct *set* of genres and says nothing about how many
+   * Titles are in each, so it cannot put them in order.
+   */
+  getGenresOfTitles(options?: GenresOfTitlesOptions): Promise<BaseItemDto[]>;
+  /**
    * `GET /Items/{itemId}/LocalTrailers` — the trailer files that sit beside a
    * Title on the Server, which is what the Billboard autoplays (#16, story 24).
    *
@@ -690,9 +705,21 @@ export type FavouriteItemsOptions = {
   limit?: number;
 };
 
+/**
+ * One of the two kinds of Title the app shows, as `includeItemTypes` spells
+ * it. A query given one narrows to it; a query given none asks for both, which
+ * is what every screen but the Movies and Series sections wants (#23).
+ *
+ * It is written out here rather than imported from `src/catalogue/`: this
+ * module is the HTTP layer and knows the Server's vocabulary, not the app's.
+ */
+export type TitleKind = 'Movie' | 'Series';
+
 export type TitlesQueryOptions = {
   /** Jellyfin's own matching, which is more than a substring of the name. */
   searchTerm?: string;
+  /** One kind only, for a section that is about Movies or about Series. */
+  kind?: TitleKind;
   /** A genre *name*, which is what `genres` takes; `genreIds` takes GUIDs. */
   genre?: string;
   limit?: number;
@@ -714,6 +741,20 @@ export type TitlesQueryOptions = {
 };
 
 export type ContinueWatchingOptions = {
+  limit?: number;
+  /**
+   * One kind of Title only (#23). What that narrows to is the question each
+   * endpoint answers rather than the literal kind: `getResumeItems` asks for
+   * **Episodes** for a Series, because a Series holds no file and is never
+   * resumable itself.
+   */
+  kind?: TitleKind;
+};
+
+export type GenresOfTitlesOptions = {
+  /** One kind only: the Movies section ranks the genres of Movies. */
+  kind?: TitleKind;
+  /** How many Titles to read. Absent means every one of them. */
   limit?: number;
 };
 
@@ -743,6 +784,8 @@ export type BillboardCandidatesOptions = {
    * default on purpose — see the note on the method.
    */
   limit?: number;
+  /** One kind only, for the Billboard over the Movies or Series section (#23). */
+  kind?: TitleKind;
 };
 
 export type SimilarTitlesOptions = {
@@ -830,13 +873,24 @@ const ADDITION_ITEM_TYPES = 'Movie,Series,Season,Episode';
 const RESUMABLE_ITEM_TYPES = 'Movie,Episode';
 
 /**
+ * What one kind of Title is resumed *as* (#23). A Movie is its own file; a
+ * Series holds none at all, so what a User resumes of one is an Episode. This
+ * is the same fact `src/title/play-target.ts` keeps for Play, read here as a
+ * query rather than as a target.
+ */
+const RESUMABLE_KIND_OF: Readonly<Record<TitleKind, string>> = {
+  Movie: 'Movie',
+  Series: 'Episode',
+};
+
+/**
  * The `fields` a title page needs and a Row does not. The ratings,
  * `RunTimeTicks`, `ProductionYear` and `OfficialRating` are deliberately absent:
  * the Server sends all four unasked (`jellyfin-api.md` §4/§17), and naming a
  * field that is not one would be a quiet lie about where they come from.
  */
 const TITLE_DETAIL_FIELDS =
-  'Overview,People,MediaStreams,ProviderIds,RemoteTrailers,LocalTrailerCount,CanDownload';
+  'Overview,People,MediaStreams,ProviderIds,RemoteTrailers,LocalTrailerCount,CanDownload,Genres';
 
 /** Posters, and the artwork only a title page shows: a backdrop and a logo. */
 const TITLE_DETAIL_IMAGE_TYPES = 'Primary,Backdrop,Logo,Thumb';
@@ -1032,8 +1086,9 @@ export function createJellyfinGateway(options: JellyfinGatewayOptions): Jellyfin
         'GET',
         `/Items${query({
           // Only the two kinds the app shows, so the Server never sends an
-          // Episode, a Season, an album or a stray video file at all.
-          includeItemTypes: TITLE_ITEM_TYPES,
+          // Episode, a Season, an album or a stray video file at all — or just
+          // one of them, for a section that is about one kind (#23).
+          includeItemTypes: options.kind ?? TITLE_ITEM_TYPES,
           // Without this the Server answers with the library folders.
           recursive: true,
           // Name order, so a term that matches several Titles comes back the
@@ -1087,7 +1142,8 @@ export function createJellyfinGateway(options: JellyfinGatewayOptions): Jellyfin
         'GET',
         `/Items${query({
           // Only the two kinds the app shows: the Billboard features a Title.
-          includeItemTypes: TITLE_ITEM_TYPES,
+          // One of them over a section about one kind (#23).
+          includeItemTypes: options.kind ?? TITLE_ITEM_TYPES,
           recursive: true,
           // A fixed order, so the same draw picks the same Title twice. The
           // randomness is the device layer's, never the Server's.
@@ -1099,6 +1155,27 @@ export function createJellyfinGateway(options: JellyfinGatewayOptions): Jellyfin
           // Whether this User has finished a Title decides whether Spotlight
           // may feature it, and where they left off is what Play resumes from.
           enableUserData: true,
+          enableTotalRecordCount: false,
+          ...(options.limit === undefined ? {} : { limit: options.limit }),
+        })}`,
+      ).then((result) => result.Items ?? []),
+
+    getGenresOfTitles: (options = {}) =>
+      request<BaseItemDtoQueryResult>(
+        'GET',
+        `/Items${query({
+          includeItemTypes: options.kind ?? TITLE_ITEM_TYPES,
+          recursive: true,
+          // A fixed order, so two reads of an unchanged library rank its
+          // genres the same way and a tie breaks the same way twice.
+          sortBy: 'SortName',
+          sortOrder: 'Ascending',
+          // The one thing this query is for, and the Server does not send it
+          // unasked (`jellyfin-api.md` §4).
+          fields: 'Genres',
+          // Nothing it answers is ever drawn: it is counted.
+          enableImages: false,
+          enableUserData: false,
           enableTotalRecordCount: false,
           ...(options.limit === undefined ? {} : { limit: options.limit }),
         })}`,
@@ -1116,8 +1193,13 @@ export function createJellyfinGateway(options: JellyfinGatewayOptions): Jellyfin
         'GET',
         `/UserItems/Resume${query({
           // A Movie or an Episode: the two things a User resumes. A Series is
-          // never resumable itself — its next Episode is `/Shows/NextUp`.
-          includeItemTypes: RESUMABLE_ITEM_TYPES,
+          // never resumable itself — its next Episode is `/Shows/NextUp` — so
+          // a section about Series asks for Episodes rather than for Series
+          // (#23), which is why the kind is mapped rather than passed on.
+          includeItemTypes:
+            options.kind === undefined
+              ? RESUMABLE_ITEM_TYPES
+              : RESUMABLE_KIND_OF[options.kind],
           mediaTypes: 'Video',
           // The progress bar and the resume point are both `UserData`, so this
           // is the one Row that cannot do without it.

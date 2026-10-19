@@ -248,6 +248,69 @@ describe('the Jellyfin gateway', () => {
     ]);
   });
 
+  it('narrows a Title query to one kind when a section asks for one', async () => {
+    const gateway = createJellyfinGateway({
+      serverAddress: fakeJellyfinUrl(),
+      deviceId: 'reads-one-kind',
+      ...identity,
+      token: tokenFor('reads-one-kind'),
+    });
+
+    // The Movies and Series sections are the same Home, narrowed to one kind
+    // (#23), and the narrowing is the Server's as "only Movies and Series" is.
+    expect((await gateway.getTitles({ kind: 'Movie' })).map((item) => item.Name)).toEqual([
+      'Arrival',
+      'Heat',
+      'Paddington',
+      'The Unfinished',
+    ]);
+    expect((await gateway.getTitles({ kind: 'Series' })).map((item) => item.Name)).toEqual([
+      'Bluey',
+      'Severance',
+    ]);
+  });
+
+  it('reads the genres of one kind of Title, for ranking a section’s genres', async () => {
+    const gateway = createJellyfinGateway({
+      serverAddress: fakeJellyfinUrl(),
+      deviceId: 'reads-genres-of',
+      ...identity,
+      token: tokenFor('reads-genres-of'),
+    });
+
+    const movies = await gateway.getGenresOfTitles({ kind: 'Movie' });
+
+    expect(movies.map((item) => [item.Name, item.Genres])).toEqual([
+      ['Arrival', ['Science Fiction', 'Drama']],
+      ['Heat', ['Crime', 'Drama']],
+      ['Paddington', ['Comedy', 'Family']],
+      ['The Unfinished', ['Drama']],
+    ]);
+  });
+
+  it('resumes one kind of Title: a Movie, or an Episode of a Series', async () => {
+    await setFakeState({
+      playbackPositions: {
+        'user-rafael': { 'movie-heat': 100, 'episode-severance-s2e4': 200 },
+      },
+    });
+    const gateway = createJellyfinGateway({
+      serverAddress: fakeJellyfinUrl(),
+      deviceId: 'resumes-one-kind',
+      ...identity,
+      token: tokenFor('resumes-one-kind'),
+    });
+
+    // A Series is never resumable itself: what a User resumes of one is an
+    // Episode, so the Series section asks for Episodes.
+    expect((await gateway.getResumeItems({ kind: 'Movie' })).map((item) => item.Id)).toEqual([
+      'movie-heat',
+    ]);
+    expect((await gateway.getResumeItems({ kind: 'Series' })).map((item) => item.Id)).toEqual([
+      'episode-severance-s2e4',
+    ]);
+  });
+
   it('builds an item image URL from the id, the image type and the tag', () => {
     const gateway = createJellyfinGateway({
       serverAddress: 'http://server.test',
