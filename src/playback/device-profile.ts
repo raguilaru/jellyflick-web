@@ -1,4 +1,5 @@
 import type { SubtitleCapabilities, VideoCapabilities } from '../device/types';
+import { cappedBitrate } from './max-quality';
 
 /**
  * The DeviceProfile Jellyflick sends to `POST /Items/{id}/PlaybackInfo`.
@@ -140,24 +141,38 @@ const SUBTITLE_FORMATS: readonly string[] = ['vtt', 'srt', 'ass', 'ssa'];
 const PGS_CODEC_NAMES: readonly string[] = ['pgssub', 'hdmv_pgs_subtitle', 'sup'];
 
 /**
- * The profile for a device, from what the device layer says it can play.
+ * The profile for a device, from what the device layer says it can play — and,
+ * since #32, from the maximum quality this device has been told to stop at.
  *
- * A pure function of the capabilities, so it is the same answer on the same
- * device and a test can hold one device class's profile still.
+ * A pure function of its arguments, so it is the same answer on the same
+ * device and a test can hold one device class's profile still. The ceiling is
+ * a *parameter* rather than a read of device storage for exactly that reason:
+ * `max-quality.ts` owns the key, the player reads it, and this stays a
+ * function of what it is given.
  */
 export function deviceProfileFor(
   capabilities: VideoCapabilities,
   subtitles: SubtitleCapabilities,
+  maxBitrate?: number,
 ): DeviceProfile {
   const videoCodecs = capabilities.videoCodecs.join(',');
   const audioCodecs = capabilities.audioCodecs.join(',');
+  const ceiling = cappedBitrate(bitrateFor(capabilities), maxBitrate);
 
   return {
     Name: PROFILE_NAME,
-    MaxStreamingBitrate: bitrateFor(capabilities),
-    // The same ceiling for a file served untouched: this app never asks the
-    // Server to pick a lower-quality version of a file it can simply send.
-    MaxStaticBitrate: bitrateFor(capabilities),
+    MaxStreamingBitrate: ceiling,
+    /*
+     * The same ceiling for a file served untouched. Before #32 that read "this
+     * app never asks the Server to pick a lower-quality version of a file it
+     * can simply send", and with a maximum quality chosen that is exactly what
+     * it does ask for: a direct play is still data, and a household limiting
+     * data on a phone means the file as much as the transcode. Left out of
+     * this one, a ceiling of 720 kbps would be honoured for everything the
+     * Server has to re-encode and ignored for everything it does not, which is
+     * the shape of limit nobody means.
+     */
+    MaxStaticBitrate: ceiling,
 
     // One entry per container. Jellyfin matches a source's container first and
     // its codecs second, so a device that plays h264 in mp4 and nothing else in

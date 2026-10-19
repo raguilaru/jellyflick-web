@@ -29,8 +29,30 @@ import { fakeJellyfinUrl } from '../fake-jellyfin/url';
 
 afterEach(resetFakeState);
 
+/**
+ * A playback report is sent **behind** the User, and the last one — the stop
+ * report the player sends as it is torn down — is fired from an effect
+ * cleanup and never awaited by anything. So it can land *after* the next test
+ * has cleared the write log, and then that test counts a report it never
+ * caused. It is #46's hazard in the playback reports rather than in a Client
+ * Settings write, and it fails the same way: only in sequence, never alone.
+ *
+ * Two equal counts in a row means the reports have stopped. Found while #32
+ * added a read per playback and moved the timing enough to make it show.
+ */
+async function reportsHaveSettled(): Promise<void> {
+  let seen = -1;
+  await waitFor(async () => {
+    const now = (await fakeWrites()).length;
+    const quiet = now === seen;
+    seen = now;
+    expect(quiet).toBe(true);
+  });
+}
+
 beforeEach(async () => {
   window.history.replaceState(null, '', '/');
+  await reportsHaveSettled();
   await resetFakeState();
   await forgetFakeWrites();
   await forgetFakeRequests();

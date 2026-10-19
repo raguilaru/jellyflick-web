@@ -1,5 +1,5 @@
 import type { Messages } from './en';
-import { formatSeconds } from './format';
+import { formatBitrate, formatSeconds, formatSpeed } from './format';
 
 /** Los idiomas más probables, por el código ISO 639-2 que envía el servidor. */
 const LANGUAGE_NAMES_ES: Readonly<Record<string, string>> = {
@@ -369,6 +369,22 @@ export const es: Messages = {
   'player.playNowFor': (p: { name: string }) => `Reproducir ${p.name} ya`,
   'player.cancelNext': 'Cancelar',
   'player.cancelNextFor': (p: { name: string }) => `No reproducir ${p.name}`,
+
+  // Trickplay, velocidad, imagen en imagen y calidad (#32).
+  'player.options': (p: { name: string }) => `Opciones de reproducción de ${p.name}`,
+  'player.optionsLabel': 'Opciones de reproducción',
+  'player.optionsButton': 'Reproducción',
+  'player.optionsDone': 'Listo',
+  'player.speedHeading': 'Velocidad',
+  'player.speedChoice': (p: { speed: number }) => `${formatSpeed(p.speed, 'es')}×`,
+  'player.qualityHeading': 'Calidad',
+  'player.qualityAuto': 'Automática',
+  'player.qualityChoice': (p: { bitrate: number }) => formatBitrate(p.bitrate, 'es'),
+  'player.qualityPerDevice': 'Se recuerda solo en este dispositivo.',
+  'player.enterPip': 'Imagen en imagen',
+  'player.leavePip': 'Salir de imagen en imagen',
+  'player.pictureInPictureRefused':
+    'Este navegador no ha abierto una ventana de imagen en imagen.',
 
   'nav.sections': 'Secciones',
   'nav.home': 'Inicio',

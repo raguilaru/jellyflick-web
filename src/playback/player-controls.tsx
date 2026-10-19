@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from 'preact/hooks';
+import { useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { useTranslate } from '../i18n/index';
 import {
   formatClock,
@@ -6,6 +6,8 @@ import {
   positionForFraction,
   remainingSeconds,
 } from './scrubbing';
+import type { TrickplayResolution } from './trickplay';
+import { PREVIEW_MAX_WIDTH, TrickplayPreview } from './trickplay-preview';
 
 /**
  * What a User presses while something is playing (#26): the seek bar, the time
@@ -48,6 +50,24 @@ export type PlayerControlsProps = {
    * an empty menu is a stop the arrow keys have to step through for nothing.
    */
   onOpenTracks?: () => void;
+  /**
+   * Opens the playback options — the speed, the quality and
+   * picture-in-picture (#32). Unlike the tracks it is **always** offered:
+   * every Title has a speed and every device has a quality, so there is no
+   * Title this menu would be empty for.
+   */
+  onOpenOptions?: () => void;
+  /**
+   * The scrubbing thumbnails this source has (#32, story 90), where the
+   * Server generated any. **Absent is the common case** — a Server with
+   * trickplay switched off, or a Title it has not got round to — and then the
+   * bar behaves exactly as it did before this ticket.
+   */
+  preview?: {
+    resolution: TrickplayResolution;
+    /** The address of one tile image, by its index. */
+    tileUrl: (tileIndex: number) => string;
+  };
 };
 
 export function PlayerControls({
@@ -60,9 +80,12 @@ export function PlayerControls({
   onSeek,
   onClose,
   onOpenTracks,
+  onOpenOptions,
+  preview,
 }: PlayerControlsProps) {
   const t = useTranslate();
   const toggle = useRef<HTMLButtonElement | null>(null);
+  const bar = useRef<HTMLDivElement | null>(null);
   const played = fractionPlayed(position, duration);
   const elapsed = formatClock(position);
   const total = formatClock(duration ?? 0);
@@ -100,6 +123,29 @@ export function PlayerControls({
   }, [ready]);
 
   /**
+   * Which moment the thumbnail is showing, or nothing at all (#32, story 90).
+   *
+   * Two things ask for a preview, and they are asking different questions. **A
+   * pointer over the bar** is asking about a moment it has not gone to yet, so
+   * the preview follows it. **A remote cannot hover at all**: its Left and
+   * Right seek immediately, so what it is owed is a thumbnail of where it has
+   * just arrived — which is why focus on the bar is the second trigger, and
+   * why a preview with no pointer behind it sits at the playhead.
+   */
+  const [hovered, setHovered] = useState<number | undefined>(undefined);
+  const [barFocused, setBarFocused] = useState(false);
+  const previewAt = hovered ?? (barFocused ? position : undefined);
+
+  /** Where along the bar a pointer is, in seconds, or nothing off either end. */
+  const momentUnder = (event: MouseEvent): number | undefined => {
+    const target = event.currentTarget;
+    if (!(target instanceof HTMLElement)) return undefined;
+    const box = target.getBoundingClientRect();
+    if (box.width === 0) return undefined;
+    return positionForFraction((event.clientX - box.left) / box.width, duration);
+  };
+
+  /**
    * A press on the bar seeks to where it was pressed. Pointer only: the keys
    * are the player's, so that Left and Right seek wherever focus happens to be
    * among the controls rather than only on the bar itself.
@@ -131,15 +177,36 @@ export function PlayerControls({
           class="player__seek"
           role="slider"
           tabIndex={0}
+          ref={bar}
           aria-label={t('player.seek', { name: titleName })}
           aria-valuemin={0}
           aria-valuemax={Math.floor(duration ?? 0)}
           aria-valuenow={Math.floor(position)}
           aria-valuetext={t('player.position', { elapsed, total })}
           onClick={onBarPress}
+          onMouseMove={(event: MouseEvent) => setHovered(momentUnder(event))}
+          onMouseLeave={() => setHovered(undefined)}
+          onFocus={() => setBarFocused(true)}
+          onBlur={() => setBarFocused(false)}
           {...{ [SEEK_BAR_ATTRIBUTE]: '' }}
         >
           <span class="player__seek-played" style={`width: ${String(played * 100)}%`} />
+          {/*
+            The thumbnail (#32, story 90). It is drawn **inside** the bar,
+            which is already `position: relative`, and its left edge is
+            clamped to the bar's own width — so however far along a pointer
+            goes, the preview cannot push the document wider than the screen.
+            That is #44's lesson: a layout that overflows is the one thing the
+            e2e suite cannot see, because Playwright scrolls before it presses.
+          */}
+          {preview === undefined || previewAt === undefined ? null : (
+            <TrickplayPreview
+              resolution={preview.resolution}
+              tileUrl={preview.tileUrl}
+              positionSeconds={previewAt}
+              left={previewLeft(bar.current, previewAt, duration)}
+            />
+          )}
         </div>
         <span class="player__time">{t('player.remaining', { clock: formatClock(remainingSeconds(position, duration)) })}</span>
       </div>
@@ -177,10 +244,54 @@ export function PlayerControls({
             {t('player.tracksLabel')}
           </button>
         )}
+        {/*
+          The speed, the quality and picture-in-picture (#32), behind one
+          control for the same reason the tracks are: three more buttons on
+          this row is a row wider than a phone.
+        */}
+        {onOpenOptions === undefined ? null : (
+          <button
+            type="button"
+            class="button button--quiet"
+            disabled={!ready}
+            /*
+              The name carries the Title and the visible text does not, the
+              same split the tracks control makes: "Playback options for The
+              Unfinished" on a button is wider than a phone.
+            */
+            aria-label={t('player.options', { name: titleName })}
+            onClick={onOpenOptions}
+          >
+            {t('player.optionsButton')}
+          </button>
+        )}
         <button type="button" class="button button--quiet" onClick={onClose}>
           {t('player.close')}
         </button>
       </p>
     </div>
   );
+}
+
+/**
+ * Where the preview's left edge goes, in pixels from the bar's own left edge.
+ *
+ * Centred on the moment it is showing, and then **clamped to the bar**, which
+ * is what stops it hanging off either end: at the start of a Title a centred
+ * preview would reach to the left of the screen, and at the end past the right
+ * of it — and a box past the right of the screen is a document wider than the
+ * screen, which is the failure a scrolling test cannot see (#44).
+ *
+ * A bar with no width is every bar in happy-dom, where a box has no size at
+ * all, and the answer there is simply zero rather than `NaN`.
+ */
+function previewLeft(
+  bar: HTMLElement | null,
+  positionSeconds: number,
+  duration: number | undefined,
+): number {
+  const width = bar?.getBoundingClientRect().width ?? 0;
+  if (width === 0) return 0;
+  const along = width * fractionPlayed(positionSeconds, duration);
+  return Math.min(Math.max(0, along - PREVIEW_MAX_WIDTH / 2), Math.max(0, width - PREVIEW_MAX_WIDTH));
 }
