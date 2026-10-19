@@ -17,7 +17,7 @@ import { fakeJellyfinUrl } from '../fake-jellyfin/url';
 /**
  * The guard itself, held against the failure it exists for (#46).
  *
- * `savesHaveSettled` is an `afterEach` line in six other files, and an
+ * `savesHaveSettled` is an `afterEach` line in five other files, and an
  * `afterEach` line that never changed anything is indistinguishable from one
  * that did. So this file reproduces the leak on purpose and is the one place
  * that would go red if the guard stopped working.
