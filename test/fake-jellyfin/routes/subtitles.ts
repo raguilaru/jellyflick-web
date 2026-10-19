@@ -186,6 +186,28 @@ function pgsFile(): Uint8Array {
   const x = Math.round((width - barWidth) / 2);
   const y = 880;
 
+  /*
+   * **An empty display set at zero, and it is load-bearing.**
+   *
+   * libpgs only draws when the active display-set *index* changes
+   * (`PgsRendererImpl.renderAtIndex`), and the index it compares against
+   * starts at **0** — which is also a perfectly valid index. So a stream whose
+   * first display set is the one already on screen when the renderer starts
+   * draws nothing at all, silently: the decoder loads, the stream parses, and
+   * the canvas stays empty.
+   *
+   * A real `.sup` rarely trips over this, because a film's first subtitle is
+   * minutes in and a User starts at 0 where the index is -1. A six-second test
+   * video whose first line is half a second in trips over it every time — and
+   * it was found by **looking at a screenshot**, with the e2e assertions
+   * green, which is the fourth time on this run that looking has caught what
+   * a suite could not.
+   *
+   * Leading with an empty set fixes it honestly rather than by working around
+   * it: index 0 now means "nothing on screen", which is what the sentinel
+   * means too, so the two agree instead of colliding.
+   */
+  parts.push(clearSet(0, width, height));
   // Two visibly different fills, so the second display set is not a repeat of
   // the first. YCrCbA: near-white, then a strong yellow.
   parts.push(displaySet(0.5, { width, height, x, y, barWidth, barHeight, colour: [235, 128, 128] }));

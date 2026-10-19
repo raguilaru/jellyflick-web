@@ -111,6 +111,16 @@ async function chooseSubtitles(page: Page, name: string): Promise<void> {
   await track.press('Enter');
 }
 
+/** The canvas's own attributes, which libpgs sizes from the stream itself. */
+function canvasSize(page: Page): Promise<{ width: number; height: number }> {
+  return page.evaluate(() => {
+    const canvas = document.querySelector('.player__image-subtitles');
+    return canvas instanceof HTMLCanvasElement
+      ? { width: canvas.width, height: canvas.height }
+      : { width: -1, height: -1 };
+  });
+}
+
 test.afterEach(async ({ request }: { request: APIRequestContext }) => {
   await request.delete(`${FAKE_JELLYFIN_URL}/__fake/state`);
   await request.delete(`${FAKE_JELLYFIN_URL}/__fake/writes`);
@@ -156,24 +166,23 @@ test('fetches the decoder only once a PGS track is chosen, and decodes the strea
   await expect.poll(decoder, { timeout: 30_000 }).not.toEqual([]);
 
   /*
-   * **And the decoder really started**, which is the assertion the `workerUrl`
-   * trap fails. With libpgs's own default the worker would boot an HTML
-   * document, never reply, and leave `ready` unsettled for ever — no error,
-   * no notice, a canvas sitting there drawing nothing. `data-renderer` is
-   * what separates that from success, because nothing else can:
-   * `.player__image-subtitles` is visible either way.
+   * **And a display set was really drawn**, which is the assertion the
+   * `workerUrl` trap fails and the strongest one available without comparing
+   * pixels.
    *
-   * Reading the canvas's own `width` would have been the neater assertion and
-   * does not work: on a browser with `OffscreenCanvas` libpgs transfers this
-   * canvas into the worker, so from the page its size stays at the default
-   * 300×150 no matter what is drawn on it. That was worth finding out here
-   * rather than believing.
+   * The canvas starts at a browser's default 300×150, and libpgs resizes it
+   * to the frame size carried in the stream's own presentation composition
+   * the first time it draws — so 1920×1080 means bytes fetched, parsed into
+   * display sets, and rendered. It holds even on a browser that transfers the
+   * canvas into the worker: the placeholder element reports the size its
+   * `OffscreenCanvas` was given, which is worth knowing because the opposite
+   * was assumed here first and was wrong.
    */
-  await expect(page.locator('.player__image-subtitles')).toHaveAttribute(
-    'data-renderer',
-    'live',
-    { timeout: 30_000 },
-  );
+  await expect
+    .poll(async () => (await canvasSize(page)).width, { timeout: 30_000 })
+    .toBe(1920);
+  expect((await canvasSize(page)).height).toBe(1080);
+
   // And it did not fail on the way: a stream libpgs refused would have
   // rejected `ready` and put the notice beside the picture instead.
   await expect(page.getByText('Jellyflick could not read those subtitles')).toHaveCount(0);

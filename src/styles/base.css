@@ -1928,6 +1928,25 @@ html[data-input='pointer'] [tabindex]:focus {
   grid-column: 1;
   width: 100%;
   height: 100%;
+  /*
+   * **The canvas must not be allowed to size the row.** A grid item's
+   * `min-height` is `auto`, which for a replaced element means its *intrinsic*
+   * height — and libpgs sets this canvas's `height` attribute to the stream's
+   * own 1080, so the picture's row grew to fit a 1080-pixel canvas and pushed
+   * the controls off the bottom of the window. `width: 100%` and
+   * `height: 100%` do not prevent that; only clearing the minimum does.
+   *
+   * `.player__video` has carried `min-height: 0` since #26 for exactly this
+   * reason, which is the clue this followed. It never showed on #29's canvas
+   * because libass sizes that one to the element's own pixel box rather than
+   * to anything the file says, so its intrinsic size is already the right one.
+   *
+   * Found by **looking at a screenshot**: every box assertion in
+   * `image-subtitles.spec.ts` compares the canvas with the picture, and the
+   * two grew together.
+   */
+  min-width: 0;
+  min-height: 0;
   pointer-events: none;
 }
 
@@ -2010,12 +2029,23 @@ html[data-input='pointer'] [tabindex]:focus {
 }
 
 /*
- * A track this app cannot draw yet (a PGS or VobSub bitmap). It is still a
- * focus stop and still named — `aria-disabled`, not `disabled` — so a remote
- * can reach it and find out why, rather than skipping a track that looks
- * missing. The group says what the reason is in words.
+ * A control in the subtitle menu that is offered but cannot be pressed, which
+ * since #30 means exactly one thing: **Subtitle timing on a track the Server
+ * burned into the picture.** It used to mean a bitmap track this app could not
+ * draw, and that no longer exists — every track in the list is now one a User
+ * can choose and see.
+ *
+ * It is still a focus stop and still named — `aria-disabled`, not `disabled` —
+ * so a remote can reach it and read the reason the group gives in words, where
+ * `disabled` would remove it from the arrow keys with nothing to explain the
+ * gap. Which is exactly why it has to *look* unavailable too: without this,
+ * the only difference between the control and a working one is discovered by
+ * pressing it and watching nothing happen. Found by looking at a screenshot.
+ *
+ * It sits well below `.button`, so it wins on source order at equal
+ * specificity (#49) rather than by accident.
  */
-.player__track-choices .button[aria-disabled='true'] {
+.player__track-group .button[aria-disabled='true'] {
   opacity: 0.55;
   cursor: default;
 }
