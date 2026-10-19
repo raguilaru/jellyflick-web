@@ -62,6 +62,14 @@ export async function forgetFakeRequests(): Promise<void> {
  * for this if a test ever needs a deliberately *slow* Server: it would not
  * protect that one.
  *
+ * **Where to put it.** `afterEach`, immediately before `resetFakeState()`,
+ * catches a write a *press* started: it is already queued by the time the hook
+ * runs. It cannot catch a write **unmounting** starts, because `cleanup` is
+ * registered in `test/setup.ts` and so runs after a file's own `afterEach` —
+ * for that one, settle in the next `beforeEach` instead, before it forgets the
+ * write log or reseeds. A playback stop report is the write that behaves that
+ * way.
+ *
  * It throws rather than giving up quietly. A write log that never stops
  * growing means something is still running after the test ended, which is
  * worth a failure rather than a reseed that races it anyway.

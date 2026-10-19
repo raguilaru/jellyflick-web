@@ -233,7 +233,12 @@ most expensive way to be told nothing.
 
 `savesHaveSettled()` lives in `test/fake-jellyfin/control.ts`, beside the
 `fakeWrites` log it reads, and goes in `afterEach` immediately before
-`resetFakeState()`. It returns once two readings of that log in a row are equal,
+`resetFakeState()`. **One ordering fact decides where it goes**: `cleanup` is
+registered in `test/setup.ts`, so Vitest runs it *after* a file's own
+`afterEach`. A write a press started is already queued by then and the
+`afterEach` catches it; a write **unmounting** starts — a playback stop report
+is the one that does this — has not happened yet, and only a settle in the next
+`beforeEach`, before that test forgets the write log or reseeds, can catch it. It returns once two readings of that log in a row are equal,
 which is a quiet gap rather than a proof — a save the app has issued but whose
 request has not reached the fake yet is invisible to it. That holds because the
 fake is on this machine and saves are chained, so the gap is many round trips
