@@ -4,7 +4,7 @@ State of the `/implement-spec` run on the integration branch `feat/jellyflick-v1
 (draft PR #38). Update this whenever a wave lands, so a fresh session can pick the work
 up without re-deriving anything.
 
-## NINTH SESSION — #21, #29 and #19 merged; #30 and #23 in flight
+## NINTH SESSION — #21, #29, #19 and #23 merged; #30 and #41 in flight
 
 **Read this, then the eighth session's section below for the two paused branches, then the
 seventh's, which is still the standing guidance and has not been superseded.**
@@ -198,45 +198,95 @@ carry/repeat decision has taken on this run: byte-identical (#21, #22), docs-onl
 a test telling a title page from Home by an `h1` that is really the Billboard's. Three
 tickets in a row. It is now in every implementer brief.
 
-### Bundle trend
+### #23 merged at `73b34fe`, closed
 
-147.05 → 149.46 (#22) → 153.13 (#31) → 155.95 (#20) → 161.22 (#28) → 164.36 (#21) →
-169.00 (#29) → **171.64 kB** raw. Still feature code, still nothing newly split beyond
-hls.js and #29's entirely-lazy libass payload.
+Two addresses over one component, because the sections differ in exactly one fact. The
+layout is a fixed `HomeLayout` literal drawn by Home's own registry, so every Row inherits
+Home's rules and nothing stores or edits it — a User who hid New on Jellyflick on Home
+still has it in the section, which a unit test pins.
 
-### Current state — ninth session, third wave in flight
+Gate re-run by the integrator on the merge result: `lint` 0, `typecheck` 0, `build` 0,
+**965 unit tests in 72 files** (+27, +3 files), **463 Playwright passed / 44 skipped /
+0 failed**, main JS **174.51 kB / 52.61 kB gz** (+2.87 kB raw), **CSS 21.26 kB unchanged**.
+The merge tree was byte-identical to the gated tip and the e2e was **repeated anyway** —
+this touches the gateway, Home's Row registry and the fake's field gating, which the whole
+suite leans on. Third shape of that decision, and the rule is now clear: byte-identical
+buys you the carry only when the change is *narrow*, not merely when the tree matches.
 
-Integration tip **`42a596f`** plus this commit, pushed and verified with `git ls-remote`
-rather than with a quiet push. Draft PR #38 still draft.
+**Skips 39 → 44, read by the integrator rather than taken from the report.** All five are
+in `movies-and-series.spec.ts`: three walk into a section through the navigation and skip
+on `phone`, one is a 375px scroll-width check that skips in `desktop` and `keyboard-only`.
+No pre-existing skip moved.
 
-**Merged this session:** #21, #29, #19 — all closed, each gated by the integrator on the
-merge result rather than on the implementer's report. Every implementer's numbers have
-matched the integrator's exactly, on this session and on every earlier one.
+**Two findings in it that outlive the ticket:**
 
-- **In flight:** **#30** Image subtitles (`src/playback/`, resumed from the interruption,
-  ports 8371/8372, three authored commits plus an integrator WIP holding only a
-  `libpgs@0.9.0` install) and **#23** Movies and Series pages (`src/home/`, fresh, ports
-  8381/8382). Both worktrees created and `npm ci`-ed **by the integrator**, never by the
-  agent — that remains the single most expensive thing that went wrong in this run.
-- **Queued, all `src/playback/`, one at a time:** #32 Trickplay, speed,
-  picture-in-picture and quality; #33 Cast, which `decisions.md` §8 says must read
-  `user.Configuration.CastReceiverId` at runtime; #34 Play On.
-- **Findings open:** #41, #42, #46, #48, #49. Closed: #43, #44.
-- **`needs-info`, both needing the host rather than an agent:** #45 (MDBList's ratings
-  shape — no key available to make one real call) and #47 (`MediaStream.Path` for
-  subtitles against a real Jellyfin). **#48 is also effectively the host's**: libass is
-  LGPL-2.1, the build ships 4.3 MB of its WebAssembly, and where the licence texts go is
-  tangled with the spec's own "choosing a licence" item.
+- **The fake was more permissive than a real Server, and it would have shipped a blank
+  feature.** The fake did not gate `Genres`; the real Server does, and no gateway query
+  asked for the field. So #21's hover-card genres line and the title page's would have been
+  **full against the fake and empty against a real Jellyfin** — green suite, blank screen.
+  The fake now gates it and `TITLE_DETAIL_FIELDS` asks for it. This is the same class as
+  #47 and it is worth a standing suspicion: **where the fake is laxer than the Server, the
+  tests cannot see the feature fail.**
+- **A library's `CollectionType` says what it is *for*, not what it holds.** Narrowing New
+  on Jellyflick to `movies` libraries cost the Series section **Bluey**, because the sample
+  Server's Kids library is typed `movies` and holds a Series. Written, tested, and taken
+  back out; the Row narrows the merge instead.
+
+**#51 filed, and it is the host's call:** a phone cannot reach either section. The bottom
+bar carries four items by story 61 and nothing on Home links to either, despite a comment
+in `sections.ts` and a line in `architecture.md` that claimed otherwise. Harmless while
+both were placeholders; now they are two real screens a phone User can only reach by typing
+the address. Fixing it changes #6/#8's navigation design and is asserted by
+`moving-around-the-app` in both suites — **three of the five new skips exist because of
+it.**
+
+**Inherited by later tickets:** `RowCard` gained a **required `kind`**, so any card literal
+in a test needs one; `useOpenTitle`'s parameter narrowed to `Pick<RowCard, 'titleId'>`;
+`use-billboard.ts` now keys the pick on the address, and only one pick is live at a time.
+
+**No `GLOSSARY.md` edit**, deliberately, with #30 in flight. The sections, and the derived
+top genres, are owed an entry at the next between-waves sweep — that is the #43 precedent.
+
+### Current state — ninth session, fourth wave in flight
+
+Integration tip **`73b34fe`** plus this commit, pushed and verified with `git ls-remote`.
+Draft PR #38 still draft.
+
+**Merged this session: #21, #29, #19, #23** — all closed, each gated by the integrator on
+the merge result rather than on the implementer's report, and every implementer's numbers
+have matched the integrator's exactly.
+
+- **In flight:** **#30** Image subtitles (`src/playback/`, resumed after the interruption,
+  ports 8371/8372) and **#41** Home reads the same Row twice (`src/home/`, ports
+  8391/8392). Both worktrees created and `npm ci`-ed **by the integrator**.
+- **Queued, all `src/playback/`, one at a time** — this is the whole remainder of the
+  spec's graph: **#32** Trickplay, speed, picture-in-picture and quality; **#33** Cast,
+  which `decisions.md` §8 says must read `user.Configuration.CastReceiverId` at runtime
+  and which #35 made the fake serve; **#34** Play On.
+- **Findings open:** #42, #46, #48, #49, #51. Closed: #43, #44, and #41 once its branch
+  lands.
+- **Needs the host rather than an agent:** #45 (MDBList's ratings shape — no key to make
+  one real call), #47 (`MediaStream.Path` against a real Jellyfin), #48 (where libass's
+  LGPL-2.1 texts go, tangled with the spec's own "choosing a licence" item), and **#51**
+  (a phone cannot reach the two new sections — a navigation design call).
+- **Cheap between-waves jobs, each colliding with everything so none belongs inside a
+  wave:** a `GLOSSARY.md` sweep owing entries for the Movies/Series sections and derived
+  top genres; **#49**, which is `base.css` only; and **#46**, which touches four e2e
+  journeys. Do these one at a time between waves, the way #43 was done.
 - **Still owed at the end of the run:** `code-review` over the whole branch, the git
   history rewrite in `decisions.md` §10 (after which the host must ask GitHub Support to
   purge the stale objects), and marking PR #38 ready.
-- **Worktrees:** the integrator's `implement-spec-c273ce`, plus
-  `ticket-30-image-subtitles` and `ticket-23-movies-series`, both **in flight — do not
-  touch**. #21's and #29's were removed after checking each was a full ancestor of the
-  integration branch with nothing uncommitted and nothing unpushed; #19's is still present
-  and is now removable on the same check. `implement-spec-88c250` and `remote-setup-2e9b22`
-  belong to **other Claude sessions, not this run — leave them alone.** No stray dev
-  server, fake Jellyfin or browser process is running (checked with `pgrep`).
+- **Worktrees:** the integrator's `implement-spec-c273ce`, plus `ticket-30-image-subtitles`
+  and `ticket-41-read-once`, both **in flight — do not touch**. #19's, #21's, #23's and
+  #29's were removed after checking each was a full ancestor with nothing uncommitted and
+  nothing unpushed. `implement-spec-88c250` and `remote-setup-2e9b22` belong to **other
+  Claude sessions, not this run — leave them alone.**
+
+### Bundle trend
+
+147.05 → 149.46 (#22) → 153.13 (#31) → 155.95 (#20) → 161.22 (#28) → 164.36 (#21) →
+169.00 (#29) → 171.64 (#19) → **174.51 kB** raw. Still feature code; nothing newly split
+beyond hls.js and #29's entirely-lazy libass payload.
 
 ## EIGHTH SESSION — PAUSED FOR TOKENS, two branches snapshotted mid-flight
 
