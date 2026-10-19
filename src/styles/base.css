@@ -1908,7 +1908,22 @@ html[data-input='pointer'] [tabindex]:focus {
  * The element's own width and height attributes are the renderer's to set,
  * which is why only the box is described here.
  */
-.player__styled-subtitles {
+/*
+ * Where libpgs draws image subtitles (#30, story 105), which wants the same
+ * box for the same reasons and so shares the rule rather than restating it.
+ *
+ * A PGS display set carries absolute coordinates inside the video's own frame,
+ * so like an ASS file it positions its own lines and needs the whole picture
+ * rather than a strip at the bottom. The renderer is told `contain`, matching
+ * `.player__video`'s `object-fit` above, so the two letterbox alike and a line
+ * meant for the bottom of a 2.39:1 frame lands on the frame and not in the bar
+ * below it.
+ *
+ * Only ever one of the two is in the tree at a time — the player renders one
+ * overlay, never two — so this is a shared box, not a stack.
+ */
+.player__styled-subtitles,
+.player__image-subtitles {
   grid-row: 1;
   grid-column: 1;
   width: 100%;

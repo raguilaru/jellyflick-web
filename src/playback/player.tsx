@@ -30,6 +30,7 @@ import {
   withSubtitleOffset,
 } from './subtitle-offset';
 import { subtitlePresentationFor, type SubtitlePresentation } from './subtitle-presentation';
+import { ImageSubtitles } from './image-subtitles';
 import { StyledSubtitles } from './styled-subtitles';
 import { Subtitles } from './subtitles';
 import { SubtitleTiming } from './subtitle-timing';
@@ -139,9 +140,34 @@ export function Player({
    * browser picks one with no API to choose — so choosing one re-negotiates.
    * The subtitles are a separate file this app fetches and draws, so choosing
    * one never touches the media element. See `usePlayback` below.
+   *
+   * **#30 puts one kind of subtitle track on the sound's side of that line.**
+   * A burned-in track is not a file at all: the Server draws the words into
+   * the picture, which is a different transcode of the same source, so
+   * choosing one has to be negotiated exactly like a change of sound. That is
+   * `burnedInIndex` below rather than a third case in here, because the two
+   * answer different questions — this one is what the User asked for, that
+   * one is what the Server was asked to bake in.
    */
   const [chosenAudio, setChosenAudio] = useState<number | undefined>(undefined);
   const [chosenSubtitle, setChosenSubtitle] = useState<ChosenSubtitle>('from-the-server');
+  /**
+   * The subtitle track the **Server** was asked to burn into the picture
+   * (#30), or none — which is the common case, and was the only one before
+   * this ticket.
+   *
+   * It is sent as `SubtitleStreamIndex` on the next `PlaybackInfo`, where the
+   * DeviceProfile's silence about that codec turns it into
+   * `SubtitleDeliveryMethod.Encode`: there is no flag that asks for burn-in,
+   * and `device-profile.ts` explains at length why the omission is the
+   * request.
+   *
+   * **Leaving a burned-in track also re-negotiates**, which is the half that
+   * is easy to forget. The words are *in the picture* until a new stream
+   * replaces it, so going back to a drawable track with this still set would
+   * leave them there underneath whatever was chosen next.
+   */
+  const [burnedInIndex, setBurnedInIndex] = useState<number | undefined>(undefined);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [subtitlesUnavailable, setSubtitlesUnavailable] = useState(false);
   /** Whether the Subtitle timing panel is open (#28). */
@@ -346,6 +372,10 @@ export function Player({
       // Left out until the User has chosen one, which is what leaves the choice
       // to the Server and so to this User's own Jellyfin account.
       ...(chosenAudio === undefined ? {} : { audioStreamIndex: chosenAudio }),
+      // The one track the Server is asked to draw into the picture (#30).
+      // Left out otherwise, so the Server keeps choosing from this User's own
+      // account exactly as it did before this ticket.
+      ...(burnedInIndex === undefined ? {} : { subtitleStreamIndex: burnedInIndex }),
     }).then((planned) => {
       if (abandoned) return;
       setAttempt(planned);
@@ -358,7 +388,17 @@ export function Player({
       abandoned = true;
     };
     // The gateway is rebuilt on every render, so its address is the dependency.
-  }, [gateway.serverAddress, itemId, userId, device, resumeTicks, attemptNumber, chosenAudio, restartTicks]);
+  }, [
+    gateway.serverAddress,
+    itemId,
+    userId,
+    device,
+    resumeTicks,
+    attemptNumber,
+    chosenAudio,
+    burnedInIndex,
+    restartTicks,
+  ]);
 
   const retry = useCallback(() => {
     setFailed(false);
@@ -413,12 +453,46 @@ export function Player({
   /**
    * Choosing the subtitles touches nothing but this app: a separate file, read
    * and drawn here, so the picture does not so much as flicker.
+   *
+   * **Except for the one track the Server has to draw** (#30). A VobSub or DVB
+   * track — and a PGS one on a device that cannot decode it — is burned into
+   * the picture, which is a different transcode, so that choice re-negotiates
+   * like a change of sound and is owed the User's place in the same way.
+   *
+   * It is a **comparison of two burn-in states**, not a test of the new track
+   * alone, because leaving one matters as much as entering it: the words stay
+   * in the picture until a new stream replaces it, so turning subtitles off
+   * while a track is baked in has to ask the Server again just as much as
+   * turning them on did. Where neither the old nor the new choice is burned
+   * in, nothing is negotiated and the picture does not move — which is still
+   * every case this app had before this ticket.
    */
-  const chooseSubtitle = useCallback((index: number | undefined) => {
-    setSubtitlesUnavailable(false);
-    setChosenSubtitle(index === undefined ? 'off' : { index });
-    setPickerOpen(false);
-  }, []);
+  const chooseSubtitle = useCallback(
+    (index: number | undefined) => {
+      setSubtitlesUnavailable(false);
+
+      const chosenTrack =
+        index === undefined
+          ? undefined
+          : plan?.tracks.subtitles.find((track) => track.index === index);
+      const wantsBurnIn =
+        chosenTrack !== undefined &&
+        subtitlePresentationFor({
+          track: chosenTrack,
+          capabilities: device.subtitleCapabilities(),
+        }).draw === 'burned-in';
+      const nextBurnedIn = wantsBurnIn && index !== undefined ? index : undefined;
+
+      if (nextBurnedIn !== burnedInIndex) {
+        setRestartTicks(ticksOfSeconds(video.current?.currentTime ?? position));
+        setBurnedInIndex(nextBurnedIn);
+      }
+
+      setChosenSubtitle(index === undefined ? 'off' : { index });
+      setPickerOpen(false);
+    },
+    [plan, device, burnedInIndex, position],
+  );
 
   /**
    * Shifting the subtitles (#28). It touches nothing but this state: the offset
@@ -543,12 +617,39 @@ export function Player({
           onUnavailable={() => setSubtitlesUnavailable(true)}
           onUnsupported={() => setStyledUnsupported(true)}
         />
+      ) : plan !== undefined && draw === 'image' && subtitleTrack !== undefined ? (
+        /*
+          Image subtitles (#30), decoded by libpgs onto its own canvas in the
+          same grid cell. Like the styled one it is the alternative to the
+          overlay below rather than an addition to it — and unlike it, there
+          is no `onCues`: a bitmap has no line for "Sync to this line" to find.
+        */
+        <ImageSubtitles
+          device={device}
+          gateway={gateway}
+          itemId={plan.itemId}
+          mediaSourceId={plan.mediaSourceId}
+          track={subtitleTrack}
+          offsetSeconds={offsetSeconds}
+          video={video}
+          onUnavailable={() => setSubtitlesUnavailable(true)}
+        />
       ) : plan !== undefined ? (
+        /*
+          The overlay this app draws itself (#27), and the fallback for
+          everything the two canvases above do not take. No track reaches it
+          unless it is the thing drawing that track: `burned-in` joins `none`
+          in being left out (#30), because the words are already in the picture
+          and fetching anything would ask the Server for a file that does not
+          exist — and draw a second copy of the subtitles if it did.
+        */
         <Subtitles
           gateway={gateway}
           itemId={plan.itemId}
           mediaSourceId={plan.mediaSourceId}
-          {...(subtitleTrack === undefined || draw === 'none' ? {} : { track: subtitleTrack })}
+          {...(subtitleTrack === undefined || draw === 'none' || draw === 'burned-in'
+            ? {}
+            : { track: subtitleTrack })}
           {...(presentation === undefined ? {} : { format: presentation.format })}
           offsetSeconds={offsetSeconds}
           onCues={setCues}
@@ -673,6 +774,14 @@ export function Player({
                   setTimingOpen(true);
                 },
               })}
+          /*
+            #30. The panel is disabled rather than hidden, and this is the one
+            place that knows: the picker is handed how the chosen track is
+            being drawn, not asked to work it out from the track itself, since
+            the same PGS track is shiftable on one device and baked in on the
+            next.
+          */
+          subtitlesBurnedIn={draw === 'burned-in'}
           onClose={() => setPickerOpen(false)}
         />
       ) : null}

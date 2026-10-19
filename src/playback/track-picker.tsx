@@ -53,12 +53,25 @@ export type TrackPickerProps = {
    * about nothing is a focus stop the arrow keys step through for nothing, the
    * same call `PlayerControls` makes about this menu itself.
    *
-   * #30 is where the third case arrives: a track the Server burned into the
-   * picture cannot be shifted at all, and the honest shape for that is the one
-   * an undrawable track already has below — the control offered, carrying
-   * `aria-disabled`, with the group saying why in words.
+   * #30 is where the third case arrives, and it is **not** absence:
+   * `subtitlesBurnedIn` below keeps the control on the screen and disables it,
+   * because there is something to say about it.
    */
   onOpenTiming?: () => void;
+  /**
+   * Whether the Server drew the subtitles into the picture (#30), which is the
+   * ticket's "the offset control is disabled with an explanation".
+   *
+   * It is deliberately **not** the absence of `onOpenTiming` above. A track
+   * that is off has nothing to time and nothing to say about it, so the
+   * control is simply not there; a burned-in track is a track a User is
+   * watching and may well want to shift, so the control stays, carrying
+   * `aria-disabled`, and the group says why. That is the same treatment an
+   * undrawable track used to get here — `aria-disabled` rather than
+   * `disabled`, so a remote can reach it and read the reason instead of
+   * skipping silently past a control that was never explained.
+   */
+  subtitlesBurnedIn?: boolean;
   onClose: () => void;
 };
 
@@ -70,6 +83,7 @@ export function TrackPicker({
   onChooseAudio,
   onChooseSubtitle,
   onOpenTiming,
+  subtitlesBurnedIn = false,
   onClose,
 }: TrackPickerProps) {
   const t = useTranslate();
@@ -90,8 +104,15 @@ export function TrackPicker({
     if (first instanceof HTMLElement) first.focus();
   }, []);
 
-  /** Whether any track the Title holds is one this app cannot draw. */
-  const hasImageSubtitles = tracks.subtitles.some((track) => track.kind === 'image');
+  /*
+   * There is no longer any such thing as a subtitle track this app will not
+   * put on the screen (#30), which is why nothing here is `aria-disabled` any
+   * more. A picture track is either decoded here or burned into the picture by
+   * the Server, and both of those are the words appearing — so the "Jellyflick
+   * cannot draw picture subtitles yet" notice and the unpressable buttons that
+   * went with it are both gone. What is left to say is said about the *chosen*
+   * track, below, and only when there is something to say.
+   */
 
   return (
     <div
@@ -136,28 +157,17 @@ export function TrackPicker({
           >
             {t('player.subtitlesOff')}
           </button>
-          {tracks.subtitles.map((track) => {
-            const drawable = track.kind === 'text';
-            return (
-              <button
-                key={track.index}
-                type="button"
-                class="button button--quiet"
-                aria-pressed={track.index === subtitleIndex}
-                /*
-                  `aria-disabled` rather than `disabled`: a disabled button is
-                  not a focus stop at all, so a remote would skip past a track
-                  with no way to find out why it was not offered. This one is
-                  reachable, named, and says what it is — and the group's own
-                  note says Jellyflick cannot draw it yet.
-                */
-                aria-disabled={drawable ? undefined : 'true'}
-                onClick={drawable ? () => onChooseSubtitle(track.index) : undefined}
-              >
-                {nameOfTrack(track, t)}
-              </button>
-            );
-          })}
+          {tracks.subtitles.map((track) => (
+            <button
+              key={track.index}
+              type="button"
+              class="button button--quiet"
+              aria-pressed={track.index === subtitleIndex}
+              onClick={() => onChooseSubtitle(track.index)}
+            >
+              {nameOfTrack(track, t)}
+            </button>
+          ))}
         </div>
         {/*
           Subtitle timing (#28). It sits in the subtitles group rather than
@@ -166,12 +176,25 @@ export function TrackPicker({
         */}
         {onOpenTiming === undefined ? null : (
           <p class="player__buttons">
-            <button type="button" class="button button--quiet" onClick={onOpenTiming}>
+            <button
+              type="button"
+              class="button button--quiet"
+              /*
+                Burned in, so there is nothing left to shift: the Server has
+                already drawn the words into the frames, and the one thing the
+                panel does is subtract a number from a cue's time. Offered and
+                `aria-disabled` rather than removed, because a User watching a
+                track they might well want to shift is owed the reason — which
+                the group's note gives, directly below.
+              */
+              aria-disabled={subtitlesBurnedIn ? 'true' : undefined}
+              onClick={subtitlesBurnedIn ? undefined : onOpenTiming}
+            >
               {t('player.subtitleTiming')}
             </button>
           </p>
         )}
-        {hasImageSubtitles ? <p class="notice">{t('player.subtitlesImage')}</p> : null}
+        {subtitlesBurnedIn ? <p class="notice">{t('player.subtitlesBurnedIn')}</p> : null}
         {subtitlesUnavailable ? (
           <p class="notice notice--problem" role="alert">
             {t('player.subtitlesUnavailable')}

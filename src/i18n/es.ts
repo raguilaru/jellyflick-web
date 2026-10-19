@@ -340,7 +340,8 @@ export const es: Messages = {
   'player.tracksDone': 'Hecho',
   'player.trackUnnamed': (p: { index: number }) => `Pista ${String(p.index)}`,
   'player.subtitlesLabel': 'Subtítulos',
-  'player.subtitlesImage': 'Jellyflick todavía no puede dibujar subtítulos de imagen.',
+  'player.subtitlesBurnedIn':
+    'El servidor está dibujando estos subtítulos en la imagen, así que su sincronía no se puede cambiar.',
   'player.subtitlesUnavailable': 'Jellyflick no pudo leer esos subtítulos del servidor.',
 
   /* El desfase de subtítulos (#28). «0,8 s» en español, por `Intl.NumberFormat`. */
