@@ -4,6 +4,87 @@ State of the `/implement-spec` run on the integration branch `feat/jellyflick-v1
 (draft PR #38). Update this whenever a wave lands, so a fresh session can pick the work
 up without re-deriving anything.
 
+## ELEVENTH SESSION — the last two spec tickets, and the host's agenda cleared
+
+**Read this, then "TENTH SESSION" below it, then the seventh session's section, which is
+still the standing guidance on traps, costs and process and has never been superseded.**
+
+Opened on tip `cae92f8`, confirmed on `origin` with `git ls-remote`, with nothing in
+flight — no agent, no dev server, fake Jellyfin or browser process, checked with `pgrep`
+rather than assumed. The tenth session's handover was accurate in every particular.
+
+### The host answered four of the six items on the agenda that was theirs
+
+This is the thing the tenth session said stood between this branch and a release, and most
+of it is now gone. The decisions are written up as comments **on the issues themselves**,
+which is where an implementer will look; they are summarised here only so a reader of this
+doc knows they exist.
+
+- **#54 — closed, no code.** "The session" means **the playback**. A speed survives a
+  re-negotiation and resets when the player is closed, which is what #32 shipped, so the
+  acceptance box stays ticked as read.
+- **#51 — decided and now an agent's: links on Home at phone width.** Not a fifth
+  bottom-bar item, not a phone header. Story 61's four items stay, the
+  `moving-around-the-app` assertion in both suites stays true rather than being rewritten,
+  and the comment beside `BOTTOM_BAR_SECTION_IDS` becomes true for the first time.
+  **#23's three `phone` skips are the acceptance test** — this ticket should take the suite
+  from 45 skips to 42.
+- **#48 — decided and now an agent's: licence texts committed, served, linked from
+  Settings.** The `public/fonts/bebas-neue-OFL.txt` precedent, in the image as well as the
+  repo, with no new screen. **`org.opencontainers.image.licenses="NOASSERTION"` is left
+  alone deliberately** — it waits on the project's own licence, which the spec's "later"
+  list holds.
+- **#45 and #47 — the host has both an MDBList key and a real Jellyfin.** These were the
+  two items no agent could ever finish. Spend the key on **one** call to pin the
+  `ratings[]` element shape and the per-source scales; ask the real Server whether
+  `MediaStream.Path` comes back for an **external** subtitle, because if it is withheld
+  story 102's cross-Episode half is lost quietly. Do these when the player tickets are out
+  of the way, not in the middle of a wave.
+
+**Still the host's and still open: #12's saves** — #46 made the suite honest about a
+fire-and-forget Client Settings write, and the app still does not wait for one. Whether it
+should is a change to #12's design, not a test fix.
+
+### In flight
+
+Two implementers, launched together, in worktrees the integrator created and ran `npm ci`
+in — the worktree-per-implementer rule, which is the most expensive thing that ever went
+wrong on this run.
+
+| Ticket | Branch | Ports | Touches |
+|---|---|---|---|
+| **#33 Cast** | `ticket/33-cast` | 4337 / 8337 | `src/playback/` |
+| **#51 Phone sections** | `ticket/51-phone-sections` | 4351 / 8351 | `src/home/`, `src/shell/` |
+
+They are in different conflict groups, so this is a legitimate wave of two. Both were told
+their ports apply to **Vitest as well as Playwright**, and both were told to check
+`pgrep -f playwright` before starting a suite and to wait rather than interleave.
+
+**#34 Play On comes after #33 and cannot run beside it** — `src/playback/` has never taken
+two implementers, and the glossary's distinction is the thing to hold onto: Play On is
+telling another running Jellyfin app on the same Server to play something; Cast is
+Chromecast or AirPlay.
+
+### What is left after this wave
+
+1. **#34 Play On**, alone, once #33 is merged.
+2. **The player's three loose ends** — **#50** (the `aria-disabled` dim rule is scoped to
+   tracks #30 removed, so "Sync to this line" looks pressable when it is not), **#53**
+   (`TrackPicker` loses focus to the document when Done closes it — the *same* defect #32
+   fixed in the options menu, so the fix is written already) and **#52** if anything of it
+   survives #32's shared guard.
+3. **#48**, which is now an agent's.
+4. **#42**, the `[desktop]` arrow-key Row-scroll assertion that has recurred twice — once
+   on a line that is **already** an `expect.poll`, so the fix suggested on the issue is
+   probably wrong, and both assertions really want to know whether `reveal.ts` is meant to
+   land exactly on 0.
+5. **#45 and #47**, with the host's key and Server.
+6. **`code-review` over the whole branch**, then **the git history rewrite** in
+   `decisions.md` §10 with nothing in flight, then **mark PR #38 ready**. The host must
+   then ask GitHub Support to purge the stale objects — the branch tips are all clean, but
+   merged PR #37's diff is still reachable by direct `/commit/<sha>` URL and only Support
+   can purge that.
+
 ## TENTH SESSION STARTS HERE — two tickets left, then the end of the run
 
 **Read this section, then "NINTH SESSION" below it for what the current code assumes, then
