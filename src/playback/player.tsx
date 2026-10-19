@@ -11,7 +11,12 @@ import { useIdleControls } from './controls-visibility';
 import { readMediaSegments, skipOffered, type MediaMarker } from './media-segments';
 import { NextEpisodeOffer } from './next-episode';
 import { SkipButton } from './skip-button';
+import { PlaybackOptions } from './playback-options';
+import { clampSpeed, NORMAL_SPEED } from './playback-speed';
 import { PlayerControls, SEEK_BAR_ATTRIBUTE } from './player-controls';
+import { readMaxQuality, writeMaxQuality } from './max-quality';
+import { trickplayFor, type TrickplayMap } from './trickplay';
+import { PREVIEW_MAX_WIDTH } from './trickplay-preview';
 import { planPlayback, type PlaybackAttempt, type PlaybackPlan } from './planning';
 import {
   createPlaybackReporter,
@@ -206,6 +211,33 @@ export function Player({
    * run out", which is the state nearly all of playback is in.
    */
   const [atTheEnd, setAtTheEnd] = useState<PlayTarget | 'nothing' | undefined>(undefined);
+  /** Whether the playback options are open (#32). */
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  /**
+   * How fast the Title is playing (#32, story 91), which starts at its own
+   * speed and stays where a User put it **for this playback** — a change of
+   * sound track or of quality re-negotiates and re-attaches the source, and
+   * the rate is re-applied each time rather than quietly going back to one.
+   */
+  const [speed, setSpeed] = useState(NORMAL_SPEED);
+  /**
+   * The maximum quality **this device** has been told to stop at (story 93),
+   * read out of device storage once when the player opens. It is a device
+   * setting rather than a Client Setting, which is the spec's own split: a
+   * phone and the television beside it belong to the same User and want
+   * opposite answers.
+   */
+  const [maxBitrate, setMaxBitrate] = useState<number | undefined>(() =>
+    readMaxQuality(device.storage()),
+  );
+  /**
+   * The scrubbing thumbnails this source has (story 90), or nothing — which
+   * is the common case and not a failure.
+   */
+  const [trickplay, setTrickplay] = useState<TrickplayMap | undefined>(undefined);
+  /** Whether the picture is in its own window, and whether one was refused. */
+  const [inPictureInPicture, setInPictureInPicture] = useState(false);
+  const [pictureInPictureRefused, setPictureInPictureRefused] = useState(false);
 
   // Back closes the player, through the one Back handler rather than a key
   // listener of this screen's own. A layout effect, which is why #8 made it one.
@@ -372,6 +404,11 @@ export function Player({
       // Left out until the User has chosen one, which is what leaves the choice
       // to the Server and so to this User's own Jellyfin account.
       ...(chosenAudio === undefined ? {} : { audioStreamIndex: chosenAudio }),
+      // The ceiling this device was told to stop at (#32, story 93). Absent
+      // is Auto, which is the absence of a ceiling rather than a value, so
+      // nothing is sent and the Server answers with the best the profile can
+      // take — exactly what it did before this ticket.
+      ...(maxBitrate === undefined ? {} : { maxBitrate }),
       // The one track the Server is asked to draw into the picture (#30).
       // Left out otherwise, so the Server keeps choosing from this User's own
       // account exactly as it did before this ticket.
@@ -397,6 +434,7 @@ export function Player({
     attemptNumber,
     chosenAudio,
     burnedInIndex,
+    maxBitrate,
     restartTicks,
   ]);
 
@@ -429,6 +467,153 @@ export function Player({
     };
     // The gateway is rebuilt on every render, so its address is the dependency.
   }, [gateway.serverAddress, plan]);
+
+  /**
+   * The scrubbing thumbnails, read once per plan (#32, story 90).
+   *
+   * **Unlike the markers above there is no flag to save the request.**
+   * `HasSegments` exists precisely so #31 can skip its read on a Server with
+   * no intro-detection plugin; `PlaybackInfo` carries nothing equivalent for
+   * trickplay, and the manifest is a gated `fields=Trickplay` property of the
+   * item rather than anything on the source. So this is one read per
+   * playback on every Server, and the empty answer is the common one.
+   *
+   * It hangs off the plan for the same reason the markers do: the thumbnails
+   * belong to the media source that plan names, and a change of sound track
+   * or of quality is a new plan.
+   *
+   * A Server that will not answer is a Server with no thumbnails, as far as a
+   * User is concerned. There is nothing to retry and nothing to say: the bar
+   * works, and a scrubbing aid that did not load is not worth a notice over
+   * the picture.
+   */
+  useEffect(() => {
+    setTrickplay(undefined);
+    if (plan === undefined) return;
+    let abandoned = false;
+    void gateway.getTrickplay(plan.itemId).then(
+      (read) => {
+        if (!abandoned) setTrickplay(read);
+      },
+      () => undefined,
+    );
+    return () => {
+      abandoned = true;
+    };
+    // The gateway is rebuilt on every render, so its address is the dependency.
+  }, [gateway.serverAddress, plan]);
+
+  /**
+   * Which set of thumbnails to draw with, at the size the preview is drawn.
+   * Nothing at all whenever the Server generated none for this source, which
+   * is what takes the whole feature off the bar.
+   */
+  const previewResolution =
+    plan === undefined ? undefined : trickplayFor(trickplay, plan.mediaSourceId, PREVIEW_MAX_WIDTH);
+
+  /**
+   * The speed (story 91), applied to the element rather than held as a number
+   * nothing reads.
+   *
+   * **Both properties, and that is the point.** `playbackRate` is what is
+   * playing now; `defaultPlaybackRate` is what the element goes back to when
+   * a new source is attached to it — which happens on every re-negotiation,
+   * so without it a User who slowed a Title down and then changed the sound
+   * track would be jolted back to full speed with nothing to explain it.
+   *
+   * Keyed on the plan as well as the speed, so it is re-applied after the
+   * source the re-negotiation attached.
+   */
+  useEffect(() => {
+    const element = video.current;
+    if (element === null) return;
+    element.defaultPlaybackRate = speed;
+    element.playbackRate = speed;
+  }, [speed, plan]);
+
+  /**
+   * Choosing a maximum quality asks the Server again, exactly as choosing a
+   * sound track does and for the same kind of reason: the ceiling is part of
+   * the DeviceProfile, and the profile is the negotiation. So what is owed
+   * the User is their **place** — the next `PlaybackInfo` starts from where
+   * they are rather than from the beginning.
+   *
+   * It is written to device storage at the press rather than when the player
+   * closes, because the press is the whole of the decision and a User who
+   * shuts the lid of a laptop has still chosen.
+   */
+  const chooseQuality = useCallback(
+    (bitrate: number | undefined) => {
+      if (bitrate === maxBitrate) return;
+      setRestartTicks(ticksOfSeconds(video.current?.currentTime ?? position));
+      writeMaxQuality(device.storage(), bitrate);
+      setMaxBitrate(bitrate);
+      setOptionsOpen(false);
+    },
+    [device, maxBitrate, position],
+  );
+
+  /**
+   * Picture-in-picture (story 92), which is a **press on the element** rather
+   * than anything the Server knows about: the same stream keeps playing in a
+   * window of the browser's own.
+   *
+   * The device layer says whether to offer it at all — `pictureInPicture` is
+   * `document.pictureInPictureEnabled`, which is false on Chromium 68 and
+   * false again on a browser whose policy forbids it. What is left here is the
+   * press, which the browser requires to be a User's: `requestPictureInPicture`
+   * rejects without a gesture, so it is called straight out of the click and
+   * never out of an effect.
+   *
+   * A refusal is said beside the picture, like every other player failure: the
+   * Title is still playing, and a window that would not open has cost nothing
+   * else.
+   */
+  const pictureInPictureOffered = device.playbackTargets().pictureInPicture;
+  const togglePictureInPicture = useCallback(() => {
+    const element = video.current;
+    if (element === null) return;
+    setPictureInPictureRefused(false);
+    setOptionsOpen(false);
+
+    /*
+     * `document.pictureInPictureElement` and the two methods are Chrome 69,
+     * one version above this app's floor, so each is reached for only after
+     * checking it is really there — the capability above says the device has
+     * them, and this says so again where it would otherwise be a crash.
+     */
+    const leaving = 'pictureInPictureElement' in document
+      && document.pictureInPictureElement !== null;
+    const asked: unknown = leaving
+      ? document.exitPictureInPicture()
+      : element.requestPictureInPicture();
+
+    if (!(asked instanceof Promise)) return;
+    asked.then(
+      () => setInPictureInPicture(!leaving),
+      () => {
+        if (!leaving) setPictureInPictureRefused(true);
+      },
+    );
+  }, []);
+
+  /**
+   * The window can also be closed by the browser's own control, which is not
+   * a press of ours — so the element's own events are what the button is kept
+   * honest by rather than the promise above.
+   */
+  useEffect(() => {
+    const element = video.current;
+    if (element === null || !pictureInPictureOffered) return;
+    const entered = (): void => setInPictureInPicture(true);
+    const left = (): void => setInPictureInPicture(false);
+    element.addEventListener('enterpictureinpicture', entered);
+    element.addEventListener('leavepictureinpicture', left);
+    return () => {
+      element.removeEventListener('enterpictureinpicture', entered);
+      element.removeEventListener('leavepictureinpicture', left);
+    };
+  }, [pictureInPictureOffered, plan]);
 
   /** Which skip is on the screen, if any: one reading of one moment. */
   const skip = skipOffered(markers, position);
@@ -570,6 +755,7 @@ export function Player({
       plan === undefined ||
       problem !== undefined ||
       pickerOpen ||
+      optionsOpen ||
       atTheEnd !== undefined,
   });
 
@@ -705,6 +891,18 @@ export function Player({
       ) : null}
 
       {/*
+        A picture-in-picture window the browser would not open (#32,
+        story 92), said beside the picture for the same reason: the Title is
+        still playing, and the press that failed also closed the menu, so a
+        message only the menu showed would be a message nobody saw.
+      */}
+      {pictureInPictureRefused ? (
+        <p class="notice notice--problem" role="alert">
+          {t('player.pictureInPictureRefused')}
+        </p>
+      ) : null}
+
+      {/*
         Skip Intro and Skip Credits (#31). Deliberately **outside** the controls
         and drawn whenever the Server says there is a marker here: the controls
         get out of the way after a few seconds, and an offer good only for the
@@ -750,6 +948,21 @@ export function Player({
           {...(plan === undefined || !hasAnyTrack(plan)
             ? {}
             : { onOpenTracks: () => setPickerOpen(true) })}
+          onOpenOptions={() => setOptionsOpen(true)}
+          {...(previewResolution === undefined || plan === undefined
+            ? {}
+            : {
+                preview: {
+                  resolution: previewResolution,
+                  tileUrl: (tileIndex: number) =>
+                    gateway.trickplayTileUrl({
+                      itemId: plan.itemId,
+                      mediaSourceId: plan.mediaSourceId,
+                      width: previewResolution.width,
+                      tileIndex,
+                    }),
+                },
+              })}
         />
       ) : null}
 
@@ -783,6 +996,27 @@ export function Player({
           */
           subtitlesBurnedIn={draw === 'burned-in'}
           onClose={() => setPickerOpen(false)}
+        />
+      ) : null}
+
+      {/*
+        The speed, the quality and picture-in-picture (#32). Like the track
+        picker it claims Back on top of the player's own claim, so Back closes
+        it and leaves the Title playing.
+      */}
+      {optionsOpen ? (
+        <PlaybackOptions
+          speed={speed}
+          onChooseSpeed={(rate) => {
+            setSpeed(clampSpeed(rate));
+            setOptionsOpen(false);
+          }}
+          {...(maxBitrate === undefined ? {} : { maxBitrate })}
+          onChooseQuality={chooseQuality}
+          {...(pictureInPictureOffered
+            ? { onPictureInPicture: togglePictureInPicture, inPictureInPicture }
+            : {})}
+          onClose={() => setOptionsOpen(false)}
         />
       ) : null}
 

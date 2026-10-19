@@ -99,6 +99,59 @@ test.describe('the app at desktop size', () => {
     // Controls fade out on their own; a nudge brings them back for the shot.
     await page.mouse.move(640, 400);
     await shot('06-playing-a-title');
+
+    /*
+     * 6b. The scrubbing thumbnail (#32). A pointer part-way along the bar is
+     * what puts one there, and this is a thing that can be geometrically
+     * wrong — the wrong cell of the sheet, the wrong size, hanging off an
+     * end — while every assertion about it passes. The fake draws a real
+     * sheet of flat-coloured cells with a darker band down each one's left
+     * edge, so a wrong `background-position` is a different colour here.
+     */
+    // Paused first: the committed film is six seconds long, and a tour that
+    // let it run would be taking pictures of a player closing itself.
+    await page.getByRole('button', { name: 'Pause Arrival' }).press('Enter');
+    await expect(page.getByRole('button', { name: 'Play Arrival' })).toBeVisible();
+
+    const bar = page.getByRole('slider', { name: 'Seek through Arrival' });
+    const barBox = await bar.boundingBox();
+    if (barBox !== null) {
+      await page.mouse.move(barBox.x + barBox.width * 0.7, barBox.y + barBox.height / 2);
+      await expect(page.locator('.player__preview')).toBeVisible();
+      /*
+       * **Wait for the sheet itself.** `settled` waits for `document.images`,
+       * and this is a CSS background rather than an `<img>` — so without this
+       * the picture is of an empty black box, which is what the first version
+       * of this tour produced and what looking at it found.
+       */
+      await expect
+        .poll(
+          () =>
+            page.evaluate(async () => {
+              const box = document.querySelector('.player__preview');
+              if (!(box instanceof HTMLElement)) return false;
+              const url = /url\("?([^")]+)"?\)/.exec(getComputedStyle(box).backgroundImage)?.[1];
+              if (url === undefined) return false;
+              return await new Promise<boolean>((resolve) => {
+                const image = new Image();
+                image.addEventListener('load', () => resolve(true));
+                image.addEventListener('error', () => resolve(false));
+                image.src = url;
+              });
+            }),
+          { timeout: 30_000 },
+        )
+        .toBe(true);
+      await settled(page);
+      await shot('06b-scrubbing-thumbnail');
+    }
+
+    // 6c. The speed, the quality and picture-in-picture, behind one control.
+    await page.getByRole('button', { name: 'Playback options for Arrival' }).press('Enter');
+    await expect(page.getByRole('dialog', { name: 'Playback options' })).toBeVisible();
+    await shot('06c-playback-options');
+    await page.keyboard.press('Escape');
+
     await page.keyboard.press('Escape');
 
     // 7. Search, with something typed.

@@ -873,6 +873,74 @@ describe('the Jellyfin gateway', () => {
 
 
   /**
+   * The trickplay thumbnails a User scrubs through (#32, story 90), from
+   * `jellyfin-playback.md` §13. Two halves, and they are gated differently:
+   * the **manifest** is a `fields=Trickplay` property of the item, and the
+   * **tile images** are their own route with the width and the tile index in
+   * the path.
+   */
+  describe('the trickplay thumbnails', () => {
+    const trickplayGateway = () =>
+      createJellyfinGateway({
+        serverAddress: fakeJellyfinUrl(),
+        deviceId: 'reads-trickplay',
+        ...identity,
+        token: tokenFor('reads-trickplay'),
+      });
+
+    it('asks for the Trickplay field by name, which the Server does not send unasked', async () => {
+      const trickplay = await trickplayGateway().getTrickplay('movie-arrival');
+
+      expect(trickplay?.['source-movie-arrival']?.['320']).toMatchObject({
+        Width: 320,
+        TileWidth: 3,
+        TileHeight: 2,
+        Interval: 1000,
+      });
+
+      const asked = (await fakeRequests()).find((request) =>
+        request.path.includes('fields=Trickplay'),
+      );
+      expect(asked?.path).toContain('ids=movie-arrival');
+      // Nothing here draws artwork or reads a watched state, so neither is asked for.
+      expect(asked?.path).toContain('enableImages=false');
+      expect(asked?.path).toContain('enableUserData=false');
+    });
+
+    it('has nothing for a Title the Server generated no thumbnails for', async () => {
+      expect(await trickplayGateway().getTrickplay('movie-unfinished')).toBeUndefined();
+    });
+
+    it('builds the tile image path with the width and the tile index in it', () => {
+      expect(
+        trickplayGateway().trickplayTileUrl({
+          itemId: 'movie-arrival',
+          mediaSourceId: 'source-movie-arrival',
+          width: 320,
+          tileIndex: 2,
+        }),
+      ).toBe(
+        `${fakeJellyfinUrl()}/Videos/movie-arrival/Trickplay/320/2.jpg?mediaSourceId=source-movie-arrival&ApiKey=${tokenFor('reads-trickplay')}`,
+      );
+    });
+
+    /** An `<img>` fetches this itself, so the address has to really answer. */
+    it('answers a tile image at that address', async () => {
+      const response = await fetch(
+        trickplayGateway().trickplayTileUrl({
+          itemId: 'movie-arrival',
+          mediaSourceId: 'source-movie-arrival',
+          width: 320,
+          tileIndex: 0,
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toContain('image/');
+    });
+  });
+
+  /**
    * The intro and credits markers (#31), from `jellyfin-playback.md` §12:
    *
    *     GET /MediaSegments/{itemId}?includeSegmentTypes={csv of MediaSegmentType}

@@ -9,6 +9,7 @@ import {
   forgetFakeRequests,
   forgetFakeWrites,
   resetFakeState,
+  savesHaveSettled,
   setFakeState,
 } from '../fake-jellyfin/control';
 import { SAMPLE_PASSWORD } from '../fake-jellyfin/data';
@@ -50,8 +51,19 @@ afterEach(() => {
   return resetFakeState();
 });
 
+/*
+ * **The settle goes in `beforeEach`, not in `afterEach`** (#46, #52). The
+ * player sends a stop report **behind** the User as it is torn down, from an
+ * effect cleanup nothing awaits — and the unmount that fires it is Testing
+ * Library's `cleanup`, registered in `test/setup.ts`, so Vitest runs it
+ * *after* this file's own `afterEach`. The write has not been made by then.
+ * Settling here, before the log is forgotten and the Server reseeded, is the
+ * only place that catches it, and `architecture.md`'s "Running the tests"
+ * states that ordering rule.
+ */
 beforeEach(async () => {
   window.history.replaceState(null, '', '/');
+  await savesHaveSettled();
   await resetFakeState();
   await forgetFakeWrites();
   await forgetFakeRequests();

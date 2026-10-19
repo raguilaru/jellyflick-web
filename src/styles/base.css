@@ -1825,6 +1825,37 @@ html[data-input='pointer'] [tabindex]:focus {
 }
 
 /*
+ * The scrubbing thumbnail (#32, story 90).
+ *
+ * Absolutely positioned **inside the bar**, which is already
+ * `position: relative`, and lifted clear of it by its own height plus a gap —
+ * so it sits above the bar rather than under the pointer, and never over the
+ * buttons below. Its `left`, `width`, `height` and the three background
+ * properties are all set inline, because every one of them is a number that
+ * changes as a pointer moves and a custom property set on each frame is the
+ * same write with more indirection — the argument `.player__seek-played`
+ * already makes about its width.
+ *
+ * `bottom` rather than `top`, so a preview of any height grows upwards from
+ * the bar instead of pushing down over the controls.
+ *
+ * `pointer-events: none` is what keeps the bar pressable underneath it: the
+ * preview follows the pointer, so without this the pointer would be over the
+ * preview rather than over the bar the moment it appeared, and the next move
+ * would be read as leaving the bar.
+ */
+.player__preview {
+  position: absolute;
+  bottom: calc(100% + var(--space-2));
+  z-index: 1;
+  pointer-events: none;
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius);
+  background-color: #000;
+  background-repeat: no-repeat;
+}
+
+/*
  * Stacked by default and in a line once there is room. There are three buttons
  * here since #27 — play/pause, the tracks and Close — and three on one line is
  * wider than a phone, so the narrow case is the default and the wide one is the
@@ -1995,6 +2026,31 @@ html[data-input='pointer'] [tabindex]:focus {
  * a menu taller than the screen with no way down is unusable with a remote.
  */
 .player__tracks {
+  position: fixed;
+  z-index: 40;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(560px, calc(100% - var(--space-5)));
+  max-height: calc(100% - var(--space-5));
+  overflow-y: auto;
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius);
+  background: var(--surface-base);
+}
+
+/*
+ * The speed, the quality and picture-in-picture (#32). The same box as the
+ * track picker above, and deliberately the same class names inside it —
+ * `.player__track-group`, `.player__track-heading`, `.player__track-choices`
+ * — because the two menus are one shape: a heading, a wrapped row of choices
+ * a remote reaches by direction, and a Done button. A second set of rules
+ * saying the same things is a second set to drift.
+ */
+.player__options {
   position: fixed;
   z-index: 40;
   top: 50%;

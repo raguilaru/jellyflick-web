@@ -12,6 +12,7 @@ import { sessionRoutes } from './sessions.ts';
 import { showRoutes } from './shows.ts';
 import { subtitleRoutes } from './subtitles.ts';
 import { systemRoutes } from './system.ts';
+import { trickplayRoutes } from './trickplay.ts';
 import { userFavoriteRoutes } from './user-favorites.ts';
 import { userItemRoutes } from './user-items.ts';
 import { userPlayedRoutes } from './user-played.ts';
@@ -48,6 +49,9 @@ export const jellyfinRoutes: readonly FakeRoute[] = [
   // specific family first means a later `/Videos/…` pattern cannot shadow it.
   ...subtitleRoutes,
   ...attachmentRoutes,
+  // Five segments under `/Videos`, so nothing can shadow it — but it keeps
+  // the company of the other narrow `/Videos` families all the same (#32).
+  ...trickplayRoutes,
   ...videoRoutes,
   ...genreRoutes,
   ...displayPreferencesRoutes,

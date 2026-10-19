@@ -100,6 +100,17 @@ export type FakeItem = {
   MediaStreams?: FakeMediaStream[];
   /** The embedded fonts a styled subtitle track is drawn with (#29). */
   MediaAttachments?: FakeMediaAttachment[];
+  /**
+   * The scrubbing thumbnails the Server generated for this item (#32,
+   * story 90), keyed by **media source id** and then by **thumbnail width as
+   * a string** — the real shape, map of maps and all, because getting that
+   * nesting wrong is the easiest mistake §13 allows.
+   *
+   * Gated behind `fields=Trickplay` in `items.ts`, as the real Server gates
+   * it: a player that forgot to ask would otherwise see thumbnails here and
+   * none at all from a Jellyfin.
+   */
+  Trickplay?: Record<string, Record<string, FakeTrickplayInfo>>;
   /** One tag per backdrop. The array index is the image's `imageIndex`. */
   BackdropImageTags?: string[];
   /** Keyed by `MetadataProvider` member name: `Imdb`, `Tmdb`, … */
@@ -160,6 +171,22 @@ export type FakeMediaAttachment = {
   Codec?: string;
   MimeType?: string;
   FileName?: string;
+};
+
+/**
+ * `TrickplayInfoDto`: one sheet-ful of scrubbing thumbnails, as the Server
+ * describes it. `Interval` is milliseconds and `TileWidth`/`TileHeight` are
+ * **counts of thumbnails**, not pixels — which is the other half of §13 a
+ * client can read backwards.
+ */
+export type FakeTrickplayInfo = {
+  Width: number;
+  Height: number;
+  TileWidth: number;
+  TileHeight: number;
+  ThumbnailCount: number;
+  Interval: number;
+  Bandwidth: number;
 };
 
 /** What the Server says a file is, in the terms a DeviceProfile is matched in. */
@@ -772,6 +799,44 @@ const SAMPLE_ITEMS: readonly FakeItem[] = [
       { Index: 1, Codec: 'otf', FileName: 'Heptapod-Display.otf' },
       { Index: 2, Codec: 'mjpeg', MimeType: 'image/jpeg', FileName: 'cover.jpg' },
     ],
+    /*
+     * The scrubbing thumbnails (#32, story 90). **Two widths**, so "pick the
+     * smallest that is still sharp enough" is a choice a test can watch being
+     * made rather than a rule with one option.
+     *
+     * The numbers describe the **six seconds the fake really serves**, not
+     * the 116 minutes the library above claims: one thumbnail a second, six
+     * of them, in a single 3 x 2 sheet. A manifest written against the
+     * claimed runtime would send a browser asking for tile images that do not
+     * exist the moment a User scrubbed anywhere real — the same gap between
+     * the library's runtime and the file's that the seek bar already leans on.
+     *
+     * Arrival is the only Title with any, which is deliberate: a Server that
+     * has not generated thumbnails is the other half of the feature, and
+     * every other Title here plays that part.
+     */
+    Trickplay: {
+      'source-movie-arrival': {
+        '160': {
+          Width: 160,
+          Height: 90,
+          TileWidth: 3,
+          TileHeight: 2,
+          ThumbnailCount: 6,
+          Interval: 1000,
+          Bandwidth: 100_000,
+        },
+        '320': {
+          Width: 320,
+          Height: 180,
+          TileWidth: 3,
+          TileHeight: 2,
+          ThumbnailCount: 6,
+          Interval: 1000,
+          Bandwidth: 400_000,
+        },
+      },
+    },
     ProviderIds: { Imdb: 'tt2543164', Tmdb: '329865' },
     // Arrival has a trailer file beside it **and** a YouTube link, which is
     // the one Title that makes "the local trailer is preferred" a thing a

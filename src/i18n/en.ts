@@ -7,7 +7,7 @@
  * function for anything formatted — all three are native on Chromium 68.
  * Formatting two locales have to agree on lives in `format.ts`.
  */
-import { formatSeconds } from './format';
+import { formatBitrate, formatSeconds, formatSpeed } from './format';
 
 /**
  * The languages a household's media is most likely to be in, by the ISO 639-2
@@ -566,6 +566,37 @@ export const en = {
   'player.playNowFor': (p: { name: string }) => `Play ${p.name} now`,
   'player.cancelNext': 'Cancel',
   'player.cancelNextFor': (p: { name: string }) => `Do not play ${p.name}`,
+
+  /*
+   * Trickplay, speed, picture-in-picture and quality (#32).
+   *
+   * The thumbnail over the seek bar has **no string at all**: it is
+   * `aria-hidden`, because the bar already says where it is in words and a
+   * picture of a frame reads out as nothing.
+   *
+   * The control that opens the menu carries the Title's name like every other
+   * control in the player, and the menu itself does not — the same split
+   * `player.tracks` and `player.tracksLabel` make.
+   */
+  'player.options': (p: { name: string }) => `Playback options for ${p.name}`,
+  'player.optionsLabel': 'Playback options',
+  'player.optionsButton': 'Playback',
+  'player.optionsDone': 'Done',
+  'player.speedHeading': 'Speed',
+  'player.speedChoice': (p: { speed: number }) => `${formatSpeed(p.speed, 'en')}×`,
+  'player.qualityHeading': 'Quality',
+  /** Auto is the absence of a ceiling, which is what every Jellyfin app means. */
+  'player.qualityAuto': 'Auto',
+  'player.qualityChoice': (p: { bitrate: number }) => formatBitrate(p.bitrate, 'en'),
+  'player.qualityPerDevice': 'Remembered on this device only.',
+  'player.enterPip': 'Picture-in-picture',
+  'player.leavePip': 'Leave picture-in-picture',
+  /**
+   * The browser refused the window. It is said beside the picture rather than
+   * instead of it, like every other player failure: the Title is still
+   * playing, and a window that would not open has cost the User nothing else.
+   */
+  'player.pictureInPictureRefused': 'This browser would not open a picture-in-picture window.',
 
   'nav.sections': 'Sections',
   'nav.home': 'Home',
