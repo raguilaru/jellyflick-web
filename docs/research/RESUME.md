@@ -14,6 +14,58 @@ this session opened it. Both paused worktrees were intact, both branches were ex
 where the doc said on `origin`, and no dev server, fake Jellyfin or browser process was
 left running — all checked rather than assumed.
 
+### #32's branch moved the e2e skip count 44 → 45, and this is the one
+
+Recorded here in the same commit, which is this doc's own rule.
+
+`test/e2e/trickplay-speed-and-quality.spec.ts` adds **six** tests. Five run in all three
+projects. The sixth — `with a pointer over the bar › follows the pointer, onto the second
+row of the sheet` — hovers along the seek bar, and the `keyboard-only` project disables
+pointer events outright, so that one skips there and nowhere else. **18 collected, 17
+passed, 1 skipped**, and no pre-existing skip moved. The trickplay preview's other trigger
+is focus on the bar, which is what a remote gets, so every other preview assertion runs in
+`keyboard-only` rather than being excused from it.
+
+### #32: the e2e found a defect every unit assertion was green through — again
+
+The sixth time on this run that a browser or a look found what the suite could not, and
+the second time it was **focus escaping the player**.
+
+Every choice in the new playback options menu closes it, which takes the focused button
+away with it — and the browser then hands focus to the **document**. The flow rule (#7,
+#40) only keeps focus inside an overlay that focus is already in, so from the document the
+arrow keys are not in the player at all: on a 390px screen a remote that had just left
+picture-in-picture walked **My List, Mark as watched and the suggestion Row on the title
+page behind the picture**, with the player still open in front of it. It passed on the
+desktop and keyboard-only viewports and failed on the phone one, which is #40's own story
+exactly — the geometry decides whether the bug is visible, so the rule is what gets
+pinned, not the layout.
+
+`playback-options.tsx` now hands focus back to the control it was opened from, unless that
+control went with a re-negotiation, in which case the controls' own effect has it. Two
+unit tests pin both halves, and the fix was held against the failure: take the cleanup out
+and the first goes red every time.
+
+**`TrackPicker` has the identical gap and was left alone** — it is #27's control, Done
+closes it the same way, and it is outside #32's scope. Filed rather than widened, which is
+the #50 precedent.
+
+### #52 was already fixed on #32's branch, and is now one shared guard
+
+#32's predecessor had independently met the stop-report leak and written a private
+`reportsHaveSettled` into `playing-a-title.test.tsx`'s `beforeEach` — which is why the
+file would not reproduce: **six full runs, zero failures** on the merged tree before
+anything was changed. With that one line taken out again it reproduces as #52 describes.
+
+The private copy is now the shared `savesHaveSettled()`, and so are the three
+`afterEach` copies `architecture.md` asked to be folded in when #32 landed —
+`shifting-the-subtitles`, `styled-subtitles`, `image-subtitles`. All three moved to
+`beforeEach` at the same time, because the `afterEach` position cannot catch a write that
+**unmounting** starts: `cleanup` is registered in `test/setup.ts` and runs after the
+file's own hooks. `choosing-tracks`, `skipping-and-the-next-episode` and
+`scrubbing-speed-and-quality` had no guard at all and have one now. Those seven are every
+unit journey that ends with the player still open.
+
 ### The tip's own gate, re-measured before anything was launched
 
 `2cbbf2d` had gained two commits since the numbers in the eighth session's section were

@@ -6,10 +6,10 @@ import type { CapabilityProfileName, FakeStyledRenderer } from '../device/profil
 import { fakeStyledRenderer, inMemoryDeviceStorage, testDeviceLayer } from '../device/profiles';
 import {
   fakeRequests,
-  fakeWrites,
   forgetFakeRequests,
   forgetFakeWrites,
   resetFakeState,
+  savesHaveSettled,
 } from '../fake-jellyfin/control';
 import { SAMPLE_PASSWORD } from '../fake-jellyfin/data';
 import { fakeJellyfinUrl } from '../fake-jellyfin/url';
@@ -50,23 +50,21 @@ import { fakeJellyfinUrl } from '../fake-jellyfin/url';
  * this file's most ordinary failure. A victim test fails only in sequence and
  * never in isolation, which is the signature to recognise.
  */
-async function savesHaveSettled(): Promise<void> {
-  let seen = -1;
-  await waitFor(async () => {
-    const now = (await fakeWrites()).length;
-    const quiet = now === seen;
-    seen = now;
-    expect(quiet).toBe(true);
-  });
-}
+afterEach(resetFakeState);
 
-afterEach(async () => {
-  await savesHaveSettled();
-  await resetFakeState();
-});
-
+/*
+ * **The settle goes in `beforeEach`, not in `afterEach`** (#46, #52). The
+ * player sends a stop report **behind** the User as it is torn down, from an
+ * effect cleanup nothing awaits — and the unmount that fires it is Testing
+ * Library's `cleanup`, registered in `test/setup.ts`, so Vitest runs it
+ * *after* this file's own `afterEach`. The write has not been made by then.
+ * Settling here, before the log is forgotten and the Server reseeded, is the
+ * only place that catches it, and `architecture.md`'s "Running the tests"
+ * states that ordering rule.
+ */
 beforeEach(async () => {
   window.history.replaceState(null, '', '/');
+  await savesHaveSettled();
   await resetFakeState();
   await forgetFakeWrites();
   await forgetFakeRequests();

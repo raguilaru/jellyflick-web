@@ -11,6 +11,7 @@ import {
   forgetFakeRequests,
   forgetFakeWrites,
   resetFakeState,
+  savesHaveSettled,
   setFakeState,
 } from '../fake-jellyfin/control';
 import { SAMPLE_PASSWORD } from '../fake-jellyfin/data';
@@ -29,30 +30,19 @@ import { fakeJellyfinUrl } from '../fake-jellyfin/url';
 
 afterEach(resetFakeState);
 
-/**
- * A playback report is sent **behind** the User, and the last one — the stop
- * report the player sends as it is torn down — is fired from an effect
- * cleanup and never awaited by anything. So it can land *after* the next test
- * has cleared the write log, and then that test counts a report it never
- * caused. It is #46's hazard in the playback reports rather than in a Client
- * Settings write, and it fails the same way: only in sequence, never alone.
- *
- * Two equal counts in a row means the reports have stopped. Found while #32
- * added a read per playback and moved the timing enough to make it show.
+/*
+ * **The settle goes in `beforeEach`, not in `afterEach`** (#46, #52). The
+ * player sends a stop report **behind** the User as it is torn down, from an
+ * effect cleanup nothing awaits — and the unmount that fires it is Testing
+ * Library's `cleanup`, registered in `test/setup.ts`, so Vitest runs it
+ * *after* this file's own `afterEach`. The write has not been made by then.
+ * Settling here, before the log is forgotten and the Server reseeded, is the
+ * only place that catches it, and `architecture.md`'s "Running the tests"
+ * states that ordering rule.
  */
-async function reportsHaveSettled(): Promise<void> {
-  let seen = -1;
-  await waitFor(async () => {
-    const now = (await fakeWrites()).length;
-    const quiet = now === seen;
-    seen = now;
-    expect(quiet).toBe(true);
-  });
-}
-
 beforeEach(async () => {
   window.history.replaceState(null, '', '/');
-  await reportsHaveSettled();
+  await savesHaveSettled();
   await resetFakeState();
   await forgetFakeWrites();
   await forgetFakeRequests();

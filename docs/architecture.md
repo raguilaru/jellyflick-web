@@ -247,10 +247,18 @@ make it shorter. `test/unit/a-save-outliving-its-test.test.tsx` is the guard hel
 against the failure it exists for, and is where to look if any of this changes:
 take the guard out of its `afterEach` and the file goes red every time.
 
-Three playback journeys — `shifting-the-subtitles`, `styled-subtitles` and
-`image-subtitles` — still carry their own private copy of the guard, left alone
-only because #32 is in flight in that territory. Fold them into the shared one
-when it lands.
+**Every player journey settles in `beforeEach`** (#32 folded the three private
+copies in — `shifting-the-subtitles`, `styled-subtitles` and `image-subtitles` —
+and added the guard to `playing-a-title`, `choosing-tracks`,
+`skipping-and-the-next-episode` and `scrubbing-speed-and-quality`). They are the
+files that end with the player still open, so the write they leak is a **stop
+report** rather than a settings save, and that is the one the `afterEach`
+position cannot catch. #52 is the report of what it costs: half of all full
+runs red, in a different file each time, and never when the file is run alone.
+
+The browser suite has the same hazard in its own shape — a stop report can
+outlive a page context — and the same answer: reseed on the way *in* as well as
+on the way out.
 
 **A green e2e run on your own machine is not evidence that it is green.** CI's
 hardware is about half the speed, and every timing bug this suite has had was
