@@ -31,8 +31,9 @@ import { fakeJellyfinUrl } from '../fake-jellyfin/url';
  * device that cannot. The same track and the same Server then give two
  * different answers, which is the whole ticket.
  *
- * Heat is the Title throughout: English audio at stream 1, a **PGS** track at
- * stream 2 and a **VobSub** one at stream 3. The pair is deliberate — PGS
+ * Arrival is the Title throughout: a **PGS** track at stream 6 and a
+ * **VobSub** one at stream 7, beside the plain and styled tracks #27 and #29
+ * left there. The pair is deliberate — PGS
  * takes whichever path the device allows, and VobSub takes the Server's on
  * every device there is.
  *
@@ -114,18 +115,18 @@ function pressCard(rowName: string, name: string): void {
   fireEvent.click(card);
 }
 
-/** Plays Heat on a device of the given class, and waits for it to be going. */
+/** Plays Arrival on a device of the given class, and waits for it to be going. */
 async function play(
   profile: CapabilityProfileName,
   imageRenderer?: FakeImageRenderer,
 ): Promise<void> {
   await signIn(profile, imageRenderer);
   await screen.findByRole('list', { name: 'New on Jellyflick' });
-  pressCard('New on Jellyflick', 'Heat');
-  await screen.findByRole('heading', { name: 'Heat', level: 1 });
+  pressCard('New on Jellyflick', 'Arrival');
+  await screen.findByRole('heading', { name: 'Arrival', level: 1 });
   fireEvent.click(screen.getByRole('button', { name: 'Play' }));
-  await screen.findByRole('region', { name: 'Playing Heat' });
-  await screen.findByRole('button', { name: 'Audio and subtitles for Heat' });
+  await screen.findByRole('region', { name: 'Playing Arrival' });
+  await screen.findByRole('button', { name: 'Audio and subtitles for Arrival' });
 }
 
 /**
@@ -140,7 +141,7 @@ async function play(
  */
 async function openPicker(): Promise<HTMLElement> {
   fireEvent.click(
-    await screen.findByRole('button', { name: 'Audio and subtitles for Heat' }),
+    await screen.findByRole('button', { name: 'Audio and subtitles for Arrival' }),
   );
   return await screen.findByRole('dialog', { name: en['player.tracksLabel'] });
 }
@@ -184,7 +185,7 @@ describe('a PGS track on a device that can draw it', () => {
     const renderer = fakeImageRenderer();
     await play('modern-desktop-browser', renderer);
 
-    await chooseSubtitle(/English \(PGS\)/);
+    await chooseSubtitle(/Portuguese \(PGS\)/);
 
     await waitFor(() => {
       expect(renderer.started).toHaveLength(1);
@@ -197,7 +198,7 @@ describe('a PGS track on a device that can draw it', () => {
      * hands the raw file over whatever was asked for, so `sup` is the only
      * spelling whose content type matches what really arrives.
      */
-    expect(started.subtitleUrl).toContain('/Subtitles/2/');
+    expect(started.subtitleUrl).toContain('/Subtitles/6/');
     expect(started.subtitleUrl).toContain('Stream.sup');
     // The canvas is the renderer's to draw on and the player's to place.
     expect(imageCanvas()).not.toBeNull();
@@ -208,7 +209,7 @@ describe('a PGS track on a device that can draw it', () => {
     await play('modern-desktop-browser');
     const before = (await negotiations()).length;
 
-    await chooseSubtitle(/English \(PGS\)/);
+    await chooseSubtitle(/Portuguese \(PGS\)/);
     await waitFor(() => {
       expect(imageCanvas()).not.toBeNull();
     });
@@ -223,7 +224,7 @@ describe('a PGS track on a device that can draw it', () => {
 
   it('offers the Subtitle timing panel, because a track drawn here can be shifted', async () => {
     await play('modern-desktop-browser');
-    await chooseSubtitle(/English \(PGS\)/);
+    await chooseSubtitle(/Portuguese \(PGS\)/);
     await openPicker();
 
     const timing = screen.getByRole('button', { name: en['player.subtitleTiming'] });
@@ -234,7 +235,7 @@ describe('a PGS track on a device that can draw it', () => {
   it('hands the Subtitle Offset down to the decoder as the User moves it', async () => {
     const renderer = fakeImageRenderer();
     await play('modern-desktop-browser', renderer);
-    await chooseSubtitle(/English \(PGS\)/);
+    await chooseSubtitle(/Portuguese \(PGS\)/);
     await waitFor(() => {
       expect(renderer.started).toHaveLength(1);
     });
@@ -255,7 +256,7 @@ describe('a PGS track on a device that can draw it', () => {
   it('destroys the decoder when the User turns the subtitles off', async () => {
     const renderer = fakeImageRenderer();
     await play('modern-desktop-browser', renderer);
-    await chooseSubtitle(/English \(PGS\)/);
+    await chooseSubtitle(/Portuguese \(PGS\)/);
     await waitFor(() => {
       expect(renderer.started).toHaveLength(1);
     });
@@ -275,7 +276,7 @@ describe('a PGS track on a device that can draw it', () => {
     const renderer = fakeImageRenderer({ failing: true });
     await play('modern-desktop-browser', renderer);
 
-    await chooseSubtitle(/English \(PGS\)/);
+    await chooseSubtitle(/Portuguese \(PGS\)/);
 
     expect(await screen.findByText(en['player.subtitlesUnavailable'])).toBeTruthy();
   });
@@ -286,7 +287,7 @@ describe('a track the Server has to burn into the picture', () => {
     await play('modern-desktop-browser');
     const before = (await negotiations()).length;
 
-    await chooseSubtitle(/Spanish \(VobSub\)/);
+    await chooseSubtitle(/German \(VobSub\)/);
 
     /*
      * There is no flag that asks for burn-in: the DeviceProfile never claims
@@ -298,16 +299,16 @@ describe('a track the Server has to burn into the picture', () => {
     await waitFor(async () => {
       expect((await negotiations()).length).toBe(before + 1);
     });
-    expect(last(await negotiations())?.SubtitleStreamIndex).toBe(3);
+    expect(last(await negotiations())?.SubtitleStreamIndex).toBe(7);
   });
 
   it('never loads the decoder for it, on a device that could have drawn PGS', async () => {
     const renderer = fakeImageRenderer();
     await play('modern-desktop-browser', renderer);
 
-    await chooseSubtitle(/Spanish \(VobSub\)/);
+    await chooseSubtitle(/German \(VobSub\)/);
     await waitFor(async () => {
-      expect(last(await negotiations())?.SubtitleStreamIndex).toBe(3);
+      expect(last(await negotiations())?.SubtitleStreamIndex).toBe(7);
     });
 
     // VobSub has no client-side renderer on any device (#30's first finding),
@@ -318,7 +319,7 @@ describe('a track the Server has to burn into the picture', () => {
 
   it('disables the Subtitle timing panel and says why', async () => {
     await play('modern-desktop-browser');
-    await chooseSubtitle(/Spanish \(VobSub\)/);
+    await chooseSubtitle(/German \(VobSub\)/);
     await openPicker();
 
     /*
@@ -336,9 +337,9 @@ describe('a track the Server has to burn into the picture', () => {
 
   it('asks the Server again when the User leaves a burned-in track', async () => {
     await play('modern-desktop-browser');
-    await chooseSubtitle(/Spanish \(VobSub\)/);
+    await chooseSubtitle(/German \(VobSub\)/);
     await waitFor(async () => {
-      expect(last(await negotiations())?.SubtitleStreamIndex).toBe(3);
+      expect(last(await negotiations())?.SubtitleStreamIndex).toBe(7);
     });
     const burnedIn = (await negotiations()).length;
 
@@ -364,21 +365,21 @@ describe('a PGS track on a device that cannot draw one', () => {
     await play('webos-5-like', renderer);
     const before = (await negotiations()).length;
 
-    await chooseSubtitle(/English \(PGS\)/);
+    await chooseSubtitle(/Portuguese \(PGS\)/);
 
     // The same press, the same Server and the same track as the first test in
     // this file, and the opposite answer — which is the whole of #30.
     await waitFor(async () => {
       expect((await negotiations()).length).toBe(before + 1);
     });
-    expect(last(await negotiations())?.SubtitleStreamIndex).toBe(2);
+    expect(last(await negotiations())?.SubtitleStreamIndex).toBe(6);
     expect(renderer.started).toHaveLength(0);
     expect(imageCanvas()).toBeNull();
   });
 
   it('disables the Subtitle timing panel there too', async () => {
     await play('webos-5-like');
-    await chooseSubtitle(/English \(PGS\)/);
+    await chooseSubtitle(/Portuguese \(PGS\)/);
     await openPicker();
 
     expect(

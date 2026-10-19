@@ -731,6 +731,37 @@ const SAMPLE_ITEMS: readonly FakeItem[] = [
       // Arrival is the right Title for it — the film's whole subject is a
       // written language, and its subtitled signs are typeset.
       { Index: 5, Type: 'Subtitle', Codec: 'ass', Language: 'jpn', DisplayTitle: 'Japanese (Styled)' },
+      /*
+       * **Both graphical families** (#30), and the pair is the point: they
+       * take opposite paths on the very same device.
+       *
+       * - `pgssub` is decoded **here**, by libpgs, wherever the device can, so
+       *   the track turns on and off without re-negotiating and the Subtitle
+       *   Offset still reaches it. Where it cannot, the Server burns it in.
+       * - `dvdsub` is a VobSub bitmap and is burned in on **every** device,
+       *   which is #30's first finding: no maintained client-side renderer
+       *   runs on this app's floor, and Jellyfin's graphical passthrough hands
+       *   over a raw PGS payload and never the `.idx` a VobSub renderer would
+       *   need for its palette.
+       *
+       * `dvdsub` is also the spelling that catches the deliberate widening in
+       * `media-tracks.ts`: the Server's own predicate quotes
+       * `Contains("dvdsub")` and then lists `dvd_subtitle` among the codecs
+       * really seen, so the Server reads one of them as *text* and this app
+       * reads both as pictures.
+       *
+       * They are on **Arrival** rather than on Heat, which is the Title that
+       * has carried a PGS track since #27, because Heat is 4K HEVC in
+       * Matroska and therefore always a transcode — and the fake has no
+       * transcoder, so no browser test can get it playing. A bitmap subtitle
+       * is only worth looking at over a moving picture.
+       *
+       * Their languages are deliberately ones nothing else here prefers, so
+       * adding them cannot change which track the Server picks by default for
+       * a User whose account asks for English or Spanish.
+       */
+      { Index: 6, Type: 'Subtitle', Codec: 'pgssub', Language: 'por', DisplayTitle: 'Portuguese (PGS)' },
+      { Index: 7, Type: 'Subtitle', Codec: 'dvdsub', Language: 'deu', DisplayTitle: 'German (VobSub)' },
     ],
     // The fonts that styled track names, muxed in beside the video. The second
     // one carries no `MimeType`, which is what a real Server often sends and
@@ -773,27 +804,19 @@ const SAMPLE_ITEMS: readonly FakeItem[] = [
     Overview: 'A detective and a thief recognise each other.',
     CommunityRating: 8.3,
     People: [{ Name: 'Al Pacino', Type: 'Actor', Role: 'Vincent Hanna' }],
-    // **Both graphical subtitle families**, which is what makes Heat the Title
-    // #30 is tested against — and a 4K Blu-ray rip is exactly where they come
-    // from. The two take opposite paths and the pair is the point:
+    // A **graphical** subtitle track: `pgssub` is a Blu-ray bitmap, and Heat
+    // is the right Title for one — a 4K Blu-ray rip is exactly where PGS comes
+    // from. #27 offered it and said it could not be drawn; #30 draws it.
     //
-    // - `pgssub` is drawn **here**, by libpgs, on a device that can, so the
-    //   track turns on and off without re-negotiating and the Subtitle Offset
-    //   still reaches it. On a device that cannot, it is burned in.
-    // - `dvdsub` is a VobSub bitmap and is burned in by the Server on **every**
-    //   device, which is #30's first finding: there is no maintained
-    //   client-side renderer that runs on this app's floor, and Jellyfin's
-    //   graphical passthrough never hands over the `.idx` a renderer would
-    //   need for the palette.
-    //
-    // `dvdsub` is also the codec spelling that catches the widening noted in
-    // `media-tracks.ts`: the Server's own predicate reads `dvd_subtitle` as
-    // text, and this app deliberately does not.
+    // The #30 fixtures themselves are on **Arrival** rather than here, and the
+    // reason is worth writing down: Heat is 4K HEVC in Matroska, so it is
+    // always a transcode, and the fake has no transcoder — a browser test can
+    // never get this Title playing. A bitmap subtitle is only interesting
+    // while a picture is running underneath it.
     MediaStreams: [
       { Index: 0, Type: 'Video', Codec: 'hevc', Language: 'und' },
       { Index: 1, Type: 'Audio', Codec: 'eac3', Language: 'eng', DisplayTitle: 'English', IsDefault: true },
       { Index: 2, Type: 'Subtitle', Codec: 'pgssub', Language: 'eng', DisplayTitle: 'English (PGS)' },
-      { Index: 3, Type: 'Subtitle', Codec: 'dvdsub', Language: 'spa', DisplayTitle: 'Spanish (VobSub)' },
     ],
     // 4K HEVC in Matroska with Dolby audio: the file nothing modest plays, so
     // the Server has to be asked to transcode it.

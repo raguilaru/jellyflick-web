@@ -181,6 +181,22 @@ export function ImageSubtitles({
       ref={canvas}
       aria-label={t('player.subtitlesLabel')}
       role="img"
+      /*
+       * **Whether the decoder is actually running**, which exists for the
+       * browser test and is worth the one attribute.
+       *
+       * Nothing else can see it. On a browser with `OffscreenCanvas` libpgs
+       * transfers this canvas to its worker, so from here its `width` and
+       * `height` stay at a browser's default 300×150 however much is drawn on
+       * it — the pixels and the size both live in the worker now. And the
+       * failure this guards against is **silent by construction**: #29's
+       * `workerUrl` trap ends with a worker that never replies, so `ready`
+       * never settles, no error is raised and nothing in the DOM differs from
+       * success. Three states that look identical from outside — never
+       * started, started and failed, started and drawing — become two
+       * attributes and a notice.
+       */
+      data-renderer={renderer.current === undefined ? 'loading' : 'live'}
     />
   );
 }
