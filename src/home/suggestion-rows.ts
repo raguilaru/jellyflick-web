@@ -2,6 +2,7 @@ import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models/base
 import { catalogueItemFrom, titleOf, type Title } from '../catalogue/catalogue';
 import type { JellyfinGateway, TitleKind } from '../jellyfin/gateway';
 import { cardForTitle, type RowCard } from './row';
+import { NO_SHARED_READS, type SharedReads } from './shared-reads';
 
 /**
  * The suggestion Rows (#15, stories 43 to 46): Watch Again, Because You
@@ -144,6 +145,29 @@ export function loadBecauseYouWatched(
    * second request issued after a spec had finished landed in the next one.
    */
   stillWanted: () => boolean = () => true,
+  /**
+   * The screen's shared reads (#41). The Because You Watched Billboard Source
+   * calls this very function, so with one of these in hand the Billboard and
+   * the Row make this Row's two-step question once between them.
+   *
+   * `stillWanted` is handed to `once` rather than used here, so the shared
+   * read goes on while **either** of them still wants it: a Row that has gone
+   * must not keep asking, and a Billboard that joined must not be cut off
+   * because the Row left.
+   */
+  reads: SharedReads = NO_SHARED_READS,
+): Promise<SuggestionRowResult> {
+  return reads.once<SuggestionRowResult>(
+    `because-you-watched|${String(limit)}`,
+    (wanted) => readBecauseYouWatched(gateway, limit, wanted),
+    stillWanted,
+  );
+}
+
+function readBecauseYouWatched(
+  gateway: JellyfinGateway,
+  limit: number,
+  stillWanted: () => boolean,
 ): Promise<SuggestionRowResult> {
   return gateway
     .getPlayedTitles({ limit: RECENTLY_WATCHED_READ })

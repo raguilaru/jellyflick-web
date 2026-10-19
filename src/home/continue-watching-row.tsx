@@ -14,6 +14,7 @@ import {
 } from './continue-watching';
 import { useOpenTitle } from './open-title';
 import { Row, type RowCard } from './row';
+import { useSharedReads } from './shared-reads';
 
 /**
  * The Continue Watching Row on Home (#12, stories 35 to 39).
@@ -42,6 +43,12 @@ export function ContinueWatchingRow({ gateway, readKey, kind }: ContinueWatching
   const t = useTranslate();
   const openTitle = useOpenTitle();
   const { settings, change, saveFailed } = useSettings();
+  /**
+   * The screen's shared reads (#41): the Resume Billboard Source above this
+   * Row calls the same loader, so whichever of the two asks first is the only
+   * one that reaches the Server.
+   */
+  const reads = useSharedReads();
   const [read, setRead] = useState<ContinueWatchingRead | undefined>(undefined);
   /**
    * What the User has taken out since the Server answered. The Server's copy of
@@ -81,7 +88,10 @@ export function ContinueWatchingRow({ gateway, readKey, kind }: ContinueWatching
     setRead(undefined);
     setRemoved([]);
     setResetFailed(false);
-    void loadContinueWatching(gateway, kind === undefined ? {} : { kind }).then((loaded) => {
+    void loadContinueWatching(gateway, {
+      ...(kind === undefined ? {} : { kind }),
+      reads,
+    }).then((loaded) => {
       if (abandoned) return;
       setRead(loaded);
     });

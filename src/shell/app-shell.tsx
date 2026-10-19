@@ -2,6 +2,7 @@ import { LocationProvider, Route, Router, useLocation } from 'preact-iso/router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { DeviceLayer } from '../device/types';
 import { HomeScreen } from '../home/home-screen';
+import { SharedReadsProvider, useSharedReadsFor } from '../home/shared-reads';
 import { BillboardProvider, useLoadedBillboard } from '../home/use-billboard';
 import { createMyList, type MyList } from '../my-list/my-list';
 import { MyListScreen } from '../my-list/my-list-screen';
@@ -121,7 +122,24 @@ function ShellFrame({ user, session, device, users }: AppShellProps) {
    * Home means asking where the User is — which only a component inside the
    * `LocationProvider` can do.
    */
-  const billboard = useLoadedBillboard(session.gateway(), user.userId, device);
+  /**
+   * One read of the Server for everything on the screen that wants it (#41).
+   *
+   * A Billboard Source asks its Row's own loader, which is what makes #22
+   * correct — and meant Home asked the Server the same questions twice when a
+   * Source and a Row shared them. The cache is made **here**, beside the
+   * Billboard, because the Billboard is the one reader that lives above the
+   * router; the Rows reach the same one through the provider below.
+   *
+   * A fresh one per address, Server and User, which is exactly as long as a
+   * screen's own reads last: Home unmounts on a navigation and reads itself
+   * again on the way back, so a cache that outlived that would hand a
+   * household what its Server said two screens ago.
+   */
+  const reads = useSharedReadsFor(
+    `${path}|${session.gateway().serverAddress}|${user.userId}`,
+  );
+  const billboard = useLoadedBillboard(session.gateway(), user.userId, device, reads);
   // The User's Accent Colour, painted on the root element so every rule that
   // reads `--accent` follows it (#11).
   useAccentColour();
@@ -164,6 +182,7 @@ function ShellFrame({ user, session, device, users }: AppShellProps) {
         />
       ) : null}
 
+      <SharedReadsProvider value={reads}>
       <BillboardProvider value={billboard}>
       <Router>
         <Route
@@ -213,6 +232,7 @@ function ShellFrame({ user, session, device, users }: AppShellProps) {
         <Route default component={UnknownSection} />
       </Router>
       </BillboardProvider>
+      </SharedReadsProvider>
 
       {wide ? null : (
         <BottomBar

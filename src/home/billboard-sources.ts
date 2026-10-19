@@ -7,6 +7,7 @@ import {
 } from './continue-watching';
 import { loadNewOnJellyflick } from './new-on-jellyflick';
 import { canBeABillboard, spotlightPick } from './spotlight';
+import type { SharedReads } from './shared-reads';
 import { loadBecauseYouWatched } from './suggestion-rows';
 
 /**
@@ -110,6 +111,17 @@ export type LoadBillboardOptions = {
    * Spotlight, which is already what it does for a Title with no backdrop.
    */
   kind?: TitleKind;
+  /**
+   * The screen's shared reads (#41).
+   *
+   * A Row-shaped Source calls its Row's **own loader**, which is what makes
+   * #22 correct and is the thing this must not undo. So the Source is handed
+   * the screen's cache and passes it straight through: the loader is still the
+   * one place the Row's rules live, and the Row drawn under the Billboard is
+   * handed the same answer instead of asking for it again. Absent — a Source
+   * loaded on its own in a test — every read is made for itself.
+   */
+  reads?: SharedReads;
 };
 
 /**
@@ -302,7 +314,10 @@ async function loadNewestAdditionBillboard(
   options: LoadBillboardOptions,
 ): Promise<BillboardResult> {
   return billboardFromRow(gateway, options, async (forGateway) => {
-    const row = await loadNewOnJellyflick(forGateway);
+    const row = await loadNewOnJellyflick(
+      forGateway,
+      options.reads === undefined ? {} : { reads: options.reads },
+    );
     return row.outcome === 'row' ? row.titles.map((card) => card.titleId) : [];
   });
 }
@@ -325,7 +340,10 @@ async function loadResumeBillboard(
   options: LoadBillboardOptions,
 ): Promise<BillboardResult> {
   return billboardFromRow(gateway, options, async (forGateway, forOptions) => {
-    const read = await loadContinueWatching(forGateway);
+    const read = await loadContinueWatching(
+      forGateway,
+      forOptions.reads === undefined ? {} : { reads: forOptions.reads },
+    );
     if (read.outcome !== 'read') return [];
     const row = continueWatchingRow({
       gateway: forGateway,
@@ -348,8 +366,13 @@ async function loadBecauseYouWatchedBillboard(
   gateway: JellyfinGateway,
   options: LoadBillboardOptions,
 ): Promise<BillboardResult> {
-  return billboardFromRow(gateway, options, async (forGateway) => {
-    const row = await loadBecauseYouWatched(forGateway);
+  return billboardFromRow(gateway, options, async (forGateway, forOptions) => {
+    const row = await loadBecauseYouWatched(
+      forGateway,
+      undefined,
+      undefined,
+      forOptions.reads,
+    );
     return row.outcome === 'row' ? row.titles.map((card) => card.titleId) : [];
   });
 }

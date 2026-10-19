@@ -2,6 +2,7 @@ import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models/base
 import { catalogueItemFrom, playbackStateOf, titleOf, type Title } from '../catalogue/catalogue';
 import type { JellyfinGateway, TitleKind } from '../jellyfin/gateway';
 import { cardForTitle, type RowCard } from './row';
+import { NO_SHARED_READS, type SharedReads } from './shared-reads';
 
 /**
  * Continue Watching: everything the User has started and not finished, together
@@ -116,6 +117,14 @@ export type ContinueWatchingLoadOptions = {
    * Row then draws is still the Series' own card.
    */
   kind?: TitleKind;
+  /**
+   * The screen's shared reads (#41). The Resume Billboard Source calls this
+   * very function, so with one of these in hand the Billboard and the Row ask
+   * the Server these three questions **once between them** instead of three
+   * times each. Absent, every caller reads for itself, which is what a loader
+   * called outside the shell does.
+   */
+  reads?: SharedReads;
 };
 
 /** The Row itself: the cards to draw, and the hidden records now spent. */
@@ -222,18 +231,34 @@ export async function loadContinueWatching(
    */
   const aboutSeries = options.kind !== 'Movie';
 
-  try {
-    const [resume, nextUp, playedEpisodes] = await Promise.all([
-      gateway.getResumeItems({ limit, ...(options.kind === undefined ? {} : { kind: options.kind }) }),
-      aboutSeries ? gateway.getNextUpItems({ limit }) : Promise.resolve([]),
-      aboutSeries
-        ? gateway.getPlayedEpisodes({ limit: PLAYED_EPISODES_LIMIT })
-        : Promise.resolve([]),
-    ]);
-    return { outcome: 'read', resume, nextUp, playedEpisodes };
-  } catch {
-    return { outcome: 'unavailable' };
-  }
+  /**
+   * The questions themselves, so that the Billboard asking for the same three
+   * is handed this answer rather than asking again (#41). The kind and the
+   * limit are in the key because they change what is asked: a section about
+   * Movies makes one read where Home makes three, and those are two different
+   * answers rather than one shared one.
+   */
+  const reads = options.reads ?? NO_SHARED_READS;
+  return reads.once<ContinueWatchingRead>(
+    `continue-watching|${options.kind ?? 'any-kind'}|${String(limit)}`,
+    async () => {
+    try {
+      const [resume, nextUp, playedEpisodes] = await Promise.all([
+        gateway.getResumeItems({
+          limit,
+          ...(options.kind === undefined ? {} : { kind: options.kind }),
+        }),
+        aboutSeries ? gateway.getNextUpItems({ limit }) : Promise.resolve([]),
+        aboutSeries
+          ? gateway.getPlayedEpisodes({ limit: PLAYED_EPISODES_LIMIT })
+          : Promise.resolve([]),
+      ]);
+      return { outcome: 'read', resume, nextUp, playedEpisodes };
+    } catch {
+      return { outcome: 'unavailable' };
+    }
+    },
+  );
 }
 
 /**

@@ -8,6 +8,7 @@ import { titleSectionAt } from '../movies-and-series/sections';
 import { HOME_PATH } from '../shell/sections';
 import { titlePathFor } from '../title/title-page';
 import { billboardSourceFor, loadBillboard, type BillboardResult } from './billboard-sources';
+import { NO_SHARED_READS, type SharedReads } from './shared-reads';
 
 /**
  * The Billboard's Title, held in the shell rather than on Home (#16, stories 30
@@ -69,6 +70,16 @@ export function useLoadedBillboard(
   gateway: JellyfinGateway,
   userId: string,
   device: DeviceLayer,
+  /**
+   * The screen's shared reads (#41), which the shell makes afresh for each
+   * visit and also hands to the Rows below the router. A Row-shaped Source
+   * reads its Row through this, so the Row drawn underneath is handed that
+   * same answer instead of asking the Server the same questions again.
+   *
+   * It is not a dependency of the effect below: a fresh cache arrives with a
+   * fresh address, which already is one.
+   */
+  reads: SharedReads = NO_SHARED_READS,
 ): BillboardState {
   const { path } = useLocation();
   const [result, setResult] = useState<BillboardResult | undefined>(undefined);
@@ -132,6 +143,7 @@ export function useLoadedBillboard(
             draw: device.random(),
             source: billboardSourceFor(chosen.current.billboardSource),
             hidden: chosen.current.hiddenSeries,
+            reads,
           }
         : {
             draw: device.random(),
@@ -142,6 +154,7 @@ export function useLoadedBillboard(
             // features is the rule that is about a library (#23).
             source: 'spotlight',
             kind: section.kind,
+            reads,
           },
     ).then((picked) => {
       if (abandoned) return;
