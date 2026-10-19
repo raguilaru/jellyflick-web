@@ -421,6 +421,38 @@ export type JellyfinGateway = {
    */
   attachmentUrl(options: AttachmentOptions): string;
   /**
+   * `GET /Items?ids={itemId}&fields=Trickplay` — the scrubbing thumbnails one
+   * media source has, or nothing (#32, story 90).
+   *
+   * **`fields=Trickplay` is the whole of why this is a method of its own.**
+   * The property is gated (`jellyfin-api.md` §4), and the player is handed an
+   * item id rather than an item: a Title opened from the Billboard or from a
+   * card never went through a title page, so there is nowhere else the
+   * manifest could already be. It is `/Items` with an `ids` rather than
+   * `/Items/{itemId}` for the same reason `getTitles` is — except that this
+   * one deliberately does **not** narrow to `Movie,Series`, because the thing
+   * being played is as often an Episode.
+   *
+   * Unlike `HasSegments` for the markers (#31), **there is no flag that says
+   * whether a Server has any**, so this costs one read per playback on every
+   * Server. Nothing on `PlaybackInfo` carries it and no cheaper question
+   * exists; the answer being empty is the common case and is not an error.
+   */
+  getTrickplay(itemId: string): Promise<TrickplayMap | undefined>;
+  /**
+   * `GET /Videos/{itemId}/Trickplay/{width}/{index}.jpg` — one **tile image**,
+   * which holds `TileWidth × TileHeight` thumbnails rather than one.
+   *
+   * `width` is the inner key of the `Trickplay` map, and `tileIndex` is the
+   * tile image's index and not the thumbnail's — the single easiest thing to
+   * get wrong here, so the parameter is named for it.
+   *
+   * A URL rather than the bytes, because an `<img>` fetches it: the token
+   * rides in the query as `ApiKey`, the same bargain `videoStreamUrl` makes
+   * and for the same reason — an element cannot send a header.
+   */
+  trickplayTileUrl(options: TrickplayTileOptions): string;
+  /**
    * `GET /MediaSegments/{itemId}?includeSegmentTypes={csv}` — the intro and
    * credits markers a player offers to skip (#31).
    *
@@ -647,6 +679,34 @@ export type MediaSegmentsQueryResult = {
   StartIndex?: number | null;
 };
 
+/**
+ * `TrickplayInfoDto`: one set of scrubbing thumbnails, for one media source at
+ * one width (#32, `jellyfin-playback.md` §13).
+ */
+export type TrickplayInfo = {
+  /** One thumbnail's width, and the number that goes in the tile image's path. */
+  readonly Width: number;
+  readonly Height: number;
+  /** Thumbnails per row in a tile image. */
+  readonly TileWidth: number;
+  /** Thumbnails per column in a tile image. */
+  readonly TileHeight: number;
+  /** How many thumbnails there are in all, across every tile image. */
+  readonly ThumbnailCount: number;
+  /** Milliseconds between one thumbnail and the next. */
+  readonly Interval: number;
+  readonly Bandwidth?: number;
+};
+
+/**
+ * `BaseItemDto.Trickplay`, which is a **map of maps**: the media source id on
+ * the outside and the thumbnail width, *as a string*, on the inside. A Server
+ * may have generated several widths for one source, and a Server with the
+ * feature switched off has none at all — which is what both the nullable
+ * inner map and the absent field mean.
+ */
+export type TrickplayMap = Record<string, Record<string, TrickplayInfo> | null | undefined>;
+
 /** `PlayMethod`: which branch of the negotiation was taken. */
 export type PlayMethod = 'DirectPlay' | 'DirectStream' | 'Transcode';
 
@@ -821,6 +881,15 @@ export type AttachmentOptions = {
   index: number;
   /** `MediaAttachment.DeliveryUrl`, preferred where the Server gave one. */
   deliveryUrl?: string;
+};
+
+export type TrickplayTileOptions = {
+  itemId: string;
+  mediaSourceId: string;
+  /** The thumbnail width: the inner key of the `Trickplay` map, in the path. */
+  width: number;
+  /** The **tile image's** index, not the thumbnail's. */
+  tileIndex: number;
 };
 
 export type SubtitleStreamOptions = {
@@ -1468,6 +1537,38 @@ export function createJellyfinGateway(options: JellyfinGatewayOptions): Jellyfin
     subtitleStreamUrl: (options) => subtitleUrlFor(options),
     getSubtitleText: (options) => requestText(subtitleUrlFor(options)),
     attachmentUrl: (options) => attachmentUrlFor(options),
+
+    getTrickplay: (itemId) =>
+      request<BaseItemDtoQueryResult>(
+        'GET',
+        `/Items${query({
+          ids: itemId,
+          // Without this the Server answers with the library folders.
+          recursive: true,
+          // The one field this read exists for. The Server sends it only when
+          // it is named (`jellyfin-api.md` §4).
+          fields: 'Trickplay',
+          // Nothing here draws artwork or reads a watched state.
+          enableImages: false,
+          enableUserData: false,
+          enableTotalRecordCount: false,
+        })}`,
+      ).then((result) => {
+        const item = (result.Items ?? [])[0] as { Trickplay?: TrickplayMap | null } | undefined;
+        const trickplay = item?.Trickplay;
+        return trickplay === null || trickplay === undefined ? undefined : trickplay;
+      }),
+
+    trickplayTileUrl: (options) =>
+      `${serverAddress}/Videos/${encodeURIComponent(options.itemId)}/Trickplay/${String(
+        options.width,
+      )}/${String(options.tileIndex)}.jpg${query({
+        mediaSourceId: options.mediaSourceId,
+        // An <img src> cannot send an Authorization header, as a <video src>
+        // cannot — so the token goes in the query, as the Server's own
+        // generated URLs do.
+        ...(accessToken === undefined || accessToken === '' ? {} : { ApiKey: accessToken }),
+      })}`,
 
     getMediaSegments: (itemId, types) =>
       request<MediaSegmentsQueryResult>(

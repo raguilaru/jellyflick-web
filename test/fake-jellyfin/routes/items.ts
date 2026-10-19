@@ -362,6 +362,10 @@ const GATED_BY_FIELDS: Readonly<Record<string, keyof FakeItem>> = {
   // until #23: a query that forgot to ask saw genres from this fake and none
   // at all from a Server.
   Genres: 'Genres',
+  // The scrubbing thumbnails (#32). Gated on the real Server
+  // (`jellyfin-api.md` §4, `dto.cs:1449`), so a player that forgot to ask
+  // would show previews against this fake and none against a Jellyfin.
+  Trickplay: 'Trickplay',
 };
 
 /**

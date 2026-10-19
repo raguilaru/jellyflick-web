@@ -11,33 +11,13 @@
  *
  * The shapes are Jellyfin's, written out rather than imported from
  * `@jellyfin/sdk` (ADR 0001 and `decisions.md` §4), and the formula is
- * `jellyfin-playback.md` §13's.
+ * `jellyfin-playback.md` §13's; the wire shapes themselves are
+ * `src/jellyfin/gateway.ts`'s, where every other one of them lives.
  */
 
-/** `TrickplayInfoDto`: one manifest, for one media source at one width. */
-export type TrickplayInfo = {
-  /** One thumbnail's width, and the number in the tile image's URL path. */
-  readonly Width: number;
-  readonly Height: number;
-  /** Thumbnails per row in a tile image. */
-  readonly TileWidth: number;
-  /** Thumbnails per column in a tile image. */
-  readonly TileHeight: number;
-  /** How many thumbnails there are in all, across every tile image. */
-  readonly ThumbnailCount: number;
-  /** Milliseconds between one thumbnail and the next. */
-  readonly Interval: number;
-  readonly Bandwidth?: number;
-};
+import type { TrickplayInfo, TrickplayMap } from '../jellyfin/gateway';
 
-/**
- * `BaseItemDto.Trickplay`, which is a map of maps: **media source id** on the
- * outside and the **thumbnail width, as a string**, on the inside. A Server
- * may have generated several widths for one source, and its `TrickplayOptions`
- * decides which; a Server with the feature switched off has none at all, which
- * is what the nullable inner map and the absent field both mean.
- */
-export type TrickplayMap = Record<string, Record<string, TrickplayInfo> | null | undefined>;
+export type { TrickplayInfo, TrickplayMap };
 
 /** One set of thumbnails: the width that goes in the URL, and its manifest. */
 export type TrickplayResolution = {
