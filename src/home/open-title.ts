@@ -14,7 +14,7 @@ import type { RowCard } from './row';
  * to import back from the file that imports *them*, and a cycle like that works
  * only until one of the two files grows something evaluated at import time.
  */
-export function useOpenTitle(): (card: RowCard) => void {
+export function useOpenTitle(): (card: Pick<RowCard, 'titleId'>) => void {
   const { route } = useLocation();
   return (card) => {
     route(titlePathFor(card.titleId));

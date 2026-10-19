@@ -6,6 +6,8 @@ import { BillboardProvider, useLoadedBillboard } from '../home/use-billboard';
 import { createMyList, type MyList } from '../my-list/my-list';
 import { MyListScreen } from '../my-list/my-list-screen';
 import { MyListProvider } from '../my-list/use-my-list';
+import { MoviesAndSeriesScreen } from '../movies-and-series/movies-and-series-screen';
+import { TITLE_SECTIONS } from '../movies-and-series/sections';
 import { SearchScreen } from '../search/search-screen';
 import type { Session, SignedInUser } from '../session/session';
 import { UserPicker, type UsersOnThisDevice } from '../session/user-picker';
@@ -47,9 +49,9 @@ export type AppShellProps = {
  * for exactly that reason. One navigation bar is in the document at a time: the
  * top bar on anything wider than a phone, the bottom bar on a phone.
  *
- * What each section *contains* belongs to its own ticket: Movies and Series are
- * #23, and each only has to point its route at its own folder. Home, My List
- * and Search are already their own screens.
+ * What each section *contains* belongs to its own ticket, and every section
+ * now has one: Movies and Series (#23) are one component over two addresses,
+ * because they differ only in which kind of Title they are about.
  *
  * My List is the one piece of state the shell holds rather than a screen: the
  * Row on Home, the My List page and every card's toggle have to agree about it
@@ -69,6 +71,7 @@ const PATHS_WITH_THEIR_OWN_SCREEN: readonly string[] = [
   HOME_PATH,
   MY_LIST_SECTION.path,
   SEARCH_SECTION.path,
+  ...TITLE_SECTIONS.map((section) => section.path),
 ];
 
 export function AppShell({ user, session, device, users }: AppShellProps) {
@@ -170,6 +173,19 @@ function ShellFrame({ user, session, device, users }: AppShellProps) {
           session={session}
           device={device}
         />
+        {/* Movies and Series: Home's composition narrowed to one kind of
+            Title, so one component answers both addresses (#23). */}
+        {TITLE_SECTIONS.map((section) => (
+          <Route
+            key={section.id}
+            path={section.path}
+            component={MoviesAndSeriesScreen}
+            section={section}
+            user={user}
+            session={session}
+            device={device}
+          />
+        ))}
         <Route path={MY_LIST_SECTION.path} component={MyListScreen} />
         <Route path={SEARCH_SECTION.path} component={SearchScreen} session={session} />
         {SECTIONS.filter(

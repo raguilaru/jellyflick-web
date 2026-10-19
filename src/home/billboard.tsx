@@ -55,9 +55,17 @@ export type BillboardProps = {
   userId: string;
   /** Where the trailer's capabilities and the player's keys come from. */
   device: DeviceLayer;
+  /**
+   * What level the featured Title's name is a heading at. Level 1 on Home,
+   * where the Billboard *is* what the screen is about; level 2 in the Movies
+   * and Series sections (#23), where the screen is about the section and the
+   * section's own name is its level 1. Two level-1 headings in one `<main>`
+   * would leave a screen reader with two answers to "what is this page".
+   */
+  headingLevel?: 1 | 2;
 };
 
-export function Billboard({ gateway, userId, device }: BillboardProps) {
+export function Billboard({ gateway, userId, device, headingLevel }: BillboardProps) {
   const t = useTranslate();
   const { result } = useBillboard();
 
@@ -83,6 +91,7 @@ export function Billboard({ gateway, userId, device }: BillboardProps) {
       gateway={gateway}
       userId={userId}
       device={device}
+      {...(headingLevel === undefined ? {} : { headingLevel })}
     />
   );
 }
@@ -92,6 +101,7 @@ function FeaturedTitle({
   gateway,
   userId,
   device,
+  headingLevel = 1,
 }: BillboardProps & { feature: TitleDetails }) {
   const t = useTranslate();
   const openTitle = useOpenTitle();
@@ -105,6 +115,9 @@ function FeaturedTitle({
   /** Said when a featured Series turns out to have no Episode to play. */
   const [nothingToPlay, setNothingToPlay] = useState(false);
   const { title, backdrop, logo, overview, ageRating } = feature;
+  // The tag, not a class: the level is what a screen reader reads, so it has
+  // to be the element itself rather than something that merely looks like it.
+  const Heading = headingLevel === 1 ? 'h1' : 'h2';
 
   return (
     <section class="billboard" aria-label={t('billboard.region')}>
@@ -132,7 +145,7 @@ function FeaturedTitle({
         {/* The Title's name, as artwork where the Server has a logo for it and
             in the logo font where it does not. One heading either way, so the
             Title is named once however it is drawn. */}
-        <h1 class="billboard__title">
+        <Heading class="billboard__title">
           {logo === undefined ? (
             <span class="billboard__name">{title.name}</span>
           ) : (
@@ -145,7 +158,7 @@ function FeaturedTitle({
               alt={title.name}
             />
           )}
-        </h1>
+        </Heading>
 
         {/* Left out rather than drawn empty when the Server did not say, the
             way the title page leaves out a label with nothing after it. */}
@@ -175,7 +188,7 @@ function FeaturedTitle({
           <button
             type="button"
             class="button button--quiet billboard__more-info"
-            onClick={() => openTitle({ titleId: title.itemId, name: title.name })}
+            onClick={() => openTitle({ titleId: title.itemId })}
           >
             {t('billboard.moreInfo')}
           </button>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { useTranslate } from '../i18n/index';
-import type { JellyfinGateway } from '../jellyfin/gateway';
+import type { JellyfinGateway, TitleKind } from '../jellyfin/gateway';
 import { HoverCard } from './hover-card-panel';
 import { useSettings } from '../settings/settings-provider';
 import {
@@ -34,9 +34,11 @@ export type ContinueWatchingRowProps = {
   gateway: JellyfinGateway;
   /** Changes when the User or the Server does, so the Row reads itself again. */
   readKey: string;
+  /** One kind of Title only, for the Movies and Series sections (#23). */
+  kind?: TitleKind;
 };
 
-export function ContinueWatchingRow({ gateway, readKey }: ContinueWatchingRowProps) {
+export function ContinueWatchingRow({ gateway, readKey, kind }: ContinueWatchingRowProps) {
   const t = useTranslate();
   const openTitle = useOpenTitle();
   const { settings, change, saveFailed } = useSettings();
@@ -79,7 +81,7 @@ export function ContinueWatchingRow({ gateway, readKey }: ContinueWatchingRowPro
     setRead(undefined);
     setRemoved([]);
     setResetFailed(false);
-    void loadContinueWatching(gateway).then((loaded) => {
+    void loadContinueWatching(gateway, kind === undefined ? {} : { kind }).then((loaded) => {
       if (abandoned) return;
       setRead(loaded);
     });

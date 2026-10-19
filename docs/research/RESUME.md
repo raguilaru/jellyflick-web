@@ -36,6 +36,15 @@ two agents' time proving the integrator's own commit innocent. Both were told as
 it was found. **When you add a runtime-skipped test, record the new count here in the same
 commit.**
 
+**#23 moved it again, 39 → 44, and these are the five.**
+`test/e2e/movies-and-series.spec.ts` adds six tests. Three of them walk into a section
+through the navigation, and a **phone's bottom bar carries no Movies or Series link** —
+four items is what story 61 asks for, so at that width a section is reached by its
+address — which is three skips in the `phone` project. The fourth measures the
+document's scroll width at 375px and is the `phone` project's own question, which is two
+skips, in `desktop` and `keyboard-only`. Nothing pre-existing moved, and the other two
+tests run in all three projects.
+
 ### #21 merged at `a4ee6c8`, closed
 
 Resumed from `13ef239` per the eighth session's instruction. The integrator's WIP snapshot

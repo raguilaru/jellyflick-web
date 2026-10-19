@@ -108,10 +108,20 @@ test.describe('the app at desktop size', () => {
     await settled(page);
     await shot('07-search', { full: true });
 
-    // 8. Movies, which is still the placeholder every unbuilt section shows.
-    await page.goto('/movies');
-    await settled(page);
-    await shot('08-movies', { full: true });
+    // 8. Movies and Series: Home's composition narrowed to one kind (#23).
+    for (const section of ['Movies', 'Series'] as const) {
+      await page.goto(`/${section.toLowerCase()}`);
+      await expect(page.getByRole('heading', { name: section, level: 1 })).toBeVisible();
+      // The genre Rows arrive after the fixed ones, so the picture waits for
+      // the whole section rather than for the first Row drawn. How many Rows
+      // that is depends on what the tour has put in My List by now, so this
+      // waits for the three genres rather than for an exact count.
+      await expect
+        .poll(() => page.locator('.row__heading').count())
+        .toBeGreaterThanOrEqual(4);
+      await settled(page);
+      await shot(`08-${section.toLowerCase()}`, { full: true });
+    }
 
     // 9. My List, holding what was added from the title page.
     await page.goto('/my-list');

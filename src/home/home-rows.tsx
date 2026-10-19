@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { useTranslate, type MessageKey } from '../i18n/index';
-import type { JellyfinGateway } from '../jellyfin/gateway';
+import type { JellyfinGateway, TitleKind } from '../jellyfin/gateway';
 import { useMyList } from '../my-list/use-my-list';
 import { HoverCard } from './hover-card-panel';
 import { ContinueWatchingRow } from './continue-watching-row';
@@ -99,20 +99,31 @@ export type HomeRowProps = {
   gateway: JellyfinGateway;
   /** Changes when the User or the Server does, so a Row reads itself again. */
   readKey: string;
+  /**
+   * One kind of Title only, for the Movies and Series sections (#23). Absent
+   * on Home, which is about both.
+   *
+   * The four kinds a section's fixed layout names honour it — Continue
+   * Watching, New on Jellyflick, My List and a genre Row. The rest cannot
+   * reach a section at all, because `sectionLayoutFor` is what names its Rows
+   * and names none of them.
+   */
+  titleKind?: TitleKind;
 };
 
 /** One Row of Home, whichever kind it is. */
-export function HomeRowFor({ row, gateway, readKey }: HomeRowProps) {
+export function HomeRowFor({ row, gateway, readKey, titleKind }: HomeRowProps) {
   const t = useTranslate();
   const choice = row.parameter;
+  const ofKind = titleKind === undefined ? {} : { kind: titleKind };
 
   switch (row.kind) {
     case 'continue-watching':
-      return <ContinueWatchingRow gateway={gateway} readKey={readKey} />;
+      return <ContinueWatchingRow gateway={gateway} readKey={readKey} {...ofKind} />;
     case 'my-list':
-      return <MyListRow />;
+      return <MyListRow {...ofKind} />;
     case 'new-on-jellyflick':
-      return <NewOnJellyflickRow gateway={gateway} readKey={readKey} />;
+      return <NewOnJellyflickRow gateway={gateway} readKey={readKey} {...ofKind} />;
     case 'watch-again':
       return (
         <SuggestionRow
@@ -143,7 +154,7 @@ export function HomeRowFor({ row, gateway, readKey }: HomeRowProps) {
         <SuggestionRow
           name="home.row.genre"
           readKey={`${readKey}|${choice}`}
-          load={() => loadGenreRow(gateway, choice)}
+          load={() => loadGenreRow(gateway, choice, ofKind)}
         />
       );
     case 'collection':
@@ -253,7 +264,15 @@ function SuggestionRow({
  * "The Server would not say" and "there is nothing yet" are different answers
  * and are told apart, because one is a problem and the other is not.
  */
-function NewOnJellyflickRow({ gateway, readKey }: { gateway: JellyfinGateway; readKey: string }) {
+function NewOnJellyflickRow({
+  gateway,
+  readKey,
+  kind,
+}: {
+  gateway: JellyfinGateway;
+  readKey: string;
+  kind?: TitleKind;
+}) {
   const t = useTranslate();
   const openTitle = useOpenTitle();
   const [result, setResult] = useState<NewOnJellyflickResult | undefined>(undefined);
@@ -261,7 +280,7 @@ function NewOnJellyflickRow({ gateway, readKey }: { gateway: JellyfinGateway; re
   useEffect(() => {
     let abandoned = false;
     setResult(undefined);
-    void loadNewOnJellyflick(gateway).then((loaded) => {
+    void loadNewOnJellyflick(gateway, kind === undefined ? {} : { kind }).then((loaded) => {
       if (abandoned) return;
       setResult(loaded);
     });
@@ -307,17 +326,23 @@ function NewOnJellyflickRow({ gateway, readKey }: { gateway: JellyfinGateway; re
  * say what is in the list is the same: Home shows the rest of itself and the
  * page carries the problem.
  */
-function MyListRow() {
+function MyListRow({ kind }: { kind?: TitleKind }) {
   const t = useTranslate();
   const openTitle = useOpenTitle();
   const myList = useMyList();
   const state = myList.state();
 
-  if (state.outcome !== 'list' || state.titles.length === 0) return null;
+  if (state.outcome !== 'list') return null;
+  // A section's My List is the same list, narrowed here rather than read
+  // again: the store the shell holds is the one every screen agrees about,
+  // and a Title's kind is on the card already (#23).
+  const titles =
+    kind === undefined ? state.titles : state.titles.filter((card) => card.kind === kind);
+  if (titles.length === 0) return null;
   return (
     <Row
       heading={t('home.row.myList')}
-      cards={state.titles}
+      cards={titles}
       onCardPress={openTitle}
       cardControl={cardControl}
     />

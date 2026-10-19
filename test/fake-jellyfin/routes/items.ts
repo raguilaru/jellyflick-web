@@ -356,13 +356,18 @@ const GATED_BY_FIELDS: Readonly<Record<string, keyof FakeItem>> = {
   // needs (#4). A query that forgot to ask for it would otherwise see dates
   // here and none at all from a real Server.
   DateCreated: 'DateCreated',
+  // What an enlarged hover card says about a Title (#21), what a title page
+  // lists, and what the Movies and Series sections rank their genre Rows by
+  // (#23). The real Server gates it (`dto.cs:1151`), and it was ungated here
+  // until #23: a query that forgot to ask saw genres from this fake and none
+  // at all from a Server.
+  Genres: 'Genres',
 };
 
 /**
  * One item as the query asked for it: the `fields` properties it named, the
  * image types it enabled, and this User's own `UserData` unless it turned that
- * off. `Genres` is deliberately not gated — the Server does gate it, and every
- * query this app makes asks for it, so gating it here would only add noise.
+ * off.
  */
 export function asAskedFor(
   item: FakeItem,
