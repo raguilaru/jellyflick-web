@@ -14,9 +14,9 @@ import { Row, type RowCard } from '../../src/home/row';
  */
 
 const CARDS: readonly RowCard[] = [
-  { titleId: 'bluey', name: 'Bluey' },
-  { titleId: 'severance', name: 'Severance' },
-  { titleId: 'arrival', name: 'Arrival' },
+  { titleId: 'bluey', kind: 'Movie' as const, name: 'Bluey' },
+  { titleId: 'severance', kind: 'Movie' as const, name: 'Severance' },
+  { titleId: 'arrival', kind: 'Movie' as const, name: 'Arrival' },
 ];
 
 function card(name: string): HTMLElement {

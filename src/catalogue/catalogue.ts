@@ -283,6 +283,20 @@ function dateOf(value: unknown): number | undefined {
 }
 
 /**
+ * The genres the Server put an item in, and nothing when it named none.
+ *
+ * Exported because a genre is a fact about an item that is worth reading
+ * without reading the whole of a title page: the Movies and Series sections
+ * rank their genre Rows by counting them (#23), and that query asks for the
+ * genres alone. The Server only sends them for a query that asked by name
+ * (`jellyfin-api.md` §4), so an empty answer is as often an unasked question
+ * as a Title in no genre.
+ */
+export function genresOf(dto: BaseItemDto): readonly string[] {
+  return dto.Genres?.filter((genre): genre is string => typeof genre === 'string') ?? [];
+}
+
+/**
  * One item as everything the title page shows, or `undefined` when it is not a
  * Title at all — which is also what a hand-typed address for an Episode or an
  * album comes to.
@@ -297,7 +311,7 @@ export function titleDetailsFrom(dto: BaseItemDto): TitleDetails | undefined {
     ...numberOf('year', dto.ProductionYear),
     ...textOf('ageRating', dto.OfficialRating),
     ...numberOf('runtimeMinutes', minutesOfTicks(dto.RunTimeTicks)),
-    genres: dto.Genres?.filter((genre): genre is string => typeof genre === 'string') ?? [],
+    genres: genresOf(dto),
     ...textOf('overview', dto.Overview),
     ...numberOf('criticRating', dto.CriticRating),
     ...numberOf('communityRating', dto.CommunityRating),

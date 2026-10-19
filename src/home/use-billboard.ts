@@ -4,6 +4,7 @@ import { useLocation } from 'preact-iso/router';
 import type { DeviceLayer } from '../device/types';
 import type { JellyfinGateway } from '../jellyfin/gateway';
 import { useSettings } from '../settings/settings-provider';
+import { titleSectionAt } from '../movies-and-series/sections';
 import { HOME_PATH } from '../shell/sections';
 import { titlePathFor } from '../title/title-page';
 import { billboardSourceFor, loadBillboard, type BillboardResult } from './billboard-sources';
@@ -91,13 +92,24 @@ export function useLoadedBillboard(
   const chosen = useRef(settings);
   chosen.current = settings;
 
+  /**
+   * The Movies or Series section, when that is where the User is (#23).
+   *
+   * Those two screens are Home narrowed to one kind of Title, Billboard
+   * included, and their pick is held **here** for the reason Home's is: a
+   * title page unmounts the screen, and the featured Title must not have
+   * changed on the way back. One pick is live at a time, so a section costs
+   * the shell no second read.
+   */
+  const section = titleSectionAt(path);
+
   useEffect(() => {
     const previous = cameFrom.current;
     cameFrom.current = path;
 
     // Somewhere else in the app: the pick is kept as it is, because the User
     // will want it unchanged when they come back.
-    if (path !== HOME_PATH) return undefined;
+    if (path !== HOME_PATH && section === undefined) return undefined;
     // Back from the Title that was featured, or from playing it (story 31).
     if (previous !== undefined && isATitlePage(previous)) return undefined;
     /**
@@ -113,11 +125,25 @@ export function useLoadedBillboard(
 
     let abandoned = false;
     setResult(undefined);
-    void loadBillboard(gateway, {
-      draw: device.random(),
-      source: billboardSourceFor(chosen.current.billboardSource),
-      hidden: chosen.current.hiddenSeries,
-    }).then((picked) => {
+    void loadBillboard(
+      gateway,
+      section === undefined
+        ? {
+            draw: device.random(),
+            source: billboardSourceFor(chosen.current.billboardSource),
+            hidden: chosen.current.hiddenSeries,
+          }
+        : {
+            draw: device.random(),
+            // **Spotlight of that kind**, and deliberately not the User's own
+            // Billboard Source: the Source is a choice about *Home*, and the
+            // Rows under it here are not the Rows their choice was made
+            // against. A section is a view of one kind of library, so what it
+            // features is the rule that is about a library (#23).
+            source: 'spotlight',
+            kind: section.kind,
+          },
+    ).then((picked) => {
       if (abandoned) return;
       setResult(picked);
     });
@@ -127,7 +153,8 @@ export function useLoadedBillboard(
     // The gateway is rebuilt on every render, so who it belongs to is the
     // dependency rather than the object itself — as My List and Home do. The
     // address is here because arriving at Home is what asks again, and
-    // `loaded` because the first pick waits for the settings above.
+    // `loaded` because the first pick waits for the settings above. The
+    // section follows from the address and so is not one of its own.
   }, [path, serverAddress, userId, device, loaded]);
 
   return { result };

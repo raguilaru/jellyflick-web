@@ -1,5 +1,5 @@
 import { titleDetailsFrom, type TitleDetails } from '../catalogue/catalogue';
-import type { JellyfinGateway } from '../jellyfin/gateway';
+import type { JellyfinGateway, TitleKind } from '../jellyfin/gateway';
 import {
   continueWatchingRow,
   loadContinueWatching,
@@ -102,6 +102,14 @@ export type LoadBillboardOptions = {
    * place their choice was ignored.
    */
   hidden?: readonly HiddenSeries[];
+  /**
+   * One kind of Title only, for the Billboard over the Movies or Series
+   * section (#23). It narrows the pool every Source draws from, so a Source
+   * does not have to know about it: a Row-shaped Source whose Row offered a
+   * Title of the other kind simply finds nothing drawable and falls back to
+   * Spotlight, which is already what it does for a Title with no backdrop.
+   */
+  kind?: TitleKind;
 };
 
 /**
@@ -183,7 +191,7 @@ async function loadSpotlightBillboard(
   gateway: JellyfinGateway,
   options: LoadBillboardOptions,
 ): Promise<BillboardResult> {
-  const candidates = await billboardCandidates(gateway);
+  const candidates = await billboardCandidates(gateway, options.kind);
   if (candidates === undefined) return { outcome: 'unavailable' };
   return spotlightOf(candidates, options.draw);
 }
@@ -200,10 +208,11 @@ async function loadSpotlightBillboard(
  */
 async function billboardCandidates(
   gateway: JellyfinGateway,
+  kind?: TitleKind,
 ): Promise<readonly TitleDetails[] | undefined> {
   let items;
   try {
-    items = await gateway.getBillboardCandidates();
+    items = await gateway.getBillboardCandidates(kind === undefined ? {} : { kind });
   } catch {
     return undefined;
   }
@@ -263,7 +272,7 @@ async function billboardFromRow(
   options: LoadBillboardOptions,
   selection: RowSelection,
 ): Promise<BillboardResult> {
-  const candidates = await billboardCandidates(gateway);
+  const candidates = await billboardCandidates(gateway, options.kind);
   if (candidates === undefined) return { outcome: 'unavailable' };
 
   const selected = await selection(gateway, options);

@@ -1,6 +1,6 @@
 import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models/base-item-dto';
 import { catalogueItemFrom, titleOf, type Title } from '../catalogue/catalogue';
-import type { JellyfinGateway } from '../jellyfin/gateway';
+import type { JellyfinGateway, TitleKind } from '../jellyfin/gateway';
 import { cardForTitle, type RowCard } from './row';
 
 /**
@@ -23,6 +23,26 @@ export const NEW_ON_JELLYFLICK_LIMIT = 20;
  */
 const LIBRARIES_WITH_TITLES = ['movies', 'tvshows'];
 
+export type NewOnJellyflickOptions = {
+  limit?: number;
+  /**
+   * One kind only, for the Movies or Series section. It narrows what the
+   * **merge** came to, and deliberately neither the Server's
+   * `includeItemTypes` nor which libraries are asked.
+   *
+   * Not `includeItemTypes`, because `/Items/Latest` answers with what was
+   * *added*, which for a Series is an Episode: asking the Server for Series
+   * would answer nothing at all. Which Title an addition stands for is the
+   * merge's own rule, so the kind is read off that Title.
+   *
+   * Not the libraries either, however tempting the saved round trip is: a
+   * library's `CollectionType` says what it is *for*, not what it holds. The
+   * sample Server's own Kids library is typed `movies` and holds Bluey, and a
+   * Series section that trusted the type would have left it out.
+   */
+  kind?: TitleKind;
+};
+
 /**
  * What the Row came to. "The Server would not answer" is an outcome rather than
  * a failure, because Home shows the rest of itself either way; an empty Row is
@@ -42,8 +62,9 @@ export type NewOnJellyflickResult =
  */
 export async function loadNewOnJellyflick(
   gateway: JellyfinGateway,
-  limit: number = NEW_ON_JELLYFLICK_LIMIT,
+  options: NewOnJellyflickOptions = {},
 ): Promise<NewOnJellyflickResult> {
+  const limit = options.limit ?? NEW_ON_JELLYFLICK_LIMIT;
   let libraries;
   try {
     libraries = await gateway.getUserViews();
@@ -61,9 +82,12 @@ export async function loadNewOnJellyflick(
     asked.map((parentId) => gateway.getLatestItems({ parentId, limit }).catch(() => [])),
   );
 
+  const merged = mergeNewOnJellyflick(latest, limit).filter(
+    (title) => options.kind === undefined || title.kind === options.kind,
+  );
   return {
     outcome: 'row',
-    titles: mergeNewOnJellyflick(latest, limit).map((title) => cardForTitle(gateway, title)),
+    titles: merged.map((title) => cardForTitle(gateway, title)),
   };
 }
 
