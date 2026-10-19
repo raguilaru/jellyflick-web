@@ -4,95 +4,85 @@ State of the `/implement-spec` run on the integration branch `feat/jellyflick-v1
 (draft PR #38). Update this whenever a wave lands, so a fresh session can pick the work
 up without re-deriving anything.
 
-## TENTH SESSION STARTS HERE — what to do first, in order
+## TENTH SESSION STARTS HERE — two tickets left, then the end of the run
 
 **Read this section, then "NINTH SESSION" below it for what the current code assumes, then
 the seventh session's section, which is still the standing guidance on traps, costs and
 process and has never been superseded.**
 
-Integration tip **`d13b4e3`** plus this commit, pushed and verified with `git ls-remote`.
-Draft PR #38 open, still draft. CI green.
+Integration tip **`b7fa388`** plus this commit, pushed and verified with `git ls-remote`.
+Draft PR #38 open, still draft. **Nothing is in flight: no agent, no worktree of this
+run's, no dev server, fake Jellyfin or browser process** — checked with `pgrep`, not
+assumed.
 
 ### The state in one paragraph
 
-**Every ticket in the spec's task graph is merged except #32, #33 and #34, and all three
-are the player.** #32 is in flight and nearly done. #33 and #34 are untouched and must run
-**one at a time**, because `src/playback/` does not take two implementers. Six process
-findings were filed during the run and five are closed; what is left open is mostly
-**yours, not an agent's** — see the agenda at the bottom.
+**The spec's task graph is down to #33 Cast and #34 Play On.** Both are `src/playback/`,
+so they run **one at a time** — `src/playback/` has never taken two implementers. Nine
+tickets merged in the ninth session alone. After those two come the three end-of-run jobs,
+and then a short agenda that is **yours rather than an agent's** and is what actually
+stands between this branch and a release.
 
-### 1. Check #32 before anything else
+### Do these, in this order
 
-**Branch `ticket/32-trickplay-speed-pip-quality`, worktree `ticket-32-trickplay`, ports
-8401/8402.** A session limit stopped its first implementer after four authored commits —
-all pushed, no WIP snapshot, nothing to reset past — and a second was launched to finish
-it. **Its state when this session ended is unknown**, so:
+1. **#33 Cast.** `decisions.md` §8 says it must read `user.Configuration.CastReceiverId`
+   **at runtime**, and #35 already made the fake serve it.
+2. **#34 Play On.** Not Cast — the glossary is explicit that Play On is telling another
+   running Jellyfin app on the same Server to play something, and Cast is Chromecast or
+   AirPlay.
+3. **The player's three loose ends, with whichever of those two is in flight or just
+   after**: **#50** ("Sync to this line" looks pressable when it is not — the
+   `aria-disabled` dim rule is scoped to tracks #30 removed), **#53** (`TrackPicker` loses
+   focus to the document when Done closes it — the *same* defect #32 just fixed in the
+   options menu, so the fix is written already) and **#52** if anything of it survives
+   (#32 folded it into one shared guard across seven journeys; it should be closeable).
+4. **`code-review` over the whole branch.** The first run found four real bugs, and #40
+   showed the navigator is the thinnest-covered part of the codebase.
+5. **The git history rewrite** in `decisions.md` §10, with no implementer in flight. The
+   host must then ask GitHub Support to purge the stale objects.
+6. **Mark PR #38 ready.**
 
-1. `git ls-remote origin refs/heads/ticket/32-trickplay-speed-pip-quality` — **does the
-   ref exist, and does it match the worktree's HEAD?** Do not read a count of unpushed
-   commits first: against a missing ref the range is empty and prints `0`, which looks
-   exactly like a clean branch. That nearly cost two tickets on the ninth session.
-2. If it has uncommitted work, snapshot it as a WIP commit whose message says the
-   boundary is the integrator's, and push before anything else.
-3. All four features were built by the first implementer — trickplay thumbnails, speed,
-   picture-in-picture, maximum quality — with a 412-line unit journey, a fake trickplay
-   endpoint and gateway tests. **What was missing is an e2e spec and any gate at all.**
-   That is what the second implementer was briefed to add.
+### The one thing to carry into every player brief
 
-**Why the e2e spec is not optional here**, and this is the single most valuable thing the
-ninth session learned: **#29 shipped a styled-subtitle renderer that never started in a
-browser, with every unit test green**, because the unit journey fakes the device layer and
-nothing runs a WASM binary in happy-dom. #30 then hit the same trap in a second library.
-Picture-in-picture and a thumbnail strip are browser behaviour. A unit test cannot see
-them.
+**Three tickets in a row shipped something an entirely green unit suite could not see.**
+#29's styled-subtitle renderer never started in a browser. #30 drew nothing, pushed the
+controls out of the window, and left a disabled control looking pressable. #32 let a
+remote walk out of the player and into the page behind it — on `phone` only, green on the
+other two projects.
 
-### 2. Then #33 Cast, then #34 Play On — one at a time
-
-Both `src/playback/`. **#33 must read `user.Configuration.CastReceiverId` at runtime** —
-`decisions.md` §8 — and #35 already made the fake serve it.
-
-### 3. Then the three things owed at the end of the run
-
-- **`code-review` over the whole branch.** The first run found four real bugs, and #40
-  showed the navigator is the thinnest-covered part of the codebase.
-- **The git history rewrite** in `decisions.md` §10, with no implementer in flight. The
-  host must then ask GitHub Support to purge the stale objects.
-- **Mark PR #38 ready.**
-
-### What a fresh session should know before briefing anyone
-
-Six implementers were stopped by a session limit across the ninth session. **The cost was
-near zero every time, and the reason is one sentence: commit at each green step and push
-as you go.** A commit survives the agent; only a push survives the worktree. Put both in
-every brief. Two agents had committed but never pushed, and their whole tickets sat one
-`git worktree remove` from gone.
-
-**Create the implementer's worktree yourself and run `npm ci` in it before briefing.**
-This remains the most expensive thing that ever went wrong on this run.
-
-**Gate every merge yourself rather than trusting the report.** Across every wave of this
-run, **every implementer's numbers have matched the integrator's exactly** — which is the
-argument for continuing, not for stopping: it is how you know the reports are worth
-reading.
-
-**Never run two Playwright suites at once.** The ninth session got **321 failures on a
-tree that was clean minutes later**, because a gate and an implementer's suite were
-sharing the machine and the gate's preview server never came up. Check `pgrep -f
-playwright` first. And capture the whole log to a file — `| tail -12` writes twelve lines
-whose counts reconcile with nothing.
+The cause is the same each time and it is structural, not carelessness: **the unit journey
+fakes the device layer, happy-dom gives every box a zero size, and nothing runs a WASM
+binary or honours a picture-in-picture request there.** So for anything in the player:
+write the e2e, and **check it against the failure it exists for** — break the thing
+deliberately, watch the test go red, put it back. #32's report is the model for how to
+write that down.
 
 ### Current gate numbers, measured on the tip rather than reported
 
-`lint` 0, `typecheck` 0, `build` 0, **1011 unit tests in 75 files**, **475 Playwright
-passed / 44 skipped / 0 failed** under `E2E_CPU_THROTTLE=4`, main JS **177.55 kB /
-53.46 kB gz**, CSS 21.33 kB, and hls.js, libass and libpgs each in their own lazy chunk
-that only a User who needs it ever fetches.
+`lint` 0, `typecheck` 0, `build` 0, **1042 unit tests in 77 files**, **492 Playwright
+passed / 45 skipped / 0 failed** under `E2E_CPU_THROTTLE=4`, main JS **185.00 kB /
+55.48 kB gz**, CSS 21.56 kB. hls.js, libass and libpgs each sit in their own lazy chunk
+that only a User who needs it ever fetches; **nothing else has been split, and nothing
+else has needed to be.**
 
-**The 44 skips are all accounted for** and were read by name: 26 original, 3 the screenshot
-tour (one test in three projects, runtime-skipped unless `SCREENSHOTS` is set), 10
-`desktop-hover-cards.spec.ts` in `keyboard-only` because that project disables pointer
-events, and 5 in `movies-and-series.spec.ts` — three of which exist **because of #51**, a
-phone cannot reach those sections at all.
+**The 45 skips are all accounted for**, read by name rather than counted: 26 original, 3
+the screenshot tour (one test in three projects, runtime-skipped unless `SCREENSHOTS` is
+set), 10 `desktop-hover-cards.spec.ts` in `keyboard-only` because that project disables
+pointer events, 5 in `movies-and-series.spec.ts` — **three of those exist because of
+#51** — and 1 in `trickplay-speed-and-quality.spec.ts`, which hovers along the seek bar.
+
+### Process, in four lines, because six implementers were stopped by a session limit
+
+- **Commit at each green step and push as you go.** A commit survives the agent; only a
+  push survives the worktree. Once that was in every brief, an interruption cost nothing.
+- **Create the worktree and run `npm ci` in it yourself.** Still the most expensive thing
+  that ever went wrong on this run.
+- **Gate every merge yourself.** Every implementer's numbers have matched the
+  integrator's exactly, every time — which is the reason to keep checking, not to stop.
+- **Never run two Playwright suites at once** (`pgrep -f playwright` first), and capture
+  the whole log to a file. A gate once reported **321 failures on a tree that was clean
+  minutes later**, many in under 100 ms. A wall of instant failures is an environment
+  report, not a test report.
 
 ### The agenda that is yours rather than an agent's
 
@@ -104,16 +94,16 @@ this branch and a release.
 | **#45** | An MDBList key, to make **one** real call. The ratings code is written against an OpenAPI schema that types the elements as a bare object with no example. A wrong guess omits a rating rather than drawing one wrong — quiet by design, and therefore quiet about being wrong. |
 | **#47** | A real Jellyfin, to check `MediaStream.Path` for external subtitles. If a real Server withholds it, the fallback key still works and **story 102's cross-Episode half is lost silently**. |
 | **#48** | A decision on where licence texts go. The build ships **4.3 MB of libass's LGPL-2.1 WebAssembly** and libpgs under MIT. There is no licences screen, and this is tangled with the spec's own "choosing a licence" item. |
-| **#51** | A navigation design call. **A phone cannot reach the Movies or Series sections.** The bottom bar carries four items by story 61 and nothing on Home links to either. Harmless while both were placeholders; they are now two real screens reachable only by typing an address. |
-| **#12's saves** | #46 made the test suite honest about a fire-and-forget Client Settings write; **the app still does not wait for one.** Whether it should is a design change, not a test fix. |
+| **#51** | A navigation design call. **A phone cannot reach the Movies or Series sections.** The bottom bar carries four items by story 61 and nothing on Home links to either. Harmless while both were placeholders; they are now two real screens reachable only by typing an address, and three of the suite's skips exist because of it. |
+| **#54** | One word's reading. A playback speed survives a re-negotiation but resets when the player is closed. The ticket's own wording put the quality ceiling in "device storage" and speed only "for the session", so speed was clearly not meant to persist to the device — but whether "session" means the playback or the app session is yours. Small either way. |
+| **#12's saves** | #46 made the suite honest about a fire-and-forget Client Settings write; **the app still does not wait for one.** Whether it should is a design change, not a test fix. |
 
-Still open and genuinely an agent's: **#42** (a `[desktop]` arrow-key Row-scroll assertion;
-it has now recurred twice, once on a line that is **already** an `expect.poll`, so the
-originally suggested fix is probably wrong), **#50** ("Sync to this line" looks pressable
-when it is not) and **#52** (a playback stop report outlives its test). #50 and #52 are
-both in the player, so they belong with #33 or #34 rather than beside them.
+Also open and genuinely an agent's: **#42**, a `[desktop]` arrow-key Row-scroll assertion
+that has now recurred twice — once on a line that is **already** an `expect.poll`, so the
+fix originally suggested on the issue is probably wrong, and both assertions really want
+to know whether `reveal.ts` is meant to land exactly on 0.
 
-## NINTH SESSION — eight merged, and what the current code assumes
+## NINTH SESSION — nine merged, and what the current code assumes
 
 **Read this, then the eighth session's section below for the two paused branches, then the
 seventh's, which is still the standing guidance and has not been superseded.**
@@ -575,8 +565,13 @@ why it is not simply `afterEach`. **It makes the suite honest, not the app corre
 fire-and-forget Client Settings save is still there, and whether it should be awaited is a
 change to #12's design and the host's call.
 
-The session ended with **#32 in flight** and the three end-of-run jobs untouched. See the
-tenth session's section at the top of this file for what to do first.
+**#32 was the ninth and last**, finished across two sessions: a limit stopped its first
+implementer with all four features built and pushed, and a second added the e2e spec and
+the gate. That spec found a focus escape on `phone` within its first run — see the tenth
+session's section above for why that keeps happening in the player and what to do about
+it.
+
+The session ended with **nothing in flight** and two spec tickets left.
 
 ### Bundle trend
 
