@@ -182,3 +182,153 @@ describe('Home with Resume as the Billboard Source and Continue Watching as a Ro
     expect(reads.length).toBe(new Set(reads).size);
   });
 });
+
+/**
+ * The other two Row-shaped Sources, and the plainer cases beside them.
+ *
+ * Each is asserted the same way: **no library read is made twice on the
+ * screen.** That is a stronger thing to say than a count, and it is the
+ * ticket's first box said literally — a Row and a Source that want the same
+ * data read it once — without this file having to enumerate the endpoints
+ * every Row happens to use today.
+ */
+describe('Home, whichever Billboard Source is featured', () => {
+  /** A household with something finished, so Because You Watched has a Title. */
+  const HAS_FINISHED_SOMETHING = {
+    played: { [RAFAEL]: ['movie-arrival'] },
+    lastPlayedDates: { [RAFAEL]: { 'movie-arrival': '2026-06-14T21:00:00Z' } },
+  };
+
+  async function landAndSettle(): Promise<string[]> {
+    await signInAndLand();
+    await screen.findByRole('list', { name: 'New on Jellyflick' });
+    await waitFor(async () => {
+      expect(await featuredTitle()).not.toBe('');
+    });
+    await readsHaveSettled();
+    return await libraryReads();
+  }
+
+  function repeated(reads: readonly string[]): string[] {
+    const seen = new Set<string>();
+    return reads.filter((path) => (seen.has(path) ? true : (seen.add(path), false)));
+  }
+
+  it('asks each library for its newest additions once when Newest Addition is featured', async () => {
+    await havingChosen('newest-addition');
+
+    const reads = await landAndSettle();
+
+    // `/UserViews` and one `/Items/Latest` per library that can hold Titles:
+    // the Source and the Row between them, not each.
+    const newOnJellyflick = reads.filter(
+      (path) => path === '/UserViews' || path.startsWith('/Items/Latest?'),
+    );
+    expect(newOnJellyflick.length).toBe(4);
+    expect(repeated(reads)).toEqual([]);
+  });
+
+  it('makes the Because You Watched Row’s two-step question once when it is featured', async () => {
+    await havingChosen('because-you-watched');
+    await setFakeState(HAS_FINISHED_SOMETHING);
+
+    const reads = await landAndSettle();
+
+    expect(repeated(reads)).toEqual([]);
+  });
+
+  it('reads nothing twice under Spotlight either, which shares no Row', async () => {
+    // The plain case, and the guard that sharing has not introduced a cost of
+    // its own where there was never a duplicate to remove.
+    await setFakeState(WATCHING_SEVERANCE);
+
+    const reads = await landAndSettle();
+
+    expect(continueWatchingReads(reads).length).toBe(3);
+    expect(repeated(reads)).toEqual([]);
+  });
+});
+
+/**
+ * A screen that is not Home (#23).
+ *
+ * The two sections compose Home's own Rows through the same registry, so a
+ * cache shared too widely would be seen here first: Movies' Continue Watching
+ * asks the Server one narrowed question where Home asks three, and handing
+ * Series that answer would be a silent, invisible bug — the Row would simply
+ * be short.
+ */
+describe('the Movies and Series sections', () => {
+  /**
+   * Home, read and **settled**, before the section's own reads are counted.
+   *
+   * Waiting for an element to appear is not waiting for the screen to have
+   * stopped asking: Home's own reads can land after a bare `findBy` has
+   * returned, and forgetting the log at that moment counts them against the
+   * section instead. This is what made the first version of the Movies test
+   * fail one run in three.
+   */
+  async function landOnHome(): Promise<void> {
+    await signInAndLand();
+    await screen.findByRole('list', { name: 'New on Jellyflick' });
+    await readsHaveSettled();
+  }
+
+  async function openSection(name: 'Movies' | 'Series'): Promise<void> {
+    fireEvent.click(screen.getByRole('link', { name }));
+    await screen.findByRole('heading', { name, level: 1 });
+    await waitFor(() => {
+      expect(document.querySelector('.billboard__title')).toBeTruthy();
+    });
+    await readsHaveSettled();
+  }
+
+  it('asks Continue Watching its one narrowed question once on Movies', async () => {
+    await setFakeState(WATCHING_SEVERANCE);
+    await landOnHome();
+    await forgetFakeRequests();
+
+    await openSection('Movies');
+
+    // One read, not three: the other two are questions about Series, which a
+    // section of Movies has nothing to merge them into (#23).
+    const reads = await libraryReads();
+    expect(continueWatchingReads(reads).length).toBe(1);
+    expect(reads.filter((path) => path.startsWith('/Shows/NextUp'))).toEqual([]);
+  });
+
+  it('does not carry Movies’ answer into Series', async () => {
+    await setFakeState(WATCHING_SEVERANCE);
+    await landOnHome();
+    await openSection('Movies');
+    await forgetFakeRequests();
+
+    await openSection('Series');
+
+    // A section's reads are its own: Series asks all three, narrowed to
+    // itself, rather than being handed what Movies was told.
+    const reads = await libraryReads();
+    expect(continueWatchingReads(reads).length).toBe(3);
+  });
+
+  it('reads Home again on the way back, rather than showing what it was told before', async () => {
+    // The cache is one screen's and nothing longer. Home unmounts on a
+    // navigation and reads itself again on the way back, and that must still
+    // be true — a cache that outlived the visit would quietly stop Home
+    // noticing anything the household had watched since.
+    await havingChosen('resume');
+    await setFakeState(WATCHING_SEVERANCE);
+    await landOnHome();
+    await screen.findByRole('list', { name: 'Continue Watching' });
+    await openSection('Movies');
+    await forgetFakeRequests();
+
+    fireEvent.click(screen.getByRole('link', { name: 'Home' }));
+    await screen.findByRole('list', { name: 'Continue Watching' });
+    await readsHaveSettled();
+
+    // Three again — read afresh, and still only once between the Row and the
+    // Billboard Source above it.
+    expect(continueWatchingReads(await libraryReads()).length).toBe(3);
+  });
+});
