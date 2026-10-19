@@ -64,6 +64,14 @@ src/
                         so two dictionaries cannot disagree about how a number
                         is written.
   jellyfin/             The gateway: the only module that talks HTTP to the Server.
+  movies-and-series/    The two sections that are about one kind of Title
+                        (#23): `sections.ts` is which they are, which kind
+                        each is about and the fixed list of Rows they draw,
+                        `top-genres.ts` the rule that ranks a library's genres
+                        and the one read behind it, and
+                        `movies-and-series-screen.tsx` the screen — one
+                        component over both addresses, because they differ in
+                        nothing but the kind.
   my-list/              My List, which is Jellyfin's Favorites: `my-list.ts` is
                         the store every screen reads, `use-my-list.ts` the
                         context and hook, `my-list-toggle.tsx` the control on a
@@ -321,13 +329,16 @@ are the unguarded fields a client has to cope with itself. `state.played` is
 Classics, holding Heat and Arrival) and `state.similar` is the fixed More like
 this relation.
 
-`/Items` honours `ids`, `fields`, `enableImageTypes`, `enableImages` and
-`enableUserData`, so a query that forgot to ask for `Overview` — or for
-`DateCreated`, which every Title Label is derived from — fails against the fake
-rather than only against a real Server. It sorts by `Name` or `SortName`
-ascending and by `DateCreated` **descending**, which is "the newest additions"
-(#14), and refuses any other order rather than quietly ignoring it. `Genres` is deliberately not gated: every query this app
-makes asks for it.
+`/Items` honours `includeItemTypes`, `ids`, `fields`, `enableImageTypes`,
+`enableImages` and `enableUserData`, so a query that forgot to ask for
+`Overview` — or for `DateCreated`, which every Title Label is derived from —
+fails against the fake rather than only against a real Server. It sorts by
+`Name` or `SortName` ascending and by `DateCreated` **descending**, which is
+"the newest additions" (#14), and refuses any other order rather than quietly
+ignoring it. **`Genres` is gated like the rest as of #23**, and it was not
+before: the real Server gates it (`dto.cs:1151`), so the enlarged hover card's
+genres and the title page's would have been full against this fake and empty
+against a Jellyfin.
 
 `failLibraryQueriesWith` makes `/UserViews`, `/Items/Latest`, `/Items` and
 `/Genres` answer with a status, for a Server that will not say what it holds.
@@ -558,11 +569,13 @@ do not already have.
 - **A section's address** lives once, in `SECTIONS` in `src/shell/sections.ts`,
   with the key of its translated name. Both navigation bars and the router read
   that list, so adding a section is one entry plus one route.
-- **Taking a section over** (Movies and Series are #23, My List #13) means
-  pointing its `<Route>` in `src/shell/app-shell.tsx` at your own folder under
-  `src/` instead of `SectionPlaceholder`, and nothing else. Name the section
-  with `sectionFor('<id>')` rather than writing its address again; Search is
-  the worked example.
+- **Taking a section over** means pointing its `<Route>` in
+  `src/shell/app-shell.tsx` at your own folder under `src/` instead of
+  `SectionPlaceholder`, and nothing else. Name the section with
+  `sectionFor('<id>')` rather than writing its address again; Search is the
+  worked example. **Every section has its own screen as of #23**, so
+  `SectionPlaceholder` is reachable only by a section added without one —
+  which is why it is still in the shell.
 - **The router is `preact-iso`**, imported as `preact-iso/router`, never the
   barrel, which pulls in `preact-render-to-string`. It pushes real history
   entries, so a section can be bookmarked, shared and reloaded — which is why
@@ -791,6 +804,66 @@ heading named Arrival, which Home itself now legitimately has, and now assert
 that the page's own `.title__sheet` is gone; and the wheel-over-a-Row test
 compared the page's scroll against zero, which only held while Home fitted the
 viewport, and now compares it against where hovering the Row left it.
+
+## The Movies and Series sections
+
+`src/movies-and-series/` is #23: the two sections that are about one kind of
+Title. They are **Home's own composition narrowed to a kind** — a Billboard
+over a handful of Rows — and that narrowing is the only thing that makes them
+two screens rather than one, which is why one component answers both addresses.
+
+- **The layout is fixed and is not the User's.** `sectionLayoutFor` is the
+  whole of it: Continue Watching, New on Jellyflick, My List, then the genre
+  Rows. It is a `HomeLayout`, so every Row is drawn by the registry in
+  `home-rows.tsx` and inherits that Row's rules rather than restating them —
+  but nothing stores it, nothing writes it, and the Home Layout editor neither
+  offers it nor knows about it. A User who has hidden Continue Watching on
+  Home still has it here: a section is a view of one kind of library, not a
+  second Home to arrange.
+- **The genres are the library's own, ranked** (`top-genres.ts`). Nobody chose
+  them, because there is nothing to choose with, so the library is asked which
+  genres most of its Movies — or its Series — are in. A tie breaks by name, so
+  a library nobody has touched ranks the same way twice. A Server that will
+  not answer leaves the section with no genre Rows and **no message**: the Rows
+  above it are reading the same Server and already say so in words.
+- **Which kinds a query asks for is still the gateway's**, as "only Movies and
+  Series" always was. `getTitles`, `getBillboardCandidates` and
+  `getResumeItems` take a `kind`, and `getResumeItems` **maps** it rather than
+  passing it on — a Series holds no file and is never resumable itself, so a
+  Series section asks the Server for Episodes. That is `play-target.ts`'s rule
+  read as a query. `getGenresOfTitles` is new beside them, for the ranking:
+  `/Genres` answers the distinct *set* of genres and so cannot put them in
+  order.
+- **New on Jellyflick narrows the merge, not the Server.** `/Items/Latest`
+  answers with what was *added*, and what is added to a Series is an Episode,
+  so `includeItemTypes=Series` would answer nothing at all. Which Title an
+  addition stands for is the merge's own rule and the kind is read off that
+  Title. It narrows no **libraries** either, however tempting the saved round
+  trip: a library's `CollectionType` says what it is *for*, not what it holds,
+  and the sample Server's Kids library is typed `movies` and holds Bluey.
+- **Continue Watching makes one read instead of three** for a Movies section.
+  The other two are both questions about Series — which Episode comes next in
+  each, and when each was last watched — so a Row that can only hold Movies is
+  given nothing to merge rather than three answers and a filter.
+- **My List is filtered, not read again.** The store the shell holds is the one
+  copy every screen agrees about, so the section narrows it by `RowCard.kind`
+  rather than asking the Server a second question.
+- **The Billboard's pick is held in the shell beside Home's**
+  (`use-billboard.ts`), for the reason Home's is: opening a title page unmounts
+  the screen and the featured Title must not have changed on the way back. One
+  pick is live at a time, keyed on the address, so a section costs the shell no
+  second read. It is **Spotlight of that kind** and deliberately not the User's
+  Billboard Source: the Source is a choice about Home, made against Rows that
+  are not these.
+- **The section names the page and the Billboard names a Title under it.** The
+  section's own name is its `<h1>` and `headingLevel={2}` puts the featured
+  Title under it; on Home it is the other way round, because there the
+  Billboard *is* what the screen is about. Two level-1 headings in one `<main>`
+  would leave a screen reader with two answers to what the page is.
+- **A phone has no link to either of them.** The bottom bar carries four items
+  and neither is among them (story 61), so at that width a section is reached
+  by its address. Nothing in #23 owns fixing that; the Playwright spec skips
+  its three navigation journeys on `phone` and says so.
 
 ## The suggestion Rows
 
