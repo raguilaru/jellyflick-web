@@ -13,6 +13,7 @@ import { useWidePointer } from '../shell/layout';
 import { episodePlayTarget, playTargetFor, type PlayTarget } from './play-target';
 import { SeriesEpisodes } from './series-episodes';
 import { loadTitlePage, titlePathFor, type TitlePageResult } from './title-page';
+import { canDownloadFile, trailerOffer } from './trailer';
 
 /**
  * The title page: everything the app knows about one Title, and everything a
@@ -111,12 +112,20 @@ function TitlePage({
    * the User is up to, and a press in the Episode list means that Episode.
    */
   const [playing, setPlaying] = useState<PlayTarget | undefined>(undefined);
+  /**
+   * Whether the YouTube trailer is on the screen (#19). A separate piece of
+   * state from `playing` because it is a different thing: the Server's own
+   * trailer goes through this app's player, and a remote one is a third
+   * party's page in an `<iframe>` over the backdrop.
+   */
+  const [embedded, setEmbedded] = useState(false);
   // A different Title means a page that is not playing, which is what pressing
   // a card in More like this does without unmounting this screen.
   const playingFor = useRef(title.itemId);
   if (playingFor.current !== title.itemId) {
     playingFor.current = title.itemId;
     setPlaying(undefined);
+    setEmbedded(false);
   }
 
   /** One Episode as something to play, by the rule in `play-target.ts`. */
@@ -130,6 +139,41 @@ function TitlePage({
    * is worse than no button.
    */
   const playTarget: PlayTarget | undefined = playTargetFor(details, page.series.upTo, t);
+
+  /**
+   * Watch trailer (#19, story 75): which kind of trailer this Title has, and
+   * whether the YouTube one is on the screen right now.
+   *
+   * The *offer* costs nothing — it is read off the detail fields the page
+   * already asked for — and everything heavy waits for the press: the local
+   * trailer's id is one request made then, and the embed is simply not in the
+   * document until a User asks for it.
+   */
+  const trailer = trailerOffer(details);
+
+  const watchTrailer = (): void => {
+    if (trailer === undefined) return;
+    if (trailer.kind === 'youtube') {
+      setEmbedded(true);
+      return;
+    }
+    // Which trailer file is asked for now rather than when the page was
+    // drawn: `LocalTrailerCount` already said there is one, and a page nobody
+    // presses this on should not cost a request.
+    void gateway
+      .getLocalTrailers(title.itemId)
+      .then((trailers) => {
+        const first = trailers.find(
+          (item) => typeof item.Id === 'string' && item.Id !== '',
+        );
+        if (first === undefined) return;
+        setPlaying({
+          itemId: first.Id as string,
+          name: t('title.trailerPlaying', { name: title.name }),
+        });
+      })
+      .catch(() => undefined);
+  };
 
   return (
     <article class="title__sheet">
@@ -176,6 +220,15 @@ function TitlePage({
             {t('title.play')}
           </button>
         )}
+        {/* One Watch trailer whichever kind the Server holds (#19, story 75),
+            and none at all for a Title with neither: a disabled control and a
+            line of explanation are both worse than an action that is simply
+            not offered, which is what the facts line does too. */}
+        {trailer === undefined ? null : (
+          <button type="button" class="button button--quiet" onClick={watchTrailer}>
+            {t('title.watchTrailer')}
+          </button>
+        )}
         {/* The remote and the keyboard reach My List here, which is what a
             card's hover-only toggle cannot give them (story 70). */}
         <MyListToggle card={card} />
@@ -189,7 +242,54 @@ function TitlePage({
             ? t('title.markNotWatched', { name: title.name })
             : t('title.markWatched', { name: title.name })}
         </button>
+        {/* Download File (#19, stories 76 and 77).
+
+            An anchor rather than a button, because saving a file is the
+            browser's own job and nothing this app could do by hand would be
+            better: a fetch would pull a film into memory first. `download`
+            is what keeps the app on the screen instead of navigating into
+            the file. It is drawn only for a User the Server allows and a
+            Title the Server has a file for — the Server is still the one
+            that says yes, this only decides what is offered. */}
+        {canDownloadFile(details, session.activeUser()?.mayDownload === true) ? (
+          <a
+            class="button button--quiet"
+            href={gateway.downloadUrl(title.itemId)}
+            download
+          >
+            {t('title.downloadFile')}
+          </a>
+        ) : null}
       </p>
+
+      {/* The YouTube trailer, and only once a User has pressed for it: an
+          embed on every title page is exactly what story 75 is about. It is
+          in the page's own flow rather than a fixed overlay — #40 is what
+          happens when a focusable thing is put over a screen that is already
+          fixed, and a third party's iframe is as focusable as it gets. */}
+      {embedded && trailer?.kind === 'youtube' ? (
+        <section class="title__trailer" aria-label={t('title.trailerFromYouTube')}>
+          <div class="title__trailer-frame">
+            <iframe
+              src={trailer.embedUrl}
+              title={t('title.trailerFromYouTube')}
+              allow="accelerometer; autoplay; encrypted-media; picture-in-picture"
+              allowFullScreen
+            />
+          </div>
+          <p class="title__actions">
+            <button
+              type="button"
+              class="button button--quiet"
+              onClick={() => {
+                setEmbedded(false);
+              }}
+            >
+              {t('title.closeTrailer')}
+            </button>
+          </p>
+        </section>
+      ) : null}
 
       {watched.unsaved ? (
         <p class="notice notice--problem" role="alert">

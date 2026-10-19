@@ -104,6 +104,14 @@ export type FakeItem = {
   BackdropImageTags?: string[];
   /** Keyed by `MetadataProvider` member name: `Imdb`, `Tmdb`, … */
   ProviderIds?: Record<string, string>;
+  /**
+   * The trailer links the metadata provider gave the Server, which in practice
+   * are YouTube pages (#19, story 75). They are a field on the item, unlike
+   * the *local* trailers in `state.localTrailers`, which is the real Server's
+   * arrangement too: a remote trailer is a URL the item carries, a local one
+   * is a file beside it.
+   */
+  RemoteTrailers?: { Name?: string; Url: string }[];
 
   /**
    * The fake's own field: the file behind this item, which is what
@@ -535,8 +543,11 @@ export function createSampleData(): FakeJellyfinState {
     users: [
       fakeUser({ Id: 'user-rafael', Name: 'Rafael', PrimaryImageTag: 'tag-rafael' }),
       fakeUser({ Id: 'user-marina', Name: 'Marina', PrimaryImageTag: 'tag-marina' }),
-      // No picture, so the app has to fall back to initials.
-      fakeUser({ Id: 'user-nico', Name: 'Nico', PrimaryImageTag: null }),
+      // No picture, so the app has to fall back to initials — and the one
+      // User the Server does not allow to download, so story 77's "the
+      // button is hidden" is a state a test can sign in to rather than one it
+      // has to patch the Server into (#19).
+      fakeUser({ Id: 'user-nico', Name: 'Nico', PrimaryImageTag: null, canDownload: false }),
       // Hidden from the public list: the only way in is to type the username.
       fakeUser({ Id: 'user-ghost', Name: 'Ghost', hidden: true }),
     ],
@@ -660,6 +671,9 @@ const SAMPLE_ITEMS: readonly FakeItem[] = [
     // A file whose only problem is its height, so "too tall to decode" is a
     // transcode reason a test can reach on its own.
     media: { Container: 'mp4', VideoCodec: 'h264', AudioCodec: 'aac', Height: 2160 },
+    // A YouTube trailer and **no** local one, which is the other half of
+    // story 75: Paddington is the Title whose Watch trailer loads an embed.
+    RemoteTrailers: [{ Name: 'Paddington (Trailer)', Url: 'https://youtu.be/8sTR9vgnJ4s' }],
     libraryId: 'lib-kids',
   },
   // Older than Arrival, so Severance's place in a Row comes from the Episode
@@ -728,6 +742,10 @@ const SAMPLE_ITEMS: readonly FakeItem[] = [
       { Index: 2, Codec: 'mjpeg', MimeType: 'image/jpeg', FileName: 'cover.jpg' },
     ],
     ProviderIds: { Imdb: 'tt2543164', Tmdb: '329865' },
+    // Arrival has a trailer file beside it **and** a YouTube link, which is
+    // the one Title that makes "the local trailer is preferred" a thing a
+    // test can see rather than a rule it has to take on trust (#19).
+    RemoteTrailers: [{ Name: 'Arrival (Trailer)', Url: 'https://www.youtube.com/watch?v=tFMo3UJ4B4g' }],
     // VP9 in WebM: what the committed test video really is, so a browser can
     // direct-play it and an end-to-end test can watch something.
     media: { Container: 'webm', VideoCodec: 'vp9', Height: 1080 },
@@ -1007,6 +1025,8 @@ function fakeUser(
   user: Pick<FakeUser, 'Id' | 'Name'> & {
     PrimaryImageTag?: string | null;
     hidden?: boolean;
+    /** `UserPolicy.EnableContentDownloading`, which gates Download File. */
+    canDownload?: boolean;
     password?: string;
   },
 ): FakeUser {
@@ -1017,7 +1037,10 @@ function fakeUser(
     PrimaryImageTag: user.PrimaryImageTag ?? null,
     HasPassword: true,
     HasConfiguredPassword: true,
-    Policy: { IsHidden: user.hidden ?? false, EnableContentDownloading: true },
+    Policy: {
+      IsHidden: user.hidden ?? false,
+      EnableContentDownloading: user.canDownload ?? true,
+    },
     password: user.password ?? SAMPLE_PASSWORD,
   };
 }

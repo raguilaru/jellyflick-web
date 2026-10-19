@@ -363,6 +363,24 @@ export const en = {
   'title.collection': 'Collection',
   'title.moreLikeThis': 'More like this',
   /*
+   * Watch trailer and Download File (#19, stories 75–77).
+   *
+   * One Watch trailer whichever kind of trailer the Title has: a User is
+   * asking to see the trailer, and which of the two the Server happens to
+   * hold is not their problem. The YouTube one says where it came from only
+   * once it is on the screen, in the heading above it.
+   */
+  'title.watchTrailer': 'Watch trailer',
+  'title.closeTrailer': 'Close trailer',
+  'title.trailerFromYouTube': 'Trailer on YouTube',
+  /** What the player is headed with while it is playing a trailer. */
+  'title.trailerPlaying': (p: { name: string }) => `${p.name} (Trailer)`,
+  /**
+   * Download File is the glossary's own term, capitals and all: it saves one
+   * file, and calling it "Download" would promise an offline mode.
+   */
+  'title.downloadFile': 'Download File',
+  /*
    * A Series' Seasons and Episodes (#18). The picker is a group of buttons
    * rather than a `<select>`, so every Season is one press on a remote.
    */
