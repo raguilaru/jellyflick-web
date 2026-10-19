@@ -5,10 +5,10 @@ import { en } from '../../src/i18n/en';
 import { inMemoryDeviceStorage, testDeviceLayer } from '../device/profiles';
 import {
   fakeRequests,
-  fakeWrites,
   forgetFakeRequests,
   forgetFakeWrites,
   resetFakeState,
+  savesHaveSettled,
   setFakeState,
 } from '../fake-jellyfin/control';
 import { SAMPLE_PASSWORD } from '../fake-jellyfin/data';
@@ -50,22 +50,9 @@ async function havingChosen(source: string): Promise<void> {
   });
 }
 
-/**
- * A Client Settings save is written behind the User, so one a test started can
- * land after the next test has reseeded the Server (#46). The guard
- * `shifting-the-subtitles.test.tsx` wrote is copied here for the same reason.
- */
-async function savesHaveSettled(): Promise<void> {
-  let seen = -1;
-  await waitFor(async () => {
-    const now = (await fakeWrites()).length;
-    const quiet = now === seen;
-    seen = now;
-    expect(quiet).toBe(true);
-  });
-}
-
 afterEach(async () => {
+  // A Client Settings save is written behind the User, so one this test
+  // started can land after the reseed below (#46).
   await savesHaveSettled();
   await resetFakeState();
 });

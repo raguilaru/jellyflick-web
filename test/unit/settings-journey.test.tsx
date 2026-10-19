@@ -14,6 +14,7 @@ import {
   fakeWrites,
   forgetFakeWrites,
   resetFakeState,
+  savesHaveSettled,
   setFakeState,
 } from '../fake-jellyfin/control';
 import { SAMPLE_PASSWORD } from '../fake-jellyfin/data';
@@ -35,8 +36,8 @@ import { fakeJellyfinUrl } from '../fake-jellyfin/url';
 afterEach(async () => {
   // A save is a round trip the screen does not wait for, so one can still be in
   // flight when a test ends; it would otherwise land after the reset below and
-  // leak a colour into the next file.
-  await savesHaveLanded();
+  // leak a colour into the next file (#46).
+  await savesHaveSettled();
   await resetFakeState();
   // These tests really navigate, so the next one would start on the screen the
   // last one left.
@@ -44,17 +45,6 @@ afterEach(async () => {
   // The accent is painted on the root element, which outlives a render.
   document.documentElement.removeAttribute('style');
 });
-
-/** Waits until the fake Jellyfin has stopped receiving writes. */
-async function savesHaveLanded(): Promise<void> {
-  let seen = -1;
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    const writes = await fakeWrites();
-    if (writes.length === seen) return;
-    seen = writes.length;
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  }
-}
 
 async function signInAndLand(): Promise<void> {
   render(
