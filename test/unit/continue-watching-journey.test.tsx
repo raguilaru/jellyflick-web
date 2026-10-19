@@ -3,7 +3,12 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/preact';
 import { App } from '../../src/app';
 import { en } from '../../src/i18n/en';
 import { inMemoryDeviceStorage, testDeviceLayer } from '../device/profiles';
-import { fakeState, resetFakeState, setFakeState } from '../fake-jellyfin/control';
+import {
+  fakeState,
+  resetFakeState,
+  savesHaveSettled,
+  setFakeState,
+} from '../fake-jellyfin/control';
 import { SAMPLE_PASSWORD } from '../fake-jellyfin/data';
 import { fakeJellyfinUrl } from '../fake-jellyfin/url';
 
@@ -37,7 +42,13 @@ const WATCHING = {
   },
 };
 
-afterEach(resetFakeState);
+afterEach(async () => {
+  // Taking a Series out of the Row is a Client Setting, saved behind the User,
+  // so one of these saves can still be in flight when a test ends and land
+  // after the reseed below (#46).
+  await savesHaveSettled();
+  await resetFakeState();
+});
 
 beforeEach(async () => {
   window.history.replaceState(null, '', '/');
