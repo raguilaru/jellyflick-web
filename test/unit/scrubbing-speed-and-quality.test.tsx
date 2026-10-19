@@ -12,6 +12,7 @@ import {
   forgetFakeRequests,
   forgetFakeWrites,
   resetFakeState,
+  savesHaveSettled,
 } from '../fake-jellyfin/control';
 import { SAMPLE_PASSWORD } from '../fake-jellyfin/data';
 import { fakeJellyfinUrl } from '../fake-jellyfin/url';
@@ -34,31 +35,23 @@ import { fakeJellyfinUrl } from '../fake-jellyfin/url';
  * **What no test here can say** is whether the thumbnail is in the right place
  * on the screen: happy-dom gives every box a zero size, so a preview centred
  * on a bar of no width is at zero and so is one that is broken. That is
- * `test/e2e/trickplay-and-playback-options.spec.ts`, which measures it against
+ * `test/e2e/trickplay-speed-and-quality.spec.ts`, which measures it against
  * the bar in a browser that has layout.
  */
 
-/**
- * A playback report is sent behind the User and the stop report is fired from
- * an effect cleanup that nothing awaits, so it can land after the next test
- * has cleared the log — #46's hazard, in the reports rather than in a Client
- * Settings write. Two equal counts in a row means they have stopped.
- */
-async function reportsHaveSettled(): Promise<void> {
-  let seen = -1;
-  await waitFor(async () => {
-    const now = (await fakeWrites()).length;
-    const quiet = now === seen;
-    seen = now;
-    expect(quiet).toBe(true);
-  });
-}
-
 afterEach(resetFakeState);
 
+/*
+ * **The settle goes here, in `beforeEach`, and not in `afterEach`** (#46,
+ * #52). A playback stop report is sent behind the User from an effect cleanup
+ * that nothing awaits, and the unmount that fires it is Testing Library's
+ * `cleanup` — registered in `test/setup.ts`, so Vitest runs it *after* this
+ * file's own `afterEach`. By then the write has not been made yet. Settling
+ * here, before the log is forgotten, is the only place that catches it.
+ */
 beforeEach(async () => {
   window.history.replaceState(null, '', '/');
-  await reportsHaveSettled();
+  await savesHaveSettled();
   await resetFakeState();
   await forgetFakeWrites();
   await forgetFakeRequests();
@@ -291,6 +284,69 @@ describe('the playback speed', () => {
     });
     await waitFor(() => {
       expect(video().playbackRate).toBe(0.5);
+    });
+  });
+});
+
+describe('the playback options menu', () => {
+  /**
+   * Found in a browser, by #32's own e2e, and invisible to every assertion
+   * that was green before it.
+   *
+   * Every choice in this menu closes it, which takes the focused button away
+   * with it — and a browser then hands focus to the **document**. From there
+   * the arrow keys are not inside the player at all, so the next press walks
+   * the title page behind the picture: on a 390px screen the e2e watched a
+   * remote land on My List, Mark as watched and then the suggestion Row,
+   * while the player sat open in front of it. That is #40's defect arriving by
+   * a different road, and the rule it breaks is #26's — a control a User
+   * cannot see must not be where the arrow keys are.
+   */
+  it('hands focus back to the control it was opened from', async () => {
+    await play();
+    const opener = await screen.findByRole('button', { name: 'Playback options for Arrival' });
+    /*
+     * Focused first, which a browser does for itself and `fireEvent` does
+     * not: a press — by pointer or by Enter on a remote — leaves focus on the
+     * button pressed, and "what had focus when the menu opened" is the whole
+     * of what the menu gives back.
+     */
+    opener.focus();
+    fireEvent.click(opener);
+    await screen.findByRole('dialog', { name: en['player.optionsLabel'] });
+
+    fireEvent.click(
+      within(groupNamed(en['player.speedHeading'])).getByRole('button', { name: '1.5×' }),
+    );
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(opener);
+    });
+  });
+
+  it('leaves focus to the controls when the press rebuilt them', async () => {
+    await play();
+    await openOptions();
+
+    /*
+     * A quality choice re-negotiates, so the whole control row goes and comes
+     * back — the button this was opened from is not in the document any more
+     * by the time the menu unmounts. Focusing a detached node would take focus
+     * to the document, which is the very thing being avoided, so the menu
+     * leaves it to the controls' own effect.
+     */
+    fireEvent.click(
+      within(groupNamed(en['player.qualityHeading'])).getByRole('button', {
+        name: en['player.qualityChoice']({ bitrate: 2_000_000 }),
+      }),
+    );
+
+    await waitFor(async () => {
+      expect(await negotiations()).toHaveLength(2);
+    });
+    await waitFor(() => {
+      expect(document.activeElement).not.toBe(document.body);
+      expect(document.activeElement?.closest('.player')).toBeTruthy();
     });
   });
 });

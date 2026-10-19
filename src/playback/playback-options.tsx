@@ -67,10 +67,31 @@ export function PlaybackOptions({
    * press that opened it was on a button this is now drawn over, and the
    * arrow keys' flow rule only applies to focus that is already inside the
    * fixed thing.
+   *
+   * **And it goes back out with it**, which is the half that is not optional
+   * here. Every choice in this menu closes it, and the button that was
+   * focused goes with it — so a browser hands focus to the document, and from
+   * there the arrow keys are not inside the player at all. That is #40's bug
+   * arriving by a different road: the next press walks the **title page
+   * behind the picture**, because the flow rule can only keep focus in an
+   * overlay focus is already in. The player's own rule is that controls which
+   * appear take focus unless focus is already inside it (#26); this is its
+   * mirror, and without it picture-in-picture, a speed and a quality each end
+   * with a User's remote somewhere they cannot see. #32's e2e found it on a
+   * 390px screen, with every unit assertion green before and after.
+   *
+   * The opener is only focused again if it is **still there**. A quality
+   * choice re-negotiates and the whole control row is rebuilt, so the button
+   * this was opened from is gone by then — and the controls' own effect,
+   * which takes focus when they come back, is the right thing to leave it to.
    */
   useLayoutEffect(() => {
+    const opener = document.activeElement;
     const first = panel.current?.querySelector('button');
     if (first instanceof HTMLElement) first.focus();
+    return () => {
+      if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
+    };
   }, []);
 
   return (
