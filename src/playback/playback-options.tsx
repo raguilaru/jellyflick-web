@@ -44,6 +44,29 @@ export type PlaybackOptionsProps = {
   onPictureInPicture?: () => void;
   /** Whether the picture is in its own window now, so the button can say so. */
   inPictureInPicture?: boolean;
+  /**
+   * Cast, **only where the device layer reports Cast support** (#33) — the
+   * ticket's first acceptance criterion, and the same rule
+   * `onPictureInPicture` above follows for the same reason: a browser with no
+   * Cast implementation in it is not something a User can be told about
+   * usefully, so there is no control rather than one that cannot work.
+   *
+   * It is a **press** and not a choice, because what it opens is the
+   * *browser's* own picker — this app never draws a list of receivers.
+   */
+  onCast?: () => void;
+  /**
+   * The receiver this Title is playing on, so the one button can offer to stop
+   * it. Absent is "not casting", which is the state nearly all of playback is
+   * in.
+   */
+  castingTo?: string;
+  /**
+   * AirPlay, only where Safari has it **and the element says there is
+   * somewhere to send it** (#33). Both halves are in the player; by the time
+   * it is here, the answer is yes.
+   */
+  onAirPlay?: () => void;
   onClose: () => void;
 };
 
@@ -54,6 +77,9 @@ export function PlaybackOptions({
   onChooseQuality,
   onPictureInPicture,
   inPictureInPicture = false,
+  onCast,
+  castingTo,
+  onAirPlay,
   onClose,
 }: PlaybackOptionsProps) {
   const t = useTranslate();
@@ -156,6 +182,29 @@ export function PlaybackOptions({
       </div>
 
       <p class="player__buttons">
+        {/*
+          Cast and AirPlay (#33) sit with picture-in-picture rather than in a
+          group of their own, and that is the same width argument the top of
+          this file makes: these are **presses**, not choices, and a row of
+          `aria-pressed` buttons would claim a User had chosen a receiver when
+          all they have done is open the browser's picker.
+
+          Neither is ever drawn on a device that has none — and on this app's
+          Chromium 68 floor that is all three of them, so a television gets
+          the two groups above and Done. There is no disabled state here on
+          purpose: a feature the browser does not have is not something a
+          User can be told about usefully.
+        */}
+        {onCast === undefined ? null : (
+          <button type="button" class="button button--quiet" onClick={onCast}>
+            {castingTo === undefined ? t('player.cast') : t('player.stopCasting')}
+          </button>
+        )}
+        {onAirPlay === undefined ? null : (
+          <button type="button" class="button button--quiet" onClick={onAirPlay}>
+            {t('player.airPlay')}
+          </button>
+        )}
         {onPictureInPicture === undefined ? null : (
           <button type="button" class="button button--quiet" onClick={onPictureInPicture}>
             {inPictureInPicture ? t('player.leavePip') : t('player.enterPip')}

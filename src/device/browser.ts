@@ -61,6 +61,25 @@ export function createBrowserDeviceLayer(): DeviceLayer {
       return await createImageSubtitleRenderer(options);
     },
 
+    /**
+     * The Cast sender (#33), loaded on demand — and of the three lazy loaders
+     * here this is the one where "on demand" is not only about weight.
+     *
+     * The subtitle renderers are chunks of this app's own build, so a User who
+     * never needs one has saved a download. This is a `<script>` off
+     * `gstatic.com`, and the rest of Jellyflick works against a Server on a
+     * LAN with no route to the internet at all: fetching it eagerly would make
+     * every such page load ask the outside world for something it cannot have,
+     * and `decisions.md` §8 says there is no way to know whether Cast is
+     * really available without paying that price. So the `import()` is inside
+     * the press, and `playbackTargets().cast` is what decides whether there is
+     * a press to make.
+     */
+    loadCastSender: async (options) => {
+      const { createCastSender } = await import('./cast-sender');
+      return await createCastSender(options);
+    },
+
     now: () => Date.now(),
     random: () => Math.random(),
   };

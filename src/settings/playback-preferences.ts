@@ -63,6 +63,22 @@ export type PlaybackPreferences = {
   readonly subtitleMode: SubtitleMode;
   /** Whether the next Episode starts by itself when one ends. */
   readonly nextEpisodeAutoPlay: boolean;
+  /**
+   * Which Chromecast receiver application this User's account names (#33), or
+   * absent for none — which is the common case, because the Server seeds the
+   * list in a migration.
+   *
+   * **It is read here and never written**, which makes it the one asymmetric
+   * field in this store. `decisions.md` §8 says Cast must read
+   * `user.Configuration.CastReceiverId` at runtime rather than hardcoding an
+   * id, and this provider is already the one copy of that configuration in the
+   * app — so the player reads it from here rather than opening a second path
+   * to the Server. Nothing in Jellyflick offers a way to change it: choosing a
+   * receiver application is a thing a User does in Jellyfin's own dashboard,
+   * and `configurationFor` below deliberately has no case for it, so a save
+   * from this app carries the stored value through untouched.
+   */
+  readonly castReceiverId?: string;
 };
 
 /**
@@ -157,6 +173,9 @@ export function preferencesFrom(configuration: UserConfiguration): PlaybackPrefe
     // device" and "English".
     ...chosen('audioLanguage', configuration.AudioLanguagePreference),
     ...chosen('subtitleLanguage', configuration.SubtitleLanguagePreference),
+    // Read-only, for Cast (#33). `chosen` is right for it for the same reason
+    // it is right for the languages: a blank is "nothing chosen", not a value.
+    ...chosen('castReceiverId', configuration.CastReceiverId),
     subtitleMode: configuration.SubtitleMode ?? DEFAULT_PLAYBACK_PREFERENCES.subtitleMode,
     nextEpisodeAutoPlay:
       configuration.EnableNextEpisodeAutoPlay ??
