@@ -4,7 +4,7 @@ State of the `/implement-spec` run on the integration branch `feat/jellyflick-v1
 (draft PR #38). Update this whenever a wave lands, so a fresh session can pick the work
 up without re-deriving anything.
 
-## NINTH SESSION — #21, #29, #19 and #23 merged; #30 and #41 in flight
+## NINTH SESSION — seven merged; #32 and #46 in flight, three tickets left
 
 **Read this, then the eighth session's section below for the two paused branches, then the
 seventh's, which is still the standing guidance and has not been superseded.**
@@ -316,46 +316,130 @@ and `ImageSubtitleRenderer` are now aliases of one `SubtitleRenderer`;
 `dvdsub` at 7, in languages nothing else prefers.
 
 
-### Current state — ninth session, fourth wave in flight
+### #30 and #41 merged; the whole spec graph is now done but for the player's last three
 
-Integration tip **`73b34fe`** plus this commit, pushed and verified with `git ls-remote`.
+**#30 Image subtitles merged**, after two session-limit interruptions it survived because
+its implementer committed as it went. Its research box closed two of the three bitmap
+families for two independent reasons — no maintained client-side VobSub renderer runs on
+the Chromium 68 floor, **and** Jellyfin's graphical passthrough never hands over the `.idx`
+a VobSub renderer needs for its palette, so even a perfect one would have bitmaps and no
+colours. PGS is drawn here with `libpgs`, lazily, the decoder and its 65.95 kB worker
+outside the main bundle. VobSub and DVB are burned in.
+
+**#27's line moved**, and later player tickets inherit the new shape: "switching subtitles
+never touches the media element" now has an exception, because a burned-in track
+re-negotiates. **Leaving one re-negotiates too** — the words are in the picture until a new
+stream replaces it, so a client that only asked on the way in would strand a User with
+subtitles they had just switched off.
+
+**libpgs had the same `workerUrl` trap as JASSUB, in a different shape**: a bare relative
+string that resolves against the document, so the SPA answers `index.html` and the worker
+parses HTML as JavaScript. Two libraries, two tickets, one trap. **Let the bundler resolve
+a library's own worker and WASM URLs; do not pass them by hand.**
+
+**#41 merged**: a Row and a Billboard Source that want the same data now read it once.
+**Six library reads become three** on Home with Resume featured and Continue Watching on
+screen, sixteen become thirteen across Home, eight become four for Newest Addition. The
+second acceptance criterion was the binding one and it held — `src/home/shared-reads.ts`
+knows nothing about Rows, Titles or the Billboard, and the Billboard still reaches
+Continue Watching only through `loadContinueWatching`, so no rule was copied anywhere.
+
+Three things about that cache worth not rediscovering: **it lives exactly one screen**, a
+fresh one per `path|serverAddress|userId`, which is the same moment a Row re-reads anyway,
+so the lifetime *is* the invalidation; **it is replaced during render, not in an effect**,
+because a child's effect runs before its parent's and clearing it in an effect would clear
+it *after* the Rows had filled it, making the first screen after every navigation read
+everything twice; and **the key carries the kind and the limit**, because a Movies section
+asks Continue Watching one question where Home asks three, and handing Series what Movies
+was told would be invisible — the Row would just come out short.
+
+### Two flaky tests, both settled by counting rather than by reasoning
+
+This is now the house method and it should stay that way. A flake argued about is a flake
+kept.
+
+- **#30's burned-in test failed about one run in three**, and only in a full suite — never
+  alone. **Waiting for a control to be visible is not waiting for it to be settled.** The
+  re-negotiation the test exists to exercise tears the controls down and rebuilds them, so
+  the wait resolved the button on its way out, the press landed on it, and the rebuild
+  discarded the dialog it opened. It now presses again when nothing happened, which is what
+  a User does, guarded so a press only ever goes to a closed picker. **Twice failed in six
+  phone-project runs before, zero in four after**, then a clean full suite.
+- **#41's own read-counting test failed five runs in fifteen**: it forgot the request log
+  as soon as Home's Row appeared, while Home's three reads were still arriving, so they
+  were counted against the section. Fixed by settling Home first; **12/12 after.**
+
+### Two full Playwright suites on one machine will lie to you
+
+The integrator ran #30's gate while an implementer was running its own suite and a build.
+The result was **321 failures**, many of them in under 100 ms, because the gate's own
+preview server never came up. Nothing was wrong with the code: the same tree, run alone
+minutes later, was **475 passed / 44 skipped / 0 failed**.
+
+Two lessons. **Check for a running suite before starting one** — `pgrep -f playwright` —
+and wait rather than interleave. And **a wall of instant failures is an environment
+report, not a test report**: read the shape before reading the first failure.
+
+A third, smaller: `npx playwright test ... | tail -12` writes only twelve lines to the log
+and the counts in them cannot be reconciled with anything. **Capture the whole log to a
+file**, then grep it.
+
+### #49 fixed and the glossary swept, between waves
+
+Both collide with every branch, so both were done with nothing in flight — the #43
+precedent, and it is still the right call.
+
+**#49**: `.button` is written below the component rules and sets `margin-top`, `padding`
+and a `font` shorthand that carries font-size with it, so at equal specificity it won on
+source order and three rules did nothing. All three elements already carry `.button`, so
+the selectors are now doubled. **The `font` shorthand was left alone deliberately** —
+replacing it with `font-family` would hand every button the UA's own font-size, which is a
+change to every screen rather than a fix to three rules.
+
+**Glossary**: the Movies and Series sections, top genres, styled subtitles, image
+subtitles, and **burned in** — the last of these matters because it is the one subtitle
+choice that reloads the video, and that is a fact a reader needs the word for.
+
+### Current state — ninth session, fifth wave in flight
+
+Integration tip **`0297bab`** plus this commit, pushed and verified with `git ls-remote`.
 Draft PR #38 still draft.
 
-**Merged this session: #21, #29, #19, #23** — all closed, each gated by the integrator on
-the merge result rather than on the implementer's report, and every implementer's numbers
-have matched the integrator's exactly.
+**Merged this session: #21, #29, #19, #23, #30, #41, and #49** — all closed. Every one was
+gated by the integrator on the merge result, and **every implementer's numbers have
+matched the integrator's exactly**, on this session and every earlier one.
 
-- **In flight:** **#30** Image subtitles (`src/playback/`, resumed after the interruption,
-  ports 8371/8372) and **#41** Home reads the same Row twice (`src/home/`, ports
-  8391/8392). Both worktrees created and `npm ci`-ed **by the integrator**.
-- **Queued, all `src/playback/`, one at a time** — this is the whole remainder of the
-  spec's graph: **#32** Trickplay, speed, picture-in-picture and quality; **#33** Cast,
-  which `decisions.md` §8 says must read `user.Configuration.CastReceiverId` at runtime
-  and which #35 made the fake serve; **#34** Play On.
-- **Findings open:** #42, #46, #48, #49, #51. Closed: #43, #44, and #41 once its branch
-  lands.
-- **Needs the host rather than an agent:** #45 (MDBList's ratings shape — no key to make
-  one real call), #47 (`MediaStream.Path` against a real Jellyfin), #48 (where libass's
-  LGPL-2.1 texts go, tangled with the spec's own "choosing a licence" item), and **#51**
-  (a phone cannot reach the two new sections — a navigation design call).
-- **Cheap between-waves jobs, each colliding with everything so none belongs inside a
-  wave:** a `GLOSSARY.md` sweep owing entries for the Movies/Series sections and derived
-  top genres; **#49**, which is `base.css` only; and **#46**, which touches four e2e
-  journeys. Do these one at a time between waves, the way #43 was done.
+**The spec's task graph is down to its last three tickets, and all three are the player.**
+
+- **In flight:** **#32** Trickplay, speed, picture-in-picture and quality (`src/playback/`,
+  ports 8401/8402) and **#46** the Client Settings write guard (four journey specs, ports
+  8411/8412). Both worktrees created and `npm ci`-ed **by the integrator**.
+- **Queued:** **#33** Cast — `decisions.md` §8 says it must read
+  `user.Configuration.CastReceiverId` at runtime, and #35 made the fake serve that — and
+  **#34** Play On. Both `src/playback/`, so **one at a time**, after #32.
+- **Findings open:** #42, #50. Closed: #41, #43, #44, #49.
+- **Needs the host rather than an agent, and this list is the end-of-run agenda:**
+  **#45** MDBList's ratings shape, which needs a key to make one real call; **#47**
+  `MediaStream.Path` against a real Jellyfin, which decides whether story 102's
+  cross-Episode half works outside the fake; **#48** where libass's LGPL-2.1 texts and
+  libpgs's MIT notice go, tangled with the spec's own "choosing a licence" item; and
+  **#51** a phone cannot reach the Movies or Series sections, which is a change to #6/#8's
+  navigation design and is why three of the suite's skips exist.
 - **Still owed at the end of the run:** `code-review` over the whole branch, the git
   history rewrite in `decisions.md` §10 (after which the host must ask GitHub Support to
   purge the stale objects), and marking PR #38 ready.
-- **Worktrees:** the integrator's `implement-spec-c273ce`, plus `ticket-30-image-subtitles`
-  and `ticket-41-read-once`, both **in flight — do not touch**. #19's, #21's, #23's and
-  #29's were removed after checking each was a full ancestor with nothing uncommitted and
-  nothing unpushed. `implement-spec-88c250` and `remote-setup-2e9b22` belong to **other
+- **Worktrees:** the integrator's `implement-spec-c273ce`, plus `ticket-32-trickplay` and
+  `ticket-46-settings-guard`, both **in flight — do not touch**. Every merged ticket's
+  worktree has been removed after checking it was a full ancestor with nothing uncommitted
+  and nothing unpushed. `implement-spec-88c250` and `remote-setup-2e9b22` belong to **other
   Claude sessions, not this run — leave them alone.**
 
 ### Bundle trend
 
 147.05 → 149.46 (#22) → 153.13 (#31) → 155.95 (#20) → 161.22 (#28) → 164.36 (#21) →
-169.00 (#29) → 171.64 (#19) → **174.51 kB** raw. Still feature code; nothing newly split
-beyond hls.js and #29's entirely-lazy libass payload.
+169.00 (#29) → 171.64 (#19) → 174.51 (#23) → 176.48 (#30) → **177.55 kB** raw, 53.47 gz.
+CSS 21.33 kB. Still feature code. Nothing is newly split beyond hls.js, #29's libass and
+#30's libpgs — **all three lazy, and none of them in that number.**
 
 ## EIGHTH SESSION — PAUSED FOR TOKENS, two branches snapshotted mid-flight
 
