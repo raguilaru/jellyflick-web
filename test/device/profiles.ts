@@ -10,6 +10,8 @@ import type {
   DeviceForm,
   DeviceLayer,
   DeviceStorage,
+  ImageSubtitleRenderer,
+  ImageSubtitleRendererOptions,
   PlaybackTargets,
   StyledSubtitleRenderer,
   StyledSubtitleRendererOptions,
@@ -47,6 +49,17 @@ export type TestDeviceOptions = {
    * engine.
    */
   styledRenderer?: FakeStyledRenderer;
+  /**
+   * The image-subtitle renderer this device loads (#30). It stands in for
+   * libpgs for the same reason the styled one stands in for libass: the
+   * device layer is a system boundary, and nothing in happy-dom decodes a
+   * run-length-encoded bitmap or starts a worker.
+   *
+   * Pass `failing` to model a device that claimed it could draw PGS and then
+   * could not load the decoder — which, unlike the styled case, has no words
+   * to fall back to.
+   */
+  imageRenderer?: FakeImageRenderer;
 };
 
 /**
@@ -70,6 +83,35 @@ export type FakeStyledRenderer = {
 };
 
 export function fakeStyledRenderer(options: { failing?: boolean } = {}): FakeStyledRenderer {
+  return {
+    started: [],
+    offsets: [],
+    destroyed: 0,
+    failing: options.failing ?? false,
+  };
+}
+
+/**
+ * The fake image-subtitle renderer, and the record of what was asked of it
+ * (#30). The sibling of `FakeStyledRenderer` above, and it records the same
+ * three things because the seam is the same two methods: that it was started
+ * on a stream, that the Subtitle Offset reached it, and that it was destroyed.
+ *
+ * What libpgs makes of the stream is libpgs's business and a real browser's,
+ * which is `test/e2e/image-subtitles.spec.ts` — the lesson #29 paid for.
+ */
+export type FakeImageRenderer = {
+  /** One entry per renderer started, in order. */
+  readonly started: ImageSubtitleRendererOptions[];
+  /** Every offset handed to a live renderer, in order. */
+  readonly offsets: number[];
+  /** How many renderers were destroyed. */
+  destroyed: number;
+  /** Set to make loading reject: a device that said yes and could not. */
+  failing: boolean;
+};
+
+export function fakeImageRenderer(options: { failing?: boolean } = {}): FakeImageRenderer {
   return {
     started: [],
     offsets: [],
@@ -109,6 +151,7 @@ export function testDeviceLayer(options: TestDeviceOptions = {}): DeviceLayer {
   const storage = options.storage ?? inMemoryDeviceStorage();
   // One per device layer, for a test that does not care to look at it.
   const styledRenderer = fakeStyledRenderer();
+  const imageRenderer = fakeImageRenderer();
   let randomIndex = 0;
   let deviceIdCount = 0;
   // Unique per device layer as well as per call, so two device layers in one
@@ -148,6 +191,24 @@ export function testDeviceLayer(options: TestDeviceOptions = {}): DeviceLayer {
         },
       });
     },
+
+    loadImageSubtitleRenderer: (rendererOptions) => {
+      const record = options.imageRenderer ?? imageRenderer;
+      if (record.failing) {
+        return Promise.reject(new Error('The test device layer cannot load an image renderer.'));
+      }
+      record.started.push(rendererOptions);
+      record.offsets.push(rendererOptions.timeOffset);
+      return Promise.resolve<ImageSubtitleRenderer>({
+        setTimeOffset: (seconds) => {
+          record.offsets.push(seconds);
+        },
+        destroy: () => {
+          record.destroyed += 1;
+        },
+      });
+    },
+
     now: () => options.now ?? FIXED_NOW,
     random: () => {
       const value = randomSequence[randomIndex % randomSequence.length] as number;
@@ -202,8 +263,16 @@ export const CAPABILITY_PROFILES: Readonly<Record<CapabilityProfileName, Capabil
   },
 
   /**
-   * The Chromium 68 floor: no styled or image subtitle rendering, and no
-   * picture-in-picture, which is Chrome 69.
+   * The Chromium 68 floor: no styled subtitle rendering and no
+   * picture-in-picture, both of which are Chrome 69.
+   *
+   * **`canRenderImage` is false here as the burn-in case, not as a prediction
+   * about the TV** (#30). libpgs is plain JavaScript and degrades to drawing
+   * on the main thread, so a real webOS 5 device layer is expected to answer
+   * `true` — but something has to stand for a device that cannot decode a
+   * bitmap, or the "the Server burns them in" half of #30 would be reachable
+   * only through VobSub and DVB, which take that path on every device and so
+   * would never exercise the capability test at all.
    */
   'webos-5-like': {
     deviceName: 'Test TV',

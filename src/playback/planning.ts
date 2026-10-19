@@ -105,7 +105,12 @@ export async function planPlayback(
   options: PlanPlaybackOptions,
 ): Promise<PlaybackAttempt> {
   const capabilities = options.device.videoCapabilities();
-  const profile = deviceProfileFor(capabilities);
+  /*
+   * The subtitle capabilities go into the profile too (#30): which image
+   * formats it claims is how burn-in is asked for, and a profile that claimed
+   * one this device cannot draw would be handed a bitmap and draw nothing.
+   */
+  const profile = deviceProfileFor(capabilities, options.device.subtitleCapabilities());
   const startTicks = options.resumeTicks ?? 0;
 
   let answer;

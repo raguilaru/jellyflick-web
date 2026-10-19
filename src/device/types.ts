@@ -72,7 +72,7 @@ export type SubtitleCapabilities = {
  * stop. A narrow seam is what lets the webOS port answer it with a different
  * library (`decisions.md` §8) without anything above noticing.
  */
-export type StyledSubtitleRenderer = {
+export type SubtitleRenderer = {
   /**
    * Shift the subtitles, in seconds, positive for later (#28). It is the same
    * number the app-drawn overlay subtracts from the element's position, and
@@ -84,6 +84,22 @@ export type StyledSubtitleRenderer = {
   /** Stop, free the worker and the WASM heap, and take the drawing away. */
   destroy(): void;
 };
+
+export type StyledSubtitleRenderer = SubtitleRenderer;
+
+/**
+ * A loaded image-subtitle renderer: `libpgs`, decoding a PGS bitmap stream and
+ * drawing it onto a canvas over the picture (#30).
+ *
+ * **It is the same two methods as the styled one, and that is a finding rather
+ * than a coincidence.** #29 cut that seam at `setTimeOffset` and `destroy`
+ * because they are the one thing that changes while a User watches and the one
+ * thing owed on unmount; a second library, chosen a ticket later for an
+ * unrelated format, turned out to need neither more nor less. So the two alias
+ * one type, and the player's two canvas overlays are the same shape to
+ * everything above them.
+ */
+export type ImageSubtitleRenderer = SubtitleRenderer;
 
 export type StyledSubtitleRendererOptions = {
   /** The element whose picture the subtitles are drawn over and timed against. */
@@ -97,6 +113,28 @@ export type StyledSubtitleRendererOptions = {
    * itself — in its worker, which is where it wants them (#29).
    */
   readonly fontUrls: readonly string[];
+  /** The Subtitle Offset in force when it starts, so it opens already shifted. */
+  readonly timeOffset: number;
+};
+
+export type ImageSubtitleRendererOptions = {
+  /** The element whose picture the subtitles are drawn over and timed against. */
+  readonly video: HTMLVideoElement;
+  /** The canvas to draw on, already sized and positioned by the caller. */
+  readonly canvas: HTMLCanvasElement;
+  /**
+   * The PGS stream's **address**, not its bytes, and that is the one way this
+   * differs from the styled options above.
+   *
+   * A `.sup` is a sequence of binary display sets rather than a text file, and
+   * `libpgs` would rather fetch it in the worker that decodes it — the same
+   * trade #29's embedded fonts make. Handing over a URL keeps a stream that
+   * can run to several megabytes of run-length-encoded bitmaps off the main
+   * thread entirely, and the token rides in the query as `ApiKey` for the same
+   * reason the video's and the attachments' do: nothing else can send a header
+   * for a fetch this app does not make.
+   */
+  readonly subtitleUrl: string;
   /** The Subtitle Offset in force when it starts, so it opens already shifted. */
   readonly timeOffset: number;
 };
@@ -188,6 +226,40 @@ export type DeviceLayer = {
   loadStyledSubtitleRenderer(
     options: StyledSubtitleRendererOptions,
   ): Promise<StyledSubtitleRenderer>;
+
+  /**
+   * Load the image-subtitle renderer this device can use, and start it on the
+   * PGS stream it is given (#30).
+   *
+   * The sibling of `loadStyledSubtitleRenderer`, here for the same three
+   * reasons and one more of its own.
+   *
+   * **Lazy**, so the decoder is in a chunk nobody fetches until a User picks a
+   * PGS track — the ticket's second acceptance criterion, and the reason this
+   * is a `Promise` rather than a constructor.
+   *
+   * **The device layer's**, because the engine is a device question and
+   * because `libpgs` has to be told which of its three modes to run in, which
+   * is `typeof OffscreenCanvas` — exactly what `src/device/` exists to keep
+   * out of `src/playback/`. Nothing may import `image-subtitle-renderer.ts`
+   * statically.
+   *
+   * **Gated** by `subtitleCapabilities().canRenderImage`, which is also what
+   * the DeviceProfile claims PGS on: a device that asks for the stream and a
+   * device that told the Server not to burn it in have to be the same device,
+   * or a User gets a picture with the words in it *and* a decoder drawing them
+   * again on top.
+   *
+   * **And it rejects** rather than returning something that draws nothing,
+   * like #29's — but the fallback differs, and that is the one of its own. A
+   * styled track that cannot be styled still has words to draw; a PGS track
+   * that cannot be decoded has nothing underneath it, because the bitmap *is*
+   * the subtitle. So the caller has no second renderer to reach for and says
+   * so beside the picture instead.
+   */
+  loadImageSubtitleRenderer(
+    options: ImageSubtitleRendererOptions,
+  ): Promise<ImageSubtitleRenderer>;
 
   /** Milliseconds since the epoch. Injected so tests can fix the clock. */
   now(): number;
