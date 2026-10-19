@@ -705,7 +705,9 @@ More info, and its local trailer.
 - **The other three Sources are their Rows, read through `billboardFromRow`**
   (#22). Each one calls **the Row's own loader** — `loadNewOnJellyflick`,
   `loadContinueWatching` + `continueWatchingRow`, `loadBecauseYouWatched` — and
-  takes the ids it answers, in its order. That is what makes "the same rules as
+  takes the ids it answers, in its order — through the screen's shared reads,
+  so the Row drawn underneath is handed that same answer rather than asking
+  for it again (#41, see below). That is what makes "the same rules as
   the Row" true by construction rather than by a second copy of each rule:
   Resume inherits the three-read merge, one entry per Title, and a hidden
   Series staying hidden until its activity moves on, without restating any of
@@ -804,6 +806,55 @@ heading named Arrival, which Home itself now legitimately has, and now assert
 that the page's own `.title__sheet` is gone; and the wheel-over-a-Row test
 compared the page's scroll against zero, which only held while Home fitted the
 viewport, and now compares it against where hovering the Row left it.
+
+## One read per screen
+
+`src/home/shared-reads.ts` is #41: the Billboard Source and the Row that want
+the same data read it once.
+
+- **What is shared is the read, never the rules.** The module knows nothing
+  about Rows, Titles or the Billboard. A loader asks for its answer by a key it
+  writes itself and the second caller to ask for that key is handed the first
+  one's promise, so the Billboard still reaches Continue Watching only through
+  `loadContinueWatching` and `continue-watching.ts` is still the one place that
+  Row's rules live. A fix that copied the Row's three-read merge, its
+  one-entry-per-Title rule or its hidden-Series behaviour into the Billboard
+  would have dropped the same number of reads and been the wrong fix.
+- **A loader opts in; it does not have to.** `loadContinueWatching`,
+  `loadNewOnJellyflick` and `loadBecauseYouWatched` each take a `SharedReads`
+  and fall back to `NO_SHARED_READS`, which simply reads. So a loader called on
+  its own — a unit test, a screen that has not been given a cache — behaves
+  exactly as it did, and sharing is something a screen switches on rather than
+  something every call site has to know about.
+- **The key is the question, including what narrows it.** The kind and the
+  limit are in it, because a section about Movies asks Continue Watching one
+  question where Home asks three: those are two answers and not one shared one.
+  Handing Series what Movies was told would be invisible on screen — the Row
+  would simply come out short.
+- **It is one screen's cache and nothing longer.** `useSharedReadsFor` makes a
+  fresh one whenever the address, the Server or the User changes, which is
+  exactly when a Row re-reads anyway: Home unmounts on a navigation and reads
+  itself again on the way back. Nothing expires, nothing is invalidated and
+  nothing is written to — the lifetime *is* the invalidation.
+- **The cache is replaced during render, not in an effect**, and that is
+  load-bearing: a child's effect runs before its parent's, so a cache cleared
+  in an effect in `ShellFrame` would be cleared *after* the Rows below had
+  already filled it, and the first screen after every navigation would read
+  everything twice. It is made in `ShellFrame` because the Billboard is the one
+  reader that lives above the router; the Rows reach the same one through
+  `SharedReadsProvider`.
+- **`loadBecauseYouWatched` is the one that asks twice in sequence**, so it is
+  told whether its answer is still wanted. `once` takes that predicate per
+  caller and hands the loader "**any** of them still wants it": a Row that has
+  gone must not keep asking, and a Billboard that joined the same read must not
+  be cut off because the Row left.
+- **It is measured on the wire, not reasoned about.**
+  `test/unit/reading-a-row-once.test.tsx` counts the fake Jellyfin's own record
+  of every request, because the deliverable is a number of round trips and no
+  assertion about the DOM can see it — a shared read that quietly did nothing
+  would draw exactly the same screen. Home with Resume featured and Continue
+  Watching on it made **6** Continue Watching reads and now makes **3**; its
+  whole library-read count fell from 16 to 13.
 
 ## The Movies and Series sections
 

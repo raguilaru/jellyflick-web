@@ -8,6 +8,7 @@ import type { HomeRow, HomeRowKind } from './home-layout';
 import { loadNewOnJellyflick, type NewOnJellyflickResult } from './new-on-jellyflick';
 import { useOpenTitle } from './open-title';
 import { Row, type RowCard } from './row';
+import { useSharedReads } from './shared-reads';
 import {
   loadBecauseYouWatched,
   loadCollectionRow,
@@ -114,6 +115,9 @@ export type HomeRowProps = {
 /** One Row of Home, whichever kind it is. */
 export function HomeRowFor({ row, gateway, readKey, titleKind }: HomeRowProps) {
   const t = useTranslate();
+  // The screen's shared reads (#41): a Billboard Source that is one of these
+  // Rows is handed this Row's answer rather than reading the Server again.
+  const reads = useSharedReads();
   const choice = row.parameter;
   const ofKind = titleKind === undefined ? {} : { kind: titleKind };
 
@@ -139,7 +143,7 @@ export function HomeRowFor({ row, gateway, readKey, titleKind }: HomeRowProps) {
           readKey={readKey}
           // The one loader that asks twice in sequence, so it is told when the
           // Row has gone rather than going on talking to the Server for it.
-          load={(stillWanted) => loadBecauseYouWatched(gateway, undefined, stillWanted)}
+          load={(stillWanted) => loadBecauseYouWatched(gateway, undefined, stillWanted, reads)}
           // The Server says which Title it suggested from; the heading is the
           // sentence that makes of it.
           headingFrom={(title) => t('home.row.becauseYouWatchedTitle', { title })}
@@ -275,15 +279,18 @@ function NewOnJellyflickRow({
 }) {
   const t = useTranslate();
   const openTitle = useOpenTitle();
+  const reads = useSharedReads();
   const [result, setResult] = useState<NewOnJellyflickResult | undefined>(undefined);
 
   useEffect(() => {
     let abandoned = false;
     setResult(undefined);
-    void loadNewOnJellyflick(gateway, kind === undefined ? {} : { kind }).then((loaded) => {
-      if (abandoned) return;
-      setResult(loaded);
-    });
+    void loadNewOnJellyflick(gateway, { ...(kind === undefined ? {} : { kind }), reads }).then(
+      (loaded) => {
+        if (abandoned) return;
+        setResult(loaded);
+      },
+    );
     return () => {
       abandoned = true;
     };

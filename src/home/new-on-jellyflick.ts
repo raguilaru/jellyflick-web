@@ -2,6 +2,7 @@ import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models/base
 import { catalogueItemFrom, titleOf, type Title } from '../catalogue/catalogue';
 import type { JellyfinGateway, TitleKind } from '../jellyfin/gateway';
 import { cardForTitle, type RowCard } from './row';
+import { NO_SHARED_READS, type SharedReads } from './shared-reads';
 
 /**
  * New on Jellyflick: the newest Titles across all libraries, newest first, with
@@ -41,6 +42,12 @@ export type NewOnJellyflickOptions = {
    * Series section that trusted the type would have left it out.
    */
   kind?: TitleKind;
+  /**
+   * The screen's shared reads (#41). The Newest Addition Billboard Source
+   * calls this very function, so with one of these in hand the Billboard and
+   * the Row ask each library once between them rather than twice each.
+   */
+  reads?: SharedReads;
 };
 
 /**
@@ -60,11 +67,29 @@ export type NewOnJellyflickResult =
  * so one unreadable library does not quietly shorten the Row. Only a Server that
  * will not say what libraries there are makes the whole Row unavailable.
  */
-export async function loadNewOnJellyflick(
+export function loadNewOnJellyflick(
   gateway: JellyfinGateway,
   options: NewOnJellyflickOptions = {},
 ): Promise<NewOnJellyflickResult> {
   const limit = options.limit ?? NEW_ON_JELLYFLICK_LIMIT;
+  const reads = options.reads ?? NO_SHARED_READS;
+  /**
+   * The kind is in the key although it narrows the *merge* rather than any
+   * query: what is cached is the Row this call came to, and a section's Row is
+   * not Home's. Two screens are never drawn at once, so this costs nothing and
+   * says plainly that the answers are not interchangeable.
+   */
+  return reads.once<NewOnJellyflickResult>(
+    `new-on-jellyflick|${options.kind ?? 'any-kind'}|${String(limit)}`,
+    () => readNewOnJellyflick(gateway, limit, options.kind),
+  );
+}
+
+async function readNewOnJellyflick(
+  gateway: JellyfinGateway,
+  limit: number,
+  kind: TitleKind | undefined,
+): Promise<NewOnJellyflickResult> {
   let libraries;
   try {
     libraries = await gateway.getUserViews();
@@ -83,7 +108,7 @@ export async function loadNewOnJellyflick(
   );
 
   const merged = mergeNewOnJellyflick(latest, limit).filter(
-    (title) => options.kind === undefined || title.kind === options.kind,
+    (title) => kind === undefined || title.kind === kind,
   );
   return {
     outcome: 'row',
