@@ -54,6 +54,19 @@ import { deviceLocaleFor, uiLocaleFor } from './ui-language';
 /** The screen's own address. Not in `SECTIONS`; see the note above. */
 export const SETTINGS_PATH = '/settings';
 
+/**
+ * Where the licence texts are served from (#48).
+ *
+ * **Not a route**: it is a real file on disk at `public/licences/NOTICE.txt`,
+ * which Vite copies verbatim into `dist/` and the container's server serves as
+ * `text/plain`. So following this link leaves the app, which is the point —
+ * the texts are the thing being distributed, not a view of it. The server's
+ * SPA fallback deliberately does not catch it: a path with an extension 404s
+ * rather than being answered with the shell, so if the file ever stopped
+ * shipping this link would fail loudly instead of showing a blank app.
+ */
+export const LICENCES_PATH = '/licences/NOTICE.txt';
+
 export type SettingsScreenProps = {
   /** For the device's own languages, which the language choice falls back to. */
   device: DeviceLayer;
@@ -322,6 +335,27 @@ export function SettingsScreen({ device }: SettingsScreenProps) {
             <p class="settings-choices">
               <a class="button button--quiet" href={HOME_LAYOUT_PATH}>
                 {t('homeLayout.heading')}
+              </a>
+            </p>
+          </section>
+
+          {/* The licences of the code the app serves (#48). Serving libass and
+              the rest to a browser is distribution, so the texts travel with
+              the app, and this is the thing that makes them reachable from it.
+
+              It is a link to a plain text file rather than a screen, which is
+              what the host chose: the texts are served straight out of
+              `public/licences/`, so there is nothing to render, nothing to
+              keep in step with the files and nothing to translate — a
+              translated licence is not the licence. `target` is deliberately
+              absent: a new tab is a dead end on a TV, and Back is the one
+              control every remote has. */}
+          <section class="settings-group">
+            <h2 class="settings-group__heading">{t('settings.licencesHeading')}</h2>
+            <p class="notice">{t('settings.licencesExplanation')}</p>
+            <p class="settings-choices">
+              <a class="button button--quiet" href={LICENCES_PATH}>
+                {t('settings.licencesLink')}
               </a>
             </p>
           </section>
