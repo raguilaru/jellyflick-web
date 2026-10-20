@@ -1990,6 +1990,22 @@ built.
   language's translated name (`title.language`) and then to its index. A Server's
   label is data, like a Title's name, and it is what every other Jellyfin app
   shows for that track.
+- **Focus comes in with the menu and goes back out with it** (#53). The first
+  half was always here: the press that opened the menu was on a button the menu
+  is now drawn over, and the flow rule above only keeps focus inside something
+  fixed that focus is already inside. The second half was missing, and it is the
+  same defect #32 fixed in the options menu and #34 met a third variant of —
+  every way out of this menu removes the focused element (Done, Back, and a
+  subtitle choice that needs no re-negotiation), so a browser hands focus to the
+  **document**, and from there the arrow keys walk the title page *behind* the
+  picture (#40). The unmount hands focus back to the control the menu was opened
+  from, **only if it is still connected**: choosing a different sound track, or
+  a subtitle track the Server has to burn in (#30), re-negotiates and rebuilds
+  the control row, so focusing the old button would put focus on the document —
+  the very thing being avoided — and the controls' own effect answers that case.
+  The three shapes of this bug are now in the same family: a dialog that *goes
+  away* (here and #32), and a dialog that *stays and changes its contents*
+  (#34's panel, which needs the second effect instead).
 
 Where each thing is tested: parsing and timing in
 `test/unit/subtitle-cues.test.ts`, with the WebVTT and SubRip grammars as

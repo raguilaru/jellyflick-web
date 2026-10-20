@@ -194,6 +194,101 @@ describe('the track picker', () => {
   });
 
   /**
+   * **And it hands focus back out with the menu** (#53), which is the half
+   * that was missing until then — the identical defect #32 met in the options
+   * menu, left alone there because this is #27's control.
+   *
+   * Every way out of this menu removes the focused element: Done closes it,
+   * Back closes it, and a subtitle choice that needs no re-negotiation closes
+   * it. The focused button goes with the menu, so a browser hands focus to the
+   * **document** — and from there the arrow keys are not inside the player at
+   * all, so the next press walks the title page *behind* the picture, because
+   * the flow rule can only keep focus in an overlay focus is already in (#7,
+   * #40). #32's e2e watched that happen on a 390px screen with every unit
+   * assertion green.
+   *
+   * Focused before the press, which a browser does for itself and `fireEvent`
+   * does not: a press leaves focus on the button pressed, and "what had focus
+   * when the menu opened" is the whole of what the menu gives back.
+   */
+  it('hands focus back to the control it was opened from', async () => {
+    await play();
+    const opener = screen.getByRole('button', { name: 'Audio and subtitles for Arrival' });
+    opener.focus();
+    fireEvent.click(opener);
+    await screen.findByRole('dialog', { name: en['player.tracksLabel'] });
+
+    fireEvent.click(screen.getByRole('button', { name: en['player.tracksDone'] }));
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(opener);
+    });
+  });
+
+  /** Back is a way out of the menu like any other, and owes the same. */
+  it('hands focus back when Back closes the menu', async () => {
+    await play();
+    const opener = screen.getByRole('button', { name: 'Audio and subtitles for Arrival' });
+    opener.focus();
+    fireEvent.click(opener);
+    await screen.findByRole('dialog', { name: en['player.tracksLabel'] });
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(opener);
+    });
+  });
+
+  /**
+   * And so does a choice: switching to a text subtitle track touches nothing
+   * but this app, so the control row is still there to go back to.
+   */
+  it('hands focus back when a subtitle choice closes the menu', async () => {
+    await play();
+    const opener = screen.getByRole('button', { name: 'Audio and subtitles for Arrival' });
+    opener.focus();
+    fireEvent.click(opener);
+    await screen.findByRole('dialog', { name: en['player.tracksLabel'] });
+
+    fireEvent.click(
+      within(groupNamed(en['player.subtitleTracks'])).getByRole('button', { name: 'English' }),
+    );
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(opener);
+    });
+  });
+
+  /**
+   * **Unless the control went with a re-negotiation**, which is the guard #32
+   * found and which is load-bearing here too: choosing a different sound track
+   * asks the Server again and rebuilds the whole control row, so the button
+   * this was opened from is detached by the time the menu unmounts. Focusing a
+   * detached node puts focus on the document — the very thing being avoided —
+   * so that case is the controls' own `ready` effect's to answer.
+   */
+  it('leaves focus to the controls when the choice rebuilt them', async () => {
+    await play();
+    const opener = screen.getByRole('button', { name: 'Audio and subtitles for Arrival' });
+    opener.focus();
+    fireEvent.click(opener);
+    await screen.findByRole('dialog', { name: en['player.tracksLabel'] });
+
+    fireEvent.click(
+      within(groupNamed(en['player.audioTracks'])).getByRole('button', { name: 'French' }),
+    );
+
+    await waitFor(async () => {
+      expect(await playbackInfoRequests()).toBe(2);
+    });
+    await waitFor(() => {
+      expect(document.activeElement).not.toBe(document.body);
+      expect(document.activeElement?.closest('.player')).toBeTruthy();
+    });
+  });
+
+  /**
    * The claim stack in `src/shell/back.ts` is innermost-last, which is what
    * lets the picker claim Back on top of the player's claim without either of
    * them knowing about the other.
