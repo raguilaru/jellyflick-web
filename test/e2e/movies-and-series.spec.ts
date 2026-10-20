@@ -174,6 +174,90 @@ function widthOf(page: Page): Promise<{ scroll: number; client: number; overflow
   });
 }
 
+/** The space the row asks for between its two links: `--space-2` in `base.css`. */
+const SPACE_BETWEEN_SECTION_LINKS = 8;
+
+/**
+ * The smallest distance between the two section links' boxes, along whichever
+ * axis separates them — so one number answers the question whether they sit
+ * side by side on one line or wrapped onto two.
+ *
+ * **Zero or less means they touch**, which is the defect #61 reports. The
+ * measurement is deliberately not either of the two shapes already in this
+ * file: `widthOf` sees a container wider than the screen, and #56's
+ * own-right-edge loop sees a control clipped by its edge. **Both pass here
+ * either way** — the row wraps and nothing is clipped, so nothing overflows
+ * and no control leaves the screen. A spacing defect is only visible as a
+ * space, and this is the only assertion in the project that measures one.
+ */
+async function spaceBetweenTheSectionLinks(page: Page): Promise<number> {
+  const links = page.locator('.home__sections').getByRole('link');
+  // Asserted before the loop below, because a measurement of a row that was
+  // never drawn would pass by vacuousness — #57 found exactly that.
+  await expect(links).toHaveCount(2);
+
+  const first = await links.nth(0).boundingBox();
+  const second = await links.nth(1).boundingBox();
+  if (first === null || second === null) {
+    throw new Error('A section link with no box is one this measurement cannot see.');
+  }
+
+  const horizontal = Math.max(
+    second.x - (first.x + first.width),
+    first.x - (second.x + second.width),
+  );
+  const vertical = Math.max(
+    second.y - (first.y + first.height),
+    first.y - (second.y + second.height),
+  );
+  return Math.max(horizontal, vertical);
+}
+
+/**
+ * **#61: the two section links do not touch on the TV target.**
+ *
+ * `.home__sections` spaced them with flex `gap`, which is **Chrome 84**. ADR
+ * 0002's floor is webOS 5 / Chromium 68, so on the TV the declaration is
+ * simply dropped and the two links sit edge to edge. It is the same class of
+ * defect as #49: a rule that is inert on the floor, invisible to every test,
+ * because this suite runs a desktop Chromium where `gap` works.
+ *
+ * **That is why the second measurement exists, and it is the one that matters.**
+ * Asserting the distance as *this* browser draws it cannot fail while the bug
+ * is present — `gap` works here, so the links are 8px apart either way. So the
+ * row is measured a second time with flex `gap` forced to zero, which is
+ * exactly and only what Chromium 68 does to it. The fix spaces the links with
+ * **margins on the children** (#44's shape, as #56 applied it to the
+ * Billboard's rows), and a margin is Chrome 1 — so it survives that
+ * neutralisation, and a `gap` does not.
+ *
+ * Held against its own failure: with the `gap` rule restored this test fails
+ * on the second measurement at 0px, while the first measurement, `widthOf`
+ * above and #56's own-edge loop all stay green.
+ */
+test('[phone] Home’s two section links keep their space without flex gap (#61)', async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'phone', 'the pair is only on Home at phone width');
+
+  await page.setViewportSize({ width: 375, height: 812 });
+  await signIn(page);
+  await expect(page.getByRole('link', { name: 'Movies', exact: true })).toBeVisible();
+
+  // As this browser draws it. True of a `gap` too, so it is the weaker half.
+  expect(await spaceBetweenTheSectionLinks(page)).toBeGreaterThanOrEqual(
+    SPACE_BETWEEN_SECTION_LINKS,
+  );
+
+  // As the floor draws it: flex `gap` contributes nothing on Chromium 68.
+  await page.addStyleTag({
+    content: '.home__sections { column-gap: 0 !important; row-gap: 0 !important; }',
+  });
+  expect(await spaceBetweenTheSectionLinks(page)).toBeGreaterThanOrEqual(
+    SPACE_BETWEEN_SECTION_LINKS,
+  );
+});
+
 test('a card in a section opens that Title’s page', async ({ page }) => {
   await signIn(page);
   await page.goto('/movies');

@@ -1248,12 +1248,44 @@ html[data-input='pointer'] [tabindex]:focus {
  * passing, because Playwright scrolls an element into view before looking at
  * it. The links share the quiet button look with Edit Home below them, which
  * is the nearest precedent for a non-Row element on Home.
+ *
+ * **The space between the links is margins on the children, never flex `gap`**
+ * (#61). `gap` is Chrome 84 and this row had it: on ADR 0002's floor of webOS
+ * 5 / Chromium 68 the declaration is simply dropped and **the two links touch
+ * each other**. It is #49's class of defect — a rule that is inert on the
+ * target and invisible to every test, because the suite runs a desktop
+ * Chromium where `gap` works — and the shape here is #44's, as #56 applied it
+ * to both of the Billboard's rows: wrapped flex, `var(--space-1)` margins on
+ * the children, and a matching negative side margin on the row so the first
+ * link still lines up with the words above it however many lines the row takes.
+ *
+ * `test/e2e/movies-and-series.spec.ts` measures the distance between the two
+ * links **twice**: as this browser draws it, and again with flex `gap` forced
+ * to zero, which is exactly what the floor does to it. Only the second
+ * measurement can fail while the defect is present, and neither the
+ * scroll-width check nor #56's own-right-edge loop can see it at all — the row
+ * wraps and nothing is clipped, so nothing overflows and no link leaves the
+ * screen. A spacing defect is only visible as a space.
  */
 .home__sections {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
-  margin: 0;
+  align-items: center;
+  /* Cancels the children's own side margins at both edges of the line. */
+  margin: 0 calc(var(--space-1) * -1);
+  min-width: 0;
+}
+
+/*
+ * Written `.home__sections > .button` rather than on a class alone, which is
+ * #49's trap and the reason `.user-list__sign-out`, `.genres__genre` and both
+ * of the Billboard's rows are doubled with `.button` too: `.button` sets
+ * `margin-top`, so a selector that only tied with it on specificity would be
+ * decided by source order. This rule does not tie — it wins outright — and
+ * that is the point, because it is then true wherever in this file it sits.
+ */
+.home__sections > .button {
+  margin: var(--space-1);
 }
 
 .layout-rows {
