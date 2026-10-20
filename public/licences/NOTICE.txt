@@ -1,0 +1,328 @@
+Jellyflick — the licences of the code it serves
+==============================================
+
+Jellyflick is a web client, so opening it makes your browser download and run
+the third-party code listed here. That is distribution, and it is why these
+licence texts travel with the app: they are committed in the repository, they
+are copied into the container image, and the settings screen links to this
+file so they are reachable from the running app rather than only from the
+source.
+
+Everything stated below was read from the installed package itself — its own
+licence file, the `license` field of its own `package.json`, the strings
+compiled into the WebAssembly binary, or a font's own `name` table — and every
+component listed is one whose bytes are really in the build output. Nothing
+here is taken from a summary elsewhere.
+
+The full texts are the other files in this directory, named after the licence
+they carry. Where a licence is short enough that its text *is* the notice —
+MIT and the two like it — the text is quoted in full below instead, which is
+all those licences ask for.
+
+
+CONTENTS
+
+  1. Subtitle rendering, compiled to WebAssembly
+  2. JavaScript the browser downloads
+  3. Fonts
+  4. The full texts in this directory
+  5. Jellyflick's own licence, which is not settled yet
+
+
+1. SUBTITLE RENDERING, COMPILED TO WEBASSEMBLY
+==============================================
+
+Jellyflick draws styled (ASS/SSA) subtitles with `jassub`, which compiles four
+C libraries to WebAssembly. The browser downloads them as
+`assets/jassub-worker-*.wasm` and `assets/jassub-worker-modern-*.wasm`, about
+4.3 MB in total. The names and versions below are from the symbol and path
+strings inside those binaries.
+
+libass
+------
+  What it is:  the subtitle renderer itself — it parses ASS/SSA subtitles and
+               rasterises them, which is the whole of Jellyflick's styled
+               subtitle support.
+  Licence:     LGPL-2.1-or-later. Full text: LGPL-2.1.txt
+  Source:      https://github.com/libass/libass
+
+  The LGPL asks that you be told where to get the source of the library, and
+  that you be able to get the source of the version actually linked here. That
+  version is not a release tarball: it is libass built from the submodule
+  pinned in JASSUB's own repository, by the Docker build in that repository.
+  So the complete corresponding source is:
+
+    libass upstream   https://github.com/libass/libass
+    as built here     https://github.com/ThaUnknown/jassub
+                      (`lib/libass`, with `run-docker-build.sh`)
+
+  The build paths left in the binary — `/code/lib/libass/libass/ass.c` and its
+  neighbours — are that submodule.
+
+FriBidi 1.0.16
+--------------
+  What it is:  the bidirectional text algorithm, so right-to-left subtitles
+               (Arabic, Hebrew) are laid out in the correct order.
+  Licence:     LGPL-2.1-or-later. Full text: LGPL-2.1.txt
+  Source:      https://github.com/fribidi/fribidi
+               as built here: https://github.com/ThaUnknown/jassub
+
+HarfBuzz 8.5.0
+--------------
+  What it is:  the text shaper — it turns characters into positioned glyphs,
+               which is what makes ligatures and complex scripts come out
+               right.
+  Licence:     the "Old MIT" licence (SPDX: MIT-Modern-Variant).
+               Full text, with its copyright holders: harfbuzz-MIT.txt
+  Source:      https://github.com/harfbuzz/harfbuzz
+               as built here: https://github.com/ThaUnknown/jassub
+
+FreeType
+--------
+  What it is:  the font rasteriser, which renders the glyph outlines libass
+               asks for.
+  Licence:     dual-licensed, FTL or GPL-2.0-or-later. Jellyflick relies on
+               the FreeType Project License (FTL). Full text: FTL.txt
+  Source:      https://gitlab.freedesktop.org/freetype/freetype
+               as built here: https://github.com/ThaUnknown/jassub
+
+  The FTL asks that credit be given in the documentation. This is it:
+
+    Portions of this software are copyright © The FreeType Project
+    (https://www.freetype.org). All rights reserved.
+
+  `fontconfig` is *not* part of this build: JASSUB does its own font
+  selection, and no fontconfig symbol appears in the binaries. Older notes in
+  this repository's research that list it are out of date.
+
+
+2. JAVASCRIPT THE BROWSER DOWNLOADS
+===================================
+
+jassub 2.5.20 — MIT
+-------------------
+  What it is:  the JavaScript wrapper and worker around the WebAssembly above.
+  Source:      https://github.com/ThaUnknown/jassub
+  The package declares the compound licence of everything it bundles; this MIT
+  text is the wrapper's own, and section 1 covers the libraries.
+
+    MIT License
+
+    Copyright (c) 2021-2022 JASSUB contributors
+    Copyright (c) 2017-2021 JavascriptSubtitlesOctopus contributors
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the
+    "Software"), to deal in the Software without restriction, including
+    without limitation the rights to use, copy, modify, merge, publish,
+    distribute, sublicense, and/or sell copies of the Software, and to permit
+    persons to whom the Software is furnished to do so, subject to the
+    following conditions:
+
+    The above copyright notice and this permission notice shall be included
+    in all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+    OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+    MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+    NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+    DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+    OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+    USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+abslink 1.3.1 — Apache-2.0
+--------------------------
+  What it is:  the remote-procedure layer JASSUB talks to its worker over. It
+               is a separate chunk in the build output.
+  Licence:     Apache-2.0. Full text: Apache-2.0.txt
+  Source:      https://github.com/ThaUnknown/abslink
+
+  The published package ships no licence file of its own; `Apache-2.0` is what
+  its `package.json` declares, and the text in this directory is the canonical
+  one that identifier names.
+
+lfa-ponyfill 1.1.1 — MIT
+------------------------
+  What it is:  a stand-in for `queryLocalFonts`, so JASSUB can find out which
+               fonts are available for a subtitle to ask for.
+  Source:      https://github.com/ThaUnknown/lfa-ponyfill
+
+  The published package ships no licence file of its own. Its `package.json`
+  declares `MIT` and names ThaUnknown as the author, so the MIT terms are:
+
+    Copyright (c) ThaUnknown
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the
+    "Software"), to deal in the Software without restriction, including
+    without limitation the rights to use, copy, modify, merge, publish,
+    distribute, sublicense, and/or sell copies of the Software, and to permit
+    persons to whom the Software is furnished to do so, subject to the
+    following conditions:
+
+    The above copyright notice and this permission notice shall be included
+    in all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+    OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+    MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+    NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+    DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+    OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+    USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+rvfc-polyfill 1.0.8 — GPL-3.0
+-----------------------------
+  What it is:  a polyfill for `HTMLVideoElement.requestVideoFrameCallback`,
+               which JASSUB uses to draw a subtitle in step with the video
+               frames. `jassub` imports it unconditionally, so its code is in
+               the bundle whether or not the browser needs it.
+  Licence:     GPL-3.0. Full text: GPL-3.0.txt
+  Source:      https://github.com/ThaUnknown/rvfc-polyfill
+
+  This one is a stricter licence than everything else here, and what it asks of
+  Jellyflick as a whole depends on the licence Jellyflick itself takes, which
+  is not chosen yet. See section 5.
+
+libpgs 0.9.0 — MIT
+------------------
+  What it is:  the PGS (Blu-ray bitmap) subtitle decoder, downloaded as its own
+               worker chunk.
+  Source:      https://github.com/Arcus92/libpgs-js
+
+    MIT License
+
+    Copyright (c) 2024 David Schulte
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the
+    "Software"), to deal in the Software without restriction, including
+    without limitation the rights to use, copy, modify, merge, publish,
+    distribute, sublicense, and/or sell copies of the Software, and to permit
+    persons to whom the Software is furnished to do so, subject to the
+    following conditions:
+
+    The above copyright notice and this permission notice shall be included
+    in all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+    OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+    MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+    NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+    DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+    OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+    USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+hls.js 1.7.3 — Apache-2.0
+-------------------------
+  What it is:  the HLS player, fetched only when a Title has to be transcoded.
+  Licence:     Apache-2.0. Full text: Apache-2.0.txt
+  Source:      https://github.com/video-dev/hls.js
+
+  Its own notice, verbatim:
+
+    Copyright (c) 2017 Dailymotion (http://www.dailymotion.com)
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+
+    src/remux/mp4-generator.js and src/demux/exp-golomb.ts implementation in
+    this project are derived from the HLS library for video.js
+    (https://github.com/videojs/videojs-contrib-hls)
+
+    That work is also covered by the Apache 2 License, following copyright:
+    Copyright (c) 2013-2015 Brightcove
+
+Preact 11.0.1 and preact-iso 2.12.2 — MIT
+-----------------------------------------
+  What it is:  the UI library the whole app is built on, and its routing
+               helper. Both are in the main bundle.
+  Source:      https://github.com/preactjs/preact
+               https://github.com/preactjs/preact-iso
+
+    The MIT License (MIT)
+
+    Copyright (c) 2015-present Jason Miller
+    Copyright (c) 2020 The Preact Authors
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the
+    "Software"), to deal in the Software without restriction, including
+    without limitation the rights to use, copy, modify, merge, publish,
+    distribute, sublicense, and/or sell copies of the Software, and to permit
+    persons to whom the Software is furnished to do so, subject to the
+    following conditions:
+
+    The above copyright notice and this permission notice shall be included
+    in all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+    OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+    MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+    NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+    DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+    OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+    USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+  The two packages carry separate MIT files naming different holders, so both
+  copyright lines are above and the shared terms are stated once.
+
+
+3. FONTS
+========
+
+Liberation Sans 2.00.5 — OFL-1.1
+--------------------------------
+  What it is:  the fallback font JASSUB uses when a subtitle asks for a font
+               the Server has not embedded. It is `jassub`'s own
+               `default.woff2`, downloaded as `assets/default-*.woff2`.
+  Licence:     SIL Open Font License 1.1. Full text, with the font's own
+               copyright lines: liberation-sans-OFL.txt
+  Source:      https://github.com/liberationfonts/liberation-fonts
+
+Bebas Neue — OFL-1.1
+--------------------
+  What it is:  Jellyflick's own display face, self-hosted.
+  Licence:     SIL Open Font License 1.1. Its text has always lived beside the
+               font file it covers, which is the precedent this directory
+               follows: fonts/bebas-neue-OFL.txt
+  Source:      https://github.com/dharmatype/Bebas-Neue
+
+
+4. THE FULL TEXTS IN THIS DIRECTORY
+===================================
+
+  LGPL-2.1.txt             libass, FriBidi
+  FTL.txt                  FreeType
+  harfbuzz-MIT.txt         HarfBuzz ("Old MIT"), with its copyright holders
+  Apache-2.0.txt           abslink, hls.js
+  GPL-3.0.txt              rvfc-polyfill
+  liberation-sans-OFL.txt  Liberation Sans
+
+  and, beside the font it covers rather than in here:
+
+  fonts/bebas-neue-OFL.txt Bebas Neue
+
+
+5. JELLYFLICK'S OWN LICENCE, WHICH IS NOT SETTLED YET
+=====================================================
+
+Jellyflick has not chosen a licence of its own. Until it does, the container
+image's `org.opencontainers.image.licenses` label says `NOASSERTION`, which is
+the honest answer rather than a placeholder: there is nothing to assert.
+
+That choice is also what decides the rvfc-polyfill question in section 2.
+A GPL-3.0 dependency linked into the bundle has consequences for the terms the
+whole app can be offered under, and settling it means either taking compatible
+terms or not shipping that code. It is tracked as an issue of its own and is
+deliberately not decided by this file, whose job is to tell you accurately
+what you are running.
