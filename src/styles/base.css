@@ -365,30 +365,73 @@ body {
   color: var(--text-strong);
 }
 
-/* Grid, so `gap` is the Chrome 66 one rather than the Chrome 84 flex one. */
+/*
+ * Play and More info, and the trailer's sound and pause controls below them.
+ * **Both rows wrap** (#56), and both wrap the way the title page's facts and
+ * actions were made to in #44 — wrapped flex with margins on the children,
+ * never flex `gap`, which is Chrome 84 and silently does nothing on the floor
+ * (`decisions.md` §6). The negative side margin on the row cancels the
+ * children's own at both ends of the line, so the first button still lines up
+ * with the words above it however many lines the row takes.
+ *
+ * What was here before was a single grid row of `max-content` columns, which is
+ * as wide as its contents whatever the screen is. That is the same mistake #44
+ * shipped as a 635px sheet on a 375px screen, and #35 as nine languages running
+ * off the side of one, and it put "Pause the trailer" 3px past the right edge of
+ * a 390px screen in English and **62px past it in Spanish** — "Pausar el
+ * tráiler" after "Activar el sonido del tráiler".
+ *
+ * **No assertion in this project could see that**, which is the half of #56
+ * worth more than the pixels. A clipped control does not lengthen the document,
+ * so `scrollWidth` was exactly `clientWidth` in all four of the measured cases
+ * and the scroll-width check this project adopted after #44 was blind to every
+ * one of them; and Playwright scrolls a control into view before touching it,
+ * so every press passed regardless. `test/e2e/the-billboard.spec.ts` now
+ * measures each control's **own right edge** against the viewport, in English
+ * and in Spanish, which is the only shape that sees it.
+ */
 .billboard__actions {
-  margin: 0;
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: max-content;
-  justify-content: start;
-  gap: var(--space-2);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  /* Cancels the children's own side margins at both edges of the line. */
+  margin: 0 calc(var(--space-1) * -1);
+  min-width: 0;
 }
 
 /*
  * The trailer's sound and pause controls, in the corner away from the words.
  * Above the scrim with the words, because they are things to press.
+ *
+ * `left` is deliberately left `auto`: a shrink-to-fit absolute box is already
+ * laid out against the containing block's width less its own `right` offset, so
+ * the line wraps rather than being clipped — while setting `left` as well would
+ * stretch an invisible full-width box across the foot of the Billboard, on top
+ * of Play and More info.
  */
 .billboard__trailer-controls {
   position: absolute;
   right: var(--space-4);
   bottom: var(--space-4);
   z-index: 3;
-  margin: 0;
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: max-content;
-  gap: var(--space-2);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  /* A wrapped line stays in the corner the row lives in. */
+  justify-content: flex-end;
+  margin: 0 calc(var(--space-1) * -1);
+  min-width: 0;
+}
+
+/*
+ * Doubled with `.button` on purpose, both of them: `.button` is written further
+ * down this file and sets `margin-top`, so at equal specificity it would win on
+ * source order and the row's own spacing would do nothing — #49's trap, which
+ * `.user-list__sign-out` and `.genres__genre` above were both caught by.
+ */
+.billboard__actions > .button,
+.billboard__trailer-controls > .button {
+  margin: var(--space-1);
 }
 
 /* A phone has no room for a Billboard this tall, nor for a wide logo. */
@@ -410,7 +453,15 @@ body {
   .billboard__trailer-controls {
     position: static;
     order: 1;
-    justify-content: start;
+    /*
+     * `flex-start`, not `start`: the row is flex since #56, and the bare
+     * `start` keyword only reached flexbox in Chrome 93 — on ADR 0002's floor
+     * of 68 it is an invalid value, the declaration is dropped, and the row
+     * would keep the `flex-end` it has in the corner on a wide screen and sit
+     * right-aligned under the words on a phone. It ships raw past the
+     * minifier, so nothing would warn.
+     */
+    justify-content: flex-start;
   }
 }
 

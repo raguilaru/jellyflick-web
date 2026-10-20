@@ -65,6 +65,58 @@ async function openSettings(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible();
 }
 
+/**
+ * **#56's assertion: every control in a row measured by its own right edge
+ * against the width of the screen it is drawn on.**
+ *
+ * This is deliberately *not* `document.documentElement.scrollWidth >
+ * clientWidth`, which is the shape this project adopted after #44 as the one
+ * thing scrolling cannot paper over. **It is blind here**, and #34 confirmed
+ * that experimentally while writing `play-on.spec.ts`: a control clipped by the
+ * edge of the screen **does not lengthen the document**, so the scroll width
+ * stays exactly equal to the client width. On the tip this ticket was filed
+ * against, "Pause the trailer" ended at x=393.23 on a 390px viewport while
+ * `scrollWidth` and `clientWidth` were both 390.
+ *
+ * Every other assertion in this file is blind too, for the reason recorded
+ * against #44: **Playwright scrolls an element into view before touching it**,
+ * so the presses in `the local trailer plays by itself…` above pass whether the
+ * button is on the screen or off the side of it. The own-right-edge loop is the
+ * only assertion that sees it, which is why it is copied from
+ * `play-on.spec.ts` rather than reinvented.
+ *
+ * The count is asserted first on purpose. A loop over nothing passes, and #57
+ * has just found one of those in `styled-subtitles.spec.ts` — a test that was
+ * green with the renderer entirely removed. A measurement of zero controls
+ * would be exactly that.
+ */
+async function expectEveryControlOnTheScreen(page: Page, selector: string): Promise<void> {
+  const viewport = page.viewportSize();
+  if (viewport === null) throw new Error('No viewport to measure against.');
+
+  const controls = page.locator(selector).locator('a, button');
+  const count = await controls.count();
+  expect(count, `${selector} has no controls to measure`).toBeGreaterThan(0);
+
+  for (let index = 0; index < count; index += 1) {
+    const control = controls.nth(index);
+    const box = await control.boundingBox();
+    const name = ((await control.textContent()) ?? '?').trim();
+    // Thrown rather than skipped past: a control with no box is one this loop
+    // cannot see, which is the failure it exists to catch and not a pass.
+    if (box === null) throw new Error(`“${name}” in ${selector} has no box to measure.`);
+
+    expect(
+      box.x,
+      `“${name}” starts off the left of the ${String(viewport.width)}px screen`,
+    ).toBeGreaterThanOrEqual(0);
+    expect(
+      box.x + box.width,
+      `“${name}” runs off the right of the ${String(viewport.width)}px screen`,
+    ).toBeLessThanOrEqual(viewport.width);
+  }
+}
+
 /** Back to Home through whichever navigation bar this viewport has. */
 async function goHome(page: Page): Promise<void> {
   const bar = (await page.locator('.top-bar').count()) > 0 ? '.top-bar' : '.bottom-bar';
@@ -189,6 +241,80 @@ test('the local trailer plays by itself, muted, and can be unmuted and paused', 
   await page.getByRole('button', { name: 'Pause the trailer' }).press('Enter');
   await expect(trailer).toHaveJSProperty('paused', true);
   await expect(page.getByRole('button', { name: 'Play the trailer' })).toBeVisible();
+});
+
+/**
+ * **#56: the Billboard's two rows of controls fit the screen they are drawn
+ * on.** Both rows are measured, not only the trailer's, because they are the
+ * same shape of mistake: a single row of `max-content` columns is as wide as
+ * its contents whatever the screen is, and #44 shipped exactly that as a 635px
+ * sheet on a 375px screen with every end-to-end assertion green.
+ *
+ * Play and More info happened to fit in English when #56 was filed. That is not
+ * the same claim as that they fit, which is why they are measured here rather
+ * than taken on trust — and the Spanish run below is where it stops being a
+ * coincidence worth relying on.
+ */
+test('the Billboard’s rows of controls fit the screen they are drawn on', async ({
+  page,
+  request,
+}) => {
+  await featureOnly(request, 'movie-arrival');
+  await signIn(page);
+
+  // Play and More info are there to be measured.
+  await expect(billboard(page).locator('.billboard__play')).toBeVisible();
+  await expectEveryControlOnTheScreen(page, '.billboard__actions');
+
+  // The trailer's row arrives after the delay, so it is waited for — and the
+  // wait is what makes the loop below a measurement of controls that exist
+  // rather than #33's trap of a row that was never drawn.
+  await expect(page.getByRole('button', { name: 'Unmute the trailer' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Pause the trailer' })).toBeVisible();
+  await expectEveryControlOnTheScreen(page, '.billboard__trailer-controls');
+});
+
+/**
+ * **The same measurement in Spanish**, which #56 asks for because the figures
+ * on the issue are English and `src/i18n/es.ts` is longer almost everywhere:
+ * "Unmute the trailer" is "Activar el sonido del tráiler", and "More info" is
+ * "Más información". A row that fits English by three pixels is not a row that
+ * fits.
+ *
+ * The locale is the browser context's, not a press on the settings screen, so
+ * this is the default path story 113 describes — `device.preferredLanguages()`
+ * reading `navigator.languages`, which is what Playwright's `locale` sets.
+ */
+test.describe('in Spanish', () => {
+  test.use({ locale: 'es-ES' });
+
+  /** The same sign-in, in the language the device asked for. */
+  async function signInEnEspanol(page: Page): Promise<void> {
+    await openApp(page, { serverAddress: FAKE_JELLYFIN_URL });
+    await page.getByRole('button', { name: 'Rafael' }).press('Enter');
+    await page.getByLabel('Contraseña').fill(PASSWORD);
+    await page.getByLabel('Contraseña').press('Enter');
+    await expect(page.getByText('Sesión iniciada como Rafael.')).toBeVisible();
+  }
+
+  test('the Billboard’s rows of controls fit the screen in Spanish too', async ({
+    page,
+    request,
+  }) => {
+    await featureOnly(request, 'movie-arrival');
+    await signInEnEspanol(page);
+
+    // The Spanish dictionary really arrived, so what is measured below is the
+    // longer labels and not English ones under a Spanish `lang`.
+    await expect(page.getByRole('button', { name: 'Más información' })).toBeVisible();
+    await expectEveryControlOnTheScreen(page, '.billboard__actions');
+
+    await expect(
+      page.getByRole('button', { name: 'Activar el sonido del tráiler' }),
+    ).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Pausar el tráiler' })).toBeVisible();
+    await expectEveryControlOnTheScreen(page, '.billboard__trailer-controls');
+  });
 });
 
 test('a Title with no trailer shows its backdrop and no player at all', async ({
