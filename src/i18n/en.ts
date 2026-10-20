@@ -655,6 +655,13 @@ export const en = {
   'player.playOnIdle': 'Nothing playing',
   'player.playOnNowPlaying': (p: { name: string }) =>
     p.name === '' ? 'Playing something' : `Playing ${p.name}`,
+  /**
+   * A Server that gives a session neither a device name nor a client name,
+   * which is `player.trackUnnamed`'s situation and gets the same treatment: a
+   * row with no text at all is unpressable in any useful sense, and the thing
+   * is still somewhere a Title can be sent.
+   */
+  'player.playOnUnnamed': 'Another Jellyfin app',
   'player.playOnDone': 'Done',
   /**
    * Where the Title went, beside the picture for the reason `castingTo` is

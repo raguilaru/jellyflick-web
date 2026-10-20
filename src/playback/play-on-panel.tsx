@@ -61,6 +61,14 @@ export function PlayOnPanel({
   const t = useTranslate();
   const panel = useRef<HTMLDivElement | null>(null);
 
+  /**
+   * What to call a session the Server named neither way. `play-on.ts` cannot
+   * answer this — it is pure and has no translator — and dropping such a
+   * session would lose a thing a Title really can be sent to, so the fallback
+   * is drawn here. It is `player.trackUnnamed`'s precedent exactly.
+   */
+  const named = (name: string): string => (name === '' ? t('player.playOnUnnamed') : name);
+
   // Back closes the panel and nothing else, through the one Back handler.
   useBackClaim(true, onClose);
 
@@ -158,7 +166,9 @@ export function PlayOnPanel({
                     there — which is the third acceptance criterion read out
                     loud rather than only drawn.
                   */}
-                  {session.deviceName}
+                  {session.deviceName === ''
+                    ? t('player.playOnUnnamed')
+                    : session.deviceName}
                   {session.client === '' ? null : <> · {session.client}</>}
                   {' — '}
                   {session.nowPlaying === undefined
@@ -170,8 +180,8 @@ export function PlayOnPanel({
           )}
         </div>
       ) : (
-        <div class="player__track-group" role="group" aria-label={playingOn.name}>
-          <h2 class="player__track-heading">{playingOn.name}</h2>
+        <div class="player__track-group" role="group" aria-label={named(playingOn.name)}>
+          <h2 class="player__track-heading">{named(playingOn.name)}</h2>
           <p class="notice" role="status">
             {playingOn.nowPlaying === undefined
               ? t('player.playOnIdle')

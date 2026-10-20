@@ -409,6 +409,7 @@ export const es: Messages = {
   'player.playOnIdle': 'Sin reproducir nada',
   'player.playOnNowPlaying': (p: { name: string }) =>
     p.name === '' ? 'Reproduciendo algo' : `Reproduciendo ${p.name}`,
+  'player.playOnUnnamed': 'Otra aplicación de Jellyfin',
   'player.playOnDone': 'Hecho',
   'player.playingOn': (p: { name: string }) => `Reproduciendo en ${p.name}.`,
   'player.playOnHandedOver':

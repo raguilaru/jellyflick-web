@@ -212,6 +212,23 @@ describe('the other apps on the Server', () => {
     expect(row.textContent).toContain('Playing Dune');
   });
 
+  /**
+   * A Server that named a session neither way still gets a row with something
+   * on it. `play-on.ts` cannot answer this — it is pure and has no translator
+   * — so the fallback is the panel's, which is `player.trackUnnamed`'s
+   * precedent. Dropping the session instead would lose somewhere a Title
+   * really can be sent.
+   */
+  it('still draws a row for an app the Server named neither way', async () => {
+    await setFakeState({
+      sessions: [{ ...LIVING_ROOM, DeviceName: null, Client: null }],
+    });
+    await play();
+    await openPlayOn();
+    const row = await screen.findByRole('button', { name: /Another Jellyfin app/ });
+    expect(row.textContent).toContain('Nothing playing');
+  });
+
   /** An app sitting idle is the common case, and says so rather than nothing. */
   it('says when an app is playing nothing', async () => {
     await setFakeState({ sessions: [LIVING_ROOM] });
