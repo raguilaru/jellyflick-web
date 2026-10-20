@@ -67,6 +67,24 @@ export type PlaybackOptionsProps = {
    * it is here, the answer is yes.
    */
   onAirPlay?: () => void;
+  /**
+   * Play On (#34): opening the list of other running Jellyfin apps on this
+   * Server.
+   *
+   * **It is required where `onCast` and `onAirPlay` are optional**, and the
+   * difference is the whole difference between the two features. Those two are
+   * drawn only where the device layer reports the browser has them, because a
+   * browser with no Cast implementation is not something a User can be told
+   * about usefully. Play On needs no browser feature at all — it is one `POST`
+   * to a Server this app is already authenticated against — so there is no
+   * device on which it is absent, the Chromium 68 floor included. Making it
+   * optional would invite a caller to leave out a control that always works.
+   *
+   * It is a **press**, like the other two, but what it opens is this app's own
+   * panel: `GET /Sessions` answers the question Cast has no way to ask, so the
+   * list of other devices is the only one in the app this app draws itself.
+   */
+  onPlayOn: () => void;
   onClose: () => void;
 };
 
@@ -80,6 +98,7 @@ export function PlaybackOptions({
   onCast,
   castingTo,
   onAirPlay,
+  onPlayOn,
   onClose,
 }: PlaybackOptionsProps) {
   const t = useTranslate();
@@ -205,6 +224,15 @@ export function PlaybackOptions({
             {t('player.airPlay')}
           </button>
         )}
+        {/*
+          Play On (#34), always drawn: see `onPlayOn`. It sits with Cast rather
+          than apart from it because a User's intention is the same shape —
+          "not on this screen" — even though underneath the two have nothing in
+          common at all.
+        */}
+        <button type="button" class="button button--quiet" onClick={onPlayOn}>
+          {t('player.playOn')}
+        </button>
         {onPictureInPicture === undefined ? null : (
           <button type="button" class="button button--quiet" onClick={onPictureInPicture}>
             {inPictureInPicture ? t('player.leavePip') : t('player.enterPip')}

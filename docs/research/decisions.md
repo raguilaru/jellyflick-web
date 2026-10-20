@@ -466,3 +466,35 @@ never widens it, so the box is still ticked on its own terms.
 The permission is a courtesy and not the security of the thing: the Server
 refuses a download either way, with a **403**, which the end-to-end spec
 asserts for the User whose policy forbids it.
+
+## 20. Play On: the five minutes are ours, and the SDK types understate the Server
+
+#34. Two things the API does not settle and one ticket had to.
+
+**`activeWithinSeconds` is 300, and it is this app's figure.** `GET /Sessions`
+documents no default for the parameter (`jellyfin-playback.md` §11), and leaving
+it off entirely is a real choice rather than a neutral one: the Server then
+answers with sessions it has not heard from in hours, so Play On would offer a
+television that was switched off after lunch. Five minutes is short enough that
+what is listed is a device somebody is near, and long enough to survive an app
+sitting on a paused Title. It is the same footing as §11's Quick Connect
+interval — pinned in `SESSIONS_ACTIVE_WITHIN_SECONDS` with a test, so that
+changing it is a decision somebody makes on purpose rather than a constant
+somebody edits.
+
+**`SessionInfoDto.NowPlayingItem` and `.PlayState` are nullable on the wire and
+not in the generated types**, which is §3's lesson in a place that bites. The
+Server sets both to an explicit `null` once an app has been told to stop, where
+an app that has never played anything simply omits them; `@jellyfin/sdk`
+generates `NowPlayingItem?: BaseItemDto` and `PlayState?: PlayerStateInfo`, so
+the compiler says the first of those cannot happen. Read as present it throws on
+the way to `Name`, and the symptom was two renders away from the cause: a Stop
+command that the Server accepted, followed by a panel that reported the Server
+as unreachable. `typecheck` was green throughout, and `npx vitest run` does not
+typecheck anyway — the only thing that caught it was the journey test watching
+what a User ends up with after a Stop.
+
+**So: treat `@jellyfin/sdk`'s optionality as a floor and never as the Server's
+word.** Where a field means "nothing", read `?? undefined` rather than checking
+`=== undefined`, and prefer a test that exercises the Server's own answer over
+one that constructs the shape the types allow.
