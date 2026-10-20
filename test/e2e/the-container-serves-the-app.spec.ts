@@ -9,6 +9,7 @@
  */
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync } from 'node:fs';
+import { readdir, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startJellyflickServer, type JellyflickServer } from '../../server/jellyflick-server';
@@ -94,7 +95,8 @@ test.describe('the licence texts travel with it', () => {
     'FTL.txt',
     'harfbuzz-MIT.txt',
     'Apache-2.0.txt',
-    'GPL-3.0.txt',
+    // `GPL-3.0.txt` was here until #57 took `rvfc-polyfill` out of the build.
+    // The obligation went with the code; the test below is the other half.
     'liberation-sans-OFL.txt',
   ];
 
@@ -144,6 +146,44 @@ test.describe('the licence texts travel with it', () => {
    * server hands them over as plain text. Re-driving the sign-in journey here
    * would duplicate that for nothing.
    */
+
+  /**
+   * The other half of the obligation, and the one a notice cannot discharge:
+   * **GPL-3.0 code must not be in the bundle at all** (#57).
+   *
+   * `jassub` does `import 'rvfc-polyfill'` unconditionally, and that package
+   * is GPL-3.0 — strong copyleft on the combined work, where every other
+   * licence here is permissive or weak copyleft, so it would constrain the
+   * terms Jellyflick itself can be offered under. `vite.config.ts` aliases it
+   * to an empty module; this is what proves the alias is still doing its job.
+   *
+   * Checked by the polyfill's **own distinctive symbols rather than by package
+   * name**, deliberately: a bundler rewrites module names away, so a name
+   * grep would pass on a bundle that still carried every byte of the code.
+   * `_rvfcpolyfillmap` and `mozPresentedFrames` appear nowhere else in any
+   * dependency, and minification leaves them alone — the first is a property
+   * name and the second is a real browser API.
+   *
+   * This reads `dist/` rather than fetching the chunk over HTTP because the
+   * chunk's address is content-hashed: the directory is the honest way to ask
+   * "is it anywhere in what ships", and `dist/` is what the image is built
+   * from.
+   */
+  test('no GPL-3.0 polyfill code is in the bundle it serves', async () => {
+    const assets = join(DIST, 'assets');
+    const scripts = (await readdir(assets)).filter((name) => name.endsWith('.js'));
+    // If the build ever stops emitting JS, the loop below would pass vacuously.
+    expect(scripts.length).toBeGreaterThan(0);
+
+    const GPL_SYMBOLS = ['_rvfcpolyfillmap', 'mozPresentedFrames'];
+    for (const name of scripts) {
+      const code = await readFile(join(assets, name), 'utf8');
+      for (const symbol of GPL_SYMBOLS) {
+        const complaint = `${name} contains rvfc-polyfill's ${symbol} — GPL-3.0 code is shipping`;
+        expect(code, complaint).not.toContain(symbol);
+      }
+    }
+  });
 });
 
 test('the MDBList key is nowhere the browser can read it', async ({ page }) => {

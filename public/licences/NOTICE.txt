@@ -171,19 +171,6 @@ lfa-ponyfill 1.1.1 -- MIT
     OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
     USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-rvfc-polyfill 1.0.8 -- GPL-3.0
------------------------------
-  What it is:  a polyfill for `HTMLVideoElement.requestVideoFrameCallback`,
-               which JASSUB uses to draw a subtitle in step with the video
-               frames. `jassub` imports it unconditionally, so its code is in
-               the bundle whether or not the browser needs it.
-  Licence:     GPL-3.0. Full text: GPL-3.0.txt
-  Source:      https://github.com/ThaUnknown/rvfc-polyfill
-
-  This one is a stricter licence than everything else here, and what it asks of
-  Jellyflick as a whole depends on the licence Jellyflick itself takes, which
-  is not chosen yet. See section 5.
-
 libpgs 0.9.0 -- MIT
 ------------------
   What it is:  the PGS (Blu-ray bitmap) subtitle decoder, downloaded as its own
@@ -305,7 +292,6 @@ Bebas Neue -- OFL-1.1
   FTL.txt                  FreeType
   harfbuzz-MIT.txt         HarfBuzz ("Old MIT"), with its copyright holders
   Apache-2.0.txt           abslink, hls.js
-  GPL-3.0.txt              rvfc-polyfill
   liberation-sans-OFL.txt  Liberation Sans
 
   and, beside the font it covers rather than in here:
@@ -320,9 +306,15 @@ Jellyflick has not chosen a licence of its own. Until it does, the container
 image's `org.opencontainers.image.licenses` label says `NOASSERTION`, which is
 the honest answer rather than a placeholder: there is nothing to assert.
 
-That choice is also what decides the rvfc-polyfill question in section 2.
-A GPL-3.0 dependency linked into the bundle has consequences for the terms the
-whole app can be offered under, and settling it means either taking compatible
-terms or not shipping that code. It is tracked as issue #57 and is deliberately
-not decided by this file, whose job is to tell you accurately what you are
-running.
+Nothing above constrains that choice. Every component listed here is under a
+permissive or a weak-copyleft licence, and weak copyleft reaches the library
+rather than the application that links it -- which is why sections 1 and 2 can
+tell you where each library's source is and leave Jellyflick's own terms open.
+Keeping it that way is a standing condition on what may be added to the
+bundle, not a one-off: a strong-copyleft dependency would decide this question
+instead of being decided by it, so the build refuses one rather than
+accumulating an obligation nobody chose. See `docs/architecture.md`.
+
+This file's job is to tell you accurately what you are running, and that is
+all it does -- it lists what is in the build output today, not what was once
+considered.

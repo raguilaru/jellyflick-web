@@ -99,6 +99,13 @@ by every later ticket.
   `requestVideoFrameCallback` 83). The only ASS renderer that works on the TV target is
   `libass-wasm`, last published 2022. Put both behind the device layer's renderer seam:
   JASSUB on web, libass-wasm on TV, plain-text flattening where neither works (#29).
+- **`requestVideoFrameCallback` is a real gate, not a formality (#57).** JASSUB used to
+  bring `rvfc-polyfill`, so the gate could skip the check; that package is GPL-3.0 and is
+  aliased out of the build now, so the browser has to have it. rVFC is **Chrome 83 /
+  Firefox 132 / Safari 15.4**, against `transferControlToOffscreen` at Chrome 69 /
+  Firefox 105 / Safari 16.4 — so **Firefox 105-131 and Chrome 80-82 clear everything else
+  and lack rVFC**, and flatten to plain text. Firefox 132 is the surprising one; check the
+  BCD rather than assuming an API this old is everywhere.
 - **PGS: use `libpgs` (MIT, 68 KB, built-in `timeOffset`)**, pinned exactly.
   **VobSub has no usable client-side renderer — the Server burns it in** and the offset
   is disabled with an explanation (#30).

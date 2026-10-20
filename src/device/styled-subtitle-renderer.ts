@@ -22,7 +22,7 @@ import type { StyledSubtitleRenderer, StyledSubtitleRendererOptions } from './ty
  * works: the webOS device layer will answer `loadStyledSubtitleRenderer` with
  * its own module, and nothing in `src/playback/` will know.
  *
- * Those two APIs are also why this module checks for them itself rather than
+ * Those APIs are also why this module checks for them itself rather than
  * trusting `subtitleCapabilities().canRenderStyled`, which asks the broader
  * question — WebAssembly and a worker, which Chromium 68 does have. A browser
  * that can render *something* styled is not necessarily one JASSUB runs in, so
@@ -31,23 +31,46 @@ import type { StyledSubtitleRenderer, StyledSubtitleRendererOptions } from './ty
  * ## Licence obligation
  *
  * JASSUB bundles LGPL-2.1 libass, and shipping the WASM binary is
- * distribution: `player-subtitles.md` §6a notes the repo and image must carry
- * the licence texts. Tracked as a follow-up on the licences screen rather than
- * silently skipped — see the issue referenced in the ticket's report.
+ * distribution, so the licence texts travel with the app: #48 put them in
+ * `public/licences/`, which the settings screen links to.
+ *
+ * One of them is gone again. `jassub` also imports `rvfc-polyfill`, which is
+ * **GPL-3.0** — strong copyleft on the combined work, unlike everything else
+ * in the bundle — so #57 aliased it to an empty module in `vite.config.ts`
+ * rather than take terms for the whole app from a polyfill. That is why
+ * `canRunJassub` below asks about `requestVideoFrameCallback`.
  */
 
 /**
  * Whether JASSUB itself can run here, as its own README's requirements reduce
- * to on this project's floor. `requestVideoFrameCallback` is **not** in the
- * list even though the README names it: JASSUB 2.5 imports `rvfc-polyfill`,
- * so it brings its own. The canvas transfer is the one that cannot be
+ * to on this project's floor. The canvas transfer is the one that cannot be
  * polyfilled, because it is how the worker gets something to draw on.
+ *
+ * **`requestVideoFrameCallback` is in this list as of #57, and it has to be.**
+ * It used to be left out on the grounds that JASSUB brings its own polyfill —
+ * `jassub` does `import 'rvfc-polyfill'` — but that polyfill is GPL-3.0 and
+ * #57 took it out of the bundle, so the question goes back to the browser.
+ *
+ * The versions this decides are real, not theoretical. `rvfc-polyfill` was
+ * load-bearing on **Firefox 105-131** and **Chrome 80-82**: they have the
+ * canvas transfer and no native `requestVideoFrameCallback` (MDN BCD — rVFC is
+ * Chrome 83 and Firefox 132; `transferControlToOffscreen` is Chrome 69 and
+ * Firefox 105). On those, styled subtitles now fall back to the flattened
+ * words instead of the styling, which is the trade #57 made knowingly.
+ *
+ * Checking it here rather than letting JASSUB find out matters, because
+ * JASSUB calls it *after* `ready` has resolved — on the first frame. Without
+ * this line those browsers get a resolved renderer and then a throw from
+ * inside the engine, which is past the only point where the caller can still
+ * draw the words instead.
  */
 function canRunJassub(): boolean {
   return (
     typeof OffscreenCanvas !== 'undefined' &&
     typeof HTMLCanvasElement !== 'undefined' &&
     'transferControlToOffscreen' in HTMLCanvasElement.prototype &&
+    typeof HTMLVideoElement !== 'undefined' &&
+    'requestVideoFrameCallback' in HTMLVideoElement.prototype &&
     typeof WebAssembly !== 'undefined' &&
     typeof Worker !== 'undefined'
   );
