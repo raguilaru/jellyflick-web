@@ -402,6 +402,30 @@ export const es: Messages = {
     p.name === '' ? 'Enviando a un dispositivo Cast.' : `Enviando a ${p.name}.`,
   'player.castUnavailable': 'Jellyflick no ha podido conectar con un dispositivo Cast.',
 
+  // Play On (#34), que no es Cast: es pedirle a otra aplicación de Jellyfin de
+  // este servidor que reproduzca el título. Las dos están en el mismo menú, así
+  // que tienen que distinguirse de un vistazo.
+  'player.playOn': 'Reproducir en',
+  'player.playOnLabel': 'Reproducir en otra aplicación',
+  'player.playOnHeading': 'Otras aplicaciones de Jellyfin',
+  'player.playOnLooking': 'Buscando otras aplicaciones de Jellyfin…',
+  'player.playOnNowhere':
+    'Ninguna otra aplicación de Jellyfin de este servidor está lista para reproducir.',
+  'player.playOnUnavailable':
+    'Jellyflick no ha podido preguntar al servidor qué más hay conectado.',
+  'player.playOnIdle': 'Sin reproducir nada',
+  'player.playOnNowPlaying': (p: { name: string }) =>
+    p.name === '' ? 'Reproduciendo algo' : `Reproduciendo ${p.name}`,
+  'player.playOnUnnamed': 'Otra aplicación de Jellyfin',
+  'player.playOnDone': 'Hecho',
+  'player.playingOn': (p: { name: string }) => `Reproduciendo en ${p.name}.`,
+  'player.playOnHandedOver':
+    'En pausa aquí, para que el servidor guarde un solo punto de este título.',
+  'player.playOnFailed': 'Jellyflick no ha podido decirle a esa aplicación qué reproducir.',
+  'player.playOnPause': 'Pausa',
+  'player.playOnResume': 'Reanudar',
+  'player.playOnStop': 'Detener',
+
   'nav.sections': 'Secciones',
   'nav.home': 'Inicio',
   'nav.movies': 'Películas',

@@ -251,9 +251,106 @@ assertion is each control's **own right edge against the viewport width**, which
 found it, and it catches a strictly larger class. The measurements are English; `es.ts`
 labels are longer and were not measured.
 
+### #34 Play On's own gate, and the skip count it did **not** move
+
+Recorded here in the same commit, which is this doc's own rule.
+
+Gated on the merge result, which is tip **`bc23093`** (so #48's licence texts are in
+these numbers too): `lint` 0, `typecheck` 0, `build` 0, **1121 unit tests in 84 files**,
+**534 Playwright passed / 42 skipped / 0 failed** under `E2E_CPU_THROTTLE=4` in 9.6m, main
+JS **195.41 kB / 58.24 kB gz**, CSS **21.63 kB unchanged** — Play On added no CSS at all,
+reusing `.player__options`, `.player__track-group` and `.player__buttons`.
+
+**#34's own share, measured before the merge rather than inferred from it**: 188.81 →
+194.61 kB raw and 56.64 → 58.03 kB gz, so **+5.80 raw / +1.39 gz**, and **29 unit tests in
+2 new files**. The remaining +0.80 / +0.21 and 11 tests are #48's. Nothing new was lazily
+split: Play On is a `POST` and a panel, and `cast-sender` stays the only chunk #33 added.
+
+**The 42 skips are unchanged and no skip *site* in the tree moved.** `play-on.spec.ts`
+adds four tests in three projects and runtime-skips none of them: there is nothing to
+gate on, which is itself the point — Play On needs no device capability, so it has no
+`phone`-only or `keyboard-only`-only case. The 42 are still: 26 original, 3 the
+screenshot tour, 10 `desktop-hover-cards.spec.ts` in `keyboard-only`, 2 in
+`movies-and-series.spec.ts` and 1 in `trickplay-speed-and-quality.spec.ts`.
+
+### The sixth time a browser found what the unit suite could not — and #56 is now measured
+
+**#34's e2e found a focus bug in a shape nothing in this app had met before.** The Play On
+panel is two panels in one — the list of other apps, and the remote for the one that took
+the Title — so pressing a row **removes the focused button by its own press** and the
+browser hands focus to the document. From there the arrow keys are not inside the player
+at all and walk the title page behind the picture, which is #40 again.
+
+It is worth distinguishing from #53 and from #32's fix, because the fix is not the same
+one: those are about a dialog that **goes away**, and both are handled by restoring the
+opener on unmount. This is a dialog that **stays and changes its contents**, so there is
+no unmount to hang a restore on. `play-on-panel.tsx` now has a second focus effect keyed
+on which half it is showing, guarded on "only if focus has fallen out". **Any later ticket
+that replaces a dialog's contents in place inherits the same trap.**
+
+**And #56 is no longer a hypothesis.** Breaking `.player__buttons` so the row refuses to
+stack, then measuring both ways on `phone`, gave: the buttons' own right edges run past a
+390px viewport, and `document.documentElement.scrollWidth` is **equal to `clientWidth`**.
+The scroll-width assertion this project adopted after #44 reports *no overflow* while a
+control is clipped off the screen. `play-on.spec.ts` asserts both, and the own-edge loop is
+the one that fails. Copy the loop, not the scroll-width line, into anything that adds a
+control to a row.
+
+### What #34 decided, for whoever reads the acceptance box
+
+**Play On hands over** — it pauses this device and reports its stop, rather than playing in
+both places. #33 left that open on purpose. The reason is the Server and not the room: the
+other end is a Jellyfin client signed in **as the same User**, so two sessions for one
+Title leave the resume point belonging to whichever stopped last; and because the position
+rides in the `PlayNow`, a player left running here would later report a stop *further
+along* and overwrite the place the other room is watching from. `docs/architecture.md`
+has it in full.
+
+**One of #33's predictions did not hold**: `onPlayOn` is **required** on `PlaybackOptions`
+where `onCast` and `onAirPlay` are optional. There is no browser without Play On — it is
+one `POST` to a Server this app is already authenticated against — so the webOS 5 floor,
+which has none of the other three, has this.
+
+### `pgrep -f playwright` matches **itself** — use `ps` instead
+
+**This cost #34 about forty minutes and #57 about twenty**, and the brief's own wording is
+what led both there, so it is corrected here rather than left as folklore.
+
+The standing rule since the seventh session is "never run two Playwright suites at once,
+check `pgrep -f playwright` first". The check is wrong. An implementer that waits with
+`until ! pgrep -f ... ; do sleep; done` puts the string `playwright` **into its own waiter
+shell's command line**, so `pgrep -f playwright` matches the waiter and reports BUSY for
+ever. It is a deadlock that looks exactly like a considerate implementer being polite, and
+nothing in the output says otherwise — `pgrep` answers with a PID, and the PID is real.
+
+The interlock that matches only a real run:
+
+```
+ps -eo pid,command | grep -E "node.*playwright" | grep -v "zsh -c" | grep -v grep
+```
+
+The rule itself stands — two suites on one machine still lie to you. Only the check changes.
+
+### Three issues #34 filed rather than widening into
+
+- **#58** — Play On from a **title page**, which #34's prose mentions and its acceptance box
+  does not. All four criteria are met by the player half; the title-page half has no player
+  to hand over from and nowhere for the remote controls to live, so it is a design call.
+  `playOnTargets` and all three gateway methods are reusable unchanged.
+- **#59** — **after any hand-over, playing again on this device reports nothing.**
+  Pre-existing and #33's as much as #34's: `reporting.ts`'s `stopped` is once-only by
+  design, so a player that comes back from a Cast or a Play On has a spent reporter. The
+  resume point then stays where the hand-over left it however much the User watches here.
+  Neither ticket's "stop it again" test asserts anything about reporting, which is how it
+  stayed invisible.
+- **#60** — **Jellyflick cannot be a Play On target.** No `POST /Sessions/Capabilities/Full`
+  and no WebSocket, so it appears in no other Jellyfin app's picker. `jellyfin-playback.md`
+  §11 already said so; it needs a WebSocket this app has nowhere, and it is the direction a
+  household on a television most wants.
+
 ### What is left after this wave
 
-**#34 Play On and #48 licences are in flight now**, in integrator-created worktrees on
+**#34 Play On has gated and is waiting for the integrator; #48 licences is still in flight**, in integrator-created worktrees on
 ports 4334/8334 and 4348/8348 — `src/playback/` and `public/`+`src/settings/`+`Dockerfile`
 respectively, so they are in different conflict groups. **#34 is the last ticket in the
 spec's task graph.**

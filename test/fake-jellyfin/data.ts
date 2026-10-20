@@ -231,6 +231,37 @@ export type FakeCollection = {
 };
 
 /**
+ * One other app signed in to this Server, as `SessionInfoDto` has it
+ * (`jellyfin-playback.md` §11) — the fields Play On reads and nothing else.
+ *
+ * `SupportsRemoteControl` and `SupportsMediaControl` are **two names for one
+ * computed getter** on the real Server, so a seeded session that sets one and
+ * not the other is a Server that cannot exist; the routes read either, as the
+ * app does. `PlayableMediaTypes` has to carry `Video` for a Title to be
+ * sendable, and that is the half `controllableByUserId` does not filter on.
+ */
+export type FakeSession = {
+  Id: string;
+  DeviceId: string;
+  DeviceName: string | null;
+  Client: string | null;
+  UserId: string;
+  UserName: string;
+  SupportsRemoteControl: boolean;
+  SupportsMediaControl: boolean;
+  PlayableMediaTypes: string[];
+  /** What it is playing, which a `PlayNow` sent to it puts here. */
+  NowPlayingItem?: { Id: string; Name?: string } | null;
+  PlayState?: { IsPaused?: boolean; PositionTicks?: number } | null;
+  /**
+   * When it was last heard from, ISO-8601. Absent is "just now", so a seeded
+   * session is live without a test having to date it — and a test that wants a
+   * television switched off an hour ago sets it.
+   */
+  LastActivityDate?: string;
+};
+
+/**
  * One Quick Connect request the Server is holding, `QuickConnectResult`-shaped
  * with the User who approved it kept alongside — the real Server keeps that in
  * its own authorization record and never puts it in the response.
@@ -469,6 +500,34 @@ export type FakeJellyfinState = {
   /** Quick Connect: whether it is on, and the requests in flight (#9). */
   quickConnect: FakeQuickConnect;
   /**
+   * The other apps signed in to this Server, as `GET /Sessions` answers with
+   * them — the list Play On picks from (#34).
+   *
+   * **Seeded empty**, which is a Server where nothing else is running: that is
+   * the ordinary case, and it is also what keeps every test written before
+   * #34 seeing exactly what it saw. A test that wants a television in the next
+   * room seeds one.
+   *
+   * It is the fake's one piece of state that a **command** writes rather than
+   * a report: `POST /Sessions/{id}/Playing` moves `NowPlayingItem` onto the
+   * session it was sent to, and the playstate commands move `PlayState`. That
+   * is what lets a test watch what the other app is playing change, which is
+   * the ticket's third acceptance criterion and cannot be checked any other
+   * way.
+   */
+  sessions: FakeSession[];
+  /**
+   * A status `GET /Sessions` answers with, for a Server that will not say what
+   * else is signed in. Null is the normal Server.
+   */
+  failSessionsWith: number | null;
+  /**
+   * A status the remote-control endpoints answer with: a Server that lists an
+   * app and then refuses to drive it, which is the failure Play On has a
+   * message for. Null is the normal Server.
+   */
+  failRemoteControlWith: number | null;
+  /**
    * Each User's `UserConfiguration`, by user id — their **Jellyfin** settings,
    * which every Jellyfin app shares, as against the per-client `CustomPrefs`
    * above. This is where the Playback Preferences store's writes land (#35).
@@ -556,6 +615,11 @@ export function createSampleData(): FakeJellyfinState {
     // Quick Connect is on, as it is on a Server whose admin has enabled it,
     // and nothing is in flight: a request only exists once a device asks.
     quickConnect: { enabled: true, requests: [], codesIssued: 0, failInitiateWith: null },
+    // Nothing else is signed in to this Server until a test says so: see the
+    // note on the field.
+    sessions: [],
+    failSessionsWith: null,
+    failRemoteControlWith: null,
     userConfiguration: {},
     failUserConfigurationWith: null,
     libraries: SAMPLE_LIBRARIES.map((library) => ({ ...library })),
