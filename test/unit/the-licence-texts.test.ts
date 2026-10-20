@@ -92,12 +92,10 @@ const COMPONENTS: readonly Component[] = [
     text: NOTICE,
     source: 'github.com/ThaUnknown/lfa-ponyfill',
   },
-  {
-    name: 'rvfc-polyfill',
-    licence: 'GPL-3.0',
-    text: 'GPL-3.0.txt',
-    source: 'github.com/ThaUnknown/rvfc-polyfill',
-  },
+  // `rvfc-polyfill` was here, and is deliberately gone: #57 aliased it out of
+  // the build because it is GPL-3.0, so its bytes no longer reach a browser
+  // and the notice no longer owes it an entry. The test named "claims no
+  // licence for code it no longer ships" is what keeps it from drifting back.
   { name: 'libpgs', licence: 'MIT', text: NOTICE, source: 'github.com/Arcus92/libpgs-js' },
   {
     name: 'hls.js',
@@ -186,19 +184,40 @@ describe('the licence texts that travel with the app', () => {
   });
 
   /**
-   * The LGPL and the GPL are the two that are more than a notice, so their
-   * texts are checked to be the real ones rather than a stub naming them.
+   * The LGPL is the one here that is more than a notice, so its text is
+   * checked to be the real one rather than a stub naming it.
    */
-  it('ships the real copyleft texts, not a summary of them', async () => {
+  it('ships the real copyleft text, not a summary of it', async () => {
     const lgpl = await readLicence('LGPL-2.1.txt');
     expect(lgpl).toContain('GNU LESSER GENERAL PUBLIC LICENSE');
     expect(lgpl).toContain('Version 2.1, February 1999');
     // The clause the obligation actually turns on.
     expect(lgpl).toContain('6. As an exception to the Sections above');
+  });
 
-    const gpl = await readLicence('GPL-3.0.txt');
-    expect(gpl).toContain('GNU GENERAL PUBLIC LICENSE');
-    expect(gpl).toContain('Version 3, 29 June 2007');
+  /**
+   * The inverse of every test above, and the one #57 needed.
+   *
+   * A notice is a claim about what the browser is running, so claiming *too
+   * much* is its own kind of wrong: it would have a reader believe they are
+   * bound by GPL-3.0 terms, and have the project believe its own licence
+   * choice is constrained, over code that is no longer in the bundle.
+   *
+   * `rvfc-polyfill` was removed from the build in #57 — `vite.config.ts`
+   * aliases it to an empty module — so the notice and the text had to go with
+   * it. `test/e2e/the-container-serves-the-app.spec.ts` holds up the other
+   * end: that the code really is absent from the built chunks. The two tests
+   * are a pair, and the pair is what keeps the notice honest in both
+   * directions.
+   */
+  it('claims no licence for code it no longer ships', async () => {
+    const notice = await readLicence(NOTICE);
+    const shipped = await readdir(LICENCES);
+
+    expect(notice).not.toContain('rvfc-polyfill');
+    // The identifier, so a reader cannot conclude the bundle is GPL-3.0.
+    expect(notice).not.toContain('GPL-3.0');
+    expect(shipped).not.toContain('GPL-3.0.txt');
   });
 
   /**
