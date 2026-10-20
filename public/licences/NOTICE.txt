@@ -323,6 +323,6 @@ the honest answer rather than a placeholder: there is nothing to assert.
 That choice is also what decides the rvfc-polyfill question in section 2.
 A GPL-3.0 dependency linked into the bundle has consequences for the terms the
 whole app can be offered under, and settling it means either taking compatible
-terms or not shipping that code. It is tracked as an issue of its own and is
-deliberately not decided by this file, whose job is to tell you accurately
-what you are running.
+terms or not shipping that code. It is tracked as issue #57 and is deliberately
+not decided by this file, whose job is to tell you accurately what you are
+running.
