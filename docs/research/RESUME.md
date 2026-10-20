@@ -348,6 +348,66 @@ The rule itself stands — two suites on one machine still lie to you. Only the 
   §11 already said so; it needs a WebSocket this app has nowhere, and it is the direction a
   household on a television most wants.
 
+### The spec's task graph is complete: #34 at `759a010`, with #48 and #57 around it
+
+Three more merges, each gated by the integrator on the merge result. **#34 Play On was the
+last ticket in the spec's graph.**
+
+| | Merge | Gate on the merge result |
+|---|---|---|
+| **#48** licences | `bc23093` | 1092 unit / 82 files; 189.48 kB / 56.80 gz. Full e2e carried (522/42/0, tree byte-identical) |
+| **#34** Play On | `759a010` | 1121 unit / 84 files; 195.41 kB / 58.24 gz. Full e2e carried (534/42/0, differed by a docs file only) |
+| **#57** no strong copyleft | `ab37c12` | **Full run, never gated in this combination**: 1125 unit / 85 files, **537 Playwright passed / 42 skipped / 0 failed**; bundle unchanged |
+
+Every implementer's numbers matched the integrator's exactly again. **The skip count has
+stayed at 42 through all three.**
+
+### Two things the integrator checked rather than took on trust, and both held
+
+Worth recording because the alternative — accepting a report — would have been invisible
+either way.
+
+- **#48's licence texts.** Four were genuinely absent from `node_modules`, so the
+  implementer fetched them from upstream rather than writing copyleft text from memory.
+  Verified: `LGPL-2.1.txt` is byte-identical to gnu.org's (26,419 bytes, sha256
+  `20e50fe7…`), `Apache-2.0.txt` to apache.org's (11,358 bytes, `cfc7749b…`), both diffed
+  to zero, and `GPL-3.0.txt` matched the installed package's own copy.
+- **#57's removal.** On a clean `rm -rf dist` build, `_rvfcpolyfillmap` and
+  `mozPresentedFrames` are **absent from all of `dist/`**, the jassub chunk is 13.87 kB
+  (from 15.15), and `dist/licences/` no longer carries `GPL-3.0.txt`.
+
+### #57: the host's decision rested on a false premise, and the implementer said so
+
+**The most important thing to carry forward from this wave.** The brief asserted that every
+browser able to run JASSUB has `requestVideoFrameCallback` natively. It does not:
+**rVFC reached Firefox only in 132**, while `transferControlToOffscreen` reached it in
+**105**, so Firefox 105–131 cleared the old gate and genuinely depended on the GPL
+polyfill — as did Chrome 80–82. §6a's Chromium-68 reasoning was sound but only ever ruled
+out the floor, not this middle band.
+
+The implementer **neither forced it nor stopped with nothing**: it built the working
+removal, made `canRunJassub()` test for rVFC so those versions fall back to flattened
+words, and handed the trade back. **The host accepted it** — subtitles still appear there,
+styling does not. Gating is not optional once the polyfill is gone: JASSUB calls rVFC after
+`renderer.ready` resolves, past the last point the seam can choose the words, and without
+the gate the new unit test fails with `channel.on is not a function` from inside JASSUB.
+
+### The host's agenda is nearly empty, and #45/#47 are now unblocked
+
+Of the six items the tenth session called "what actually stands between this branch and a
+release": **#54, #51, #48 are done, #57 was decided and shipped**, and **the host has both
+an MDBList key and a real Jellyfin**, which unblocks #45 and #47 — the two items no agent
+could ever finish. Only **#12's saves** remains undecided.
+
+### A vacuous test, found by the break that was asked for
+
+#57's deliberate break of `canRunJassub()` reddened two of `styled-subtitles.spec.ts`'s
+three tests, as it should — and **the third passed with the engine entirely gone**,
+because the canvas mounts from the decision before anything downloads. Not a defect, but
+it is layout coverage wearing a renderer test's name, and the file's docstring implies
+otherwise. **This is what asking for the break buys**, and it is the second time the
+practice has paid in two waves.
+
 ### What is left after this wave
 
 **#34 Play On has gated and is waiting for the integrator; #48 licences is still in flight**, in integrator-created worktrees on
