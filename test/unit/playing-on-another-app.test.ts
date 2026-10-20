@@ -171,6 +171,31 @@ describe('what the other app is playing', () => {
   });
 
   /**
+   * **A Server says "nothing" with `null`, not by leaving the field out**, and
+   * that is not a style question: an app that has been told to stop comes back
+   * with `NowPlayingItem: null` and `PlayState: null` set on purpose, where an
+   * app that has never played anything simply has no field. Read as present,
+   * the first of those throws on the way to its `Name` — which in the player
+   * is a list that empties itself and a panel that reports the Server as
+   * unreachable, one press after a Stop that worked.
+   */
+  it('reads a Server’s null as nothing playing', () => {
+    /*
+     * The cast is the point rather than a nuisance. `@jellyfin/sdk` generates
+     * `NowPlayingItem?: BaseItemDto` and `PlayState?: PlayerStateInfo` —
+     * **neither nullable** — so the compiler says this answer cannot happen
+     * and the Server sends it anyway. That gap is exactly how the bug this
+     * pins was reachable with `typecheck` green, and it is the same class of
+     * thing `decisions.md` §3 records about `DisplayPreferences`.
+     */
+    const stopped = { NowPlayingItem: null, PlayState: null } as unknown as Partial<SessionInfoDto>;
+    const [target] = playOnTargets([session(stopped)], { ownDeviceId: THIS_DEVICE });
+    expect(target?.nowPlaying).toBe(undefined);
+    expect(target?.paused).toBe(false);
+    expect(target?.positionTicks).toBe(undefined);
+  });
+
+  /**
    * A Title playing with no name is still a Title playing, and the panel has
    * something to say about it; `undefined` would claim the app was idle.
    */

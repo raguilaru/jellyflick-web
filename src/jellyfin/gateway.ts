@@ -2,9 +2,12 @@ import type { AuthenticationResult } from '@jellyfin/sdk/lib/generated-client/mo
 import type { BaseItemDto } from '@jellyfin/sdk/lib/generated-client/models/base-item-dto';
 import type { BaseItemDtoQueryResult } from '@jellyfin/sdk/lib/generated-client/models/base-item-dto-query-result';
 import type { DisplayPreferencesDto } from '@jellyfin/sdk/lib/generated-client/models/display-preferences-dto';
+import type { PlayCommand } from '@jellyfin/sdk/lib/generated-client/models/play-command';
+import type { PlaystateCommand } from '@jellyfin/sdk/lib/generated-client/models/playstate-command';
 import type { PublicSystemInfo } from '@jellyfin/sdk/lib/generated-client/models/public-system-info';
 import type { QuickConnectResult } from '@jellyfin/sdk/lib/generated-client/models/quick-connect-result';
 import type { RecommendationDto } from '@jellyfin/sdk/lib/generated-client/models/recommendation-dto';
+import type { SessionInfoDto } from '@jellyfin/sdk/lib/generated-client/models/session-info-dto';
 import type { UserConfiguration } from '@jellyfin/sdk/lib/generated-client/models/user-configuration';
 import type { UserDto } from '@jellyfin/sdk/lib/generated-client/models/user-dto';
 import type { UserItemDataDto } from '@jellyfin/sdk/lib/generated-client/models/user-item-data-dto';
@@ -512,6 +515,49 @@ export type JellyfinGateway = {
    */
   pingPlayback(playSessionId: string): Promise<void>;
   /**
+   * `GET /Sessions?controllableByUserId=…&activeWithinSeconds=…` — the other
+   * apps signed in to this Server that this User may drive (#34, Play On).
+   *
+   * **`controllableByUserId` is what makes the answer a list of candidates
+   * rather than a list of sessions.** `jellyfin-playback.md` §11 traces it to
+   * `SessionManager.GetSessions`, which filters on `SupportsRemoteControl`
+   * only when it is given — so asking without it would hand back every app on
+   * the Server, controllable or not. The two filters it does **not** do are
+   * `src/playback/play-on.ts`'s: that the app plays video, and that it is not
+   * this device.
+   *
+   * It is the one read in the app that exists to find out about **other**
+   * clients, and it is asked when a User opens the Play On panel rather than
+   * on every playback: nothing else in the app has any use for the answer.
+   */
+  getControllableSessions(options: ControllableSessionsOptions): Promise<SessionInfoDto[]>;
+  /**
+   * `POST /Sessions/{sessionId}/Playing?playCommand=…&itemIds=…` — tell another
+   * app to play a Title (#34).
+   *
+   * **Everything is a query parameter and there is no body**, alone among the
+   * POSTs on this API (`jellyfin-playback.md` §11), and `playCommand` and
+   * `itemIds` are both required. `itemIds` is a list because the endpoint
+   * takes a queue — Jellyfin's own apps send a whole Season — and this app
+   * sends the one Title it is playing, the same call `cast.ts` makes for the
+   * same reason.
+   *
+   * Nothing about credentials appears here, and that is the whole difference
+   * from Cast: the other app is already signed in to this Server and reports
+   * its own progress under its own session.
+   */
+  playOnSession(options: PlayOnSessionOptions): Promise<void>;
+  /**
+   * `POST /Sessions/{sessionId}/Playing/{command}` — pause, resume, stop or
+   * seek the app that is playing (#34).
+   *
+   * `Seek` is the one command with an argument, and it is a query parameter
+   * like the rest. The command names are `PlaystateCommand`'s, which is a
+   * different enum from the `PlayCommand` above and from `GeneralCommandType`;
+   * this app sends only the transport three and a seek.
+   */
+  commandPlaystate(options: PlaystateCommandOptions): Promise<void>;
+  /**
    * `GET /DisplayPreferences/{id}` — where a User's Client Settings are kept.
    *
    * `client` is a **required** query parameter, and it partitions storage, so
@@ -751,6 +797,37 @@ export type PlaybackStopReport = {
   MediaSourceId: string;
   PositionTicks: number;
   Failed: boolean;
+};
+
+/** What `GET /Sessions` is narrowed by for Play On (#34). */
+export type ControllableSessionsOptions = {
+  /** The User whose sessions to list, and so the filter that makes them controllable. */
+  userId: string;
+  /** How long a session may have been quiet and still be listed. */
+  activeWithinSeconds: number;
+};
+
+/** One `PlayNow` on another app's session (#34). */
+export type PlayOnSessionOptions = {
+  sessionId: string;
+  /** A queue, which this app always sends one Title in. */
+  itemIds: readonly string[];
+  /** Where to start it, in Jellyfin's ticks — the place the User had reached. */
+  startPositionTicks?: number;
+  /**
+   * Which of `PlayCommand`'s five, defaulting to the only one this app sends.
+   * Named rather than hardcoded because the parameter is required on the
+   * endpoint and a reader should see which value is going.
+   */
+  playCommand?: PlayCommand;
+};
+
+/** One transport command on another app's session (#34). */
+export type PlaystateCommandOptions = {
+  sessionId: string;
+  command: PlaystateCommand;
+  /** Required by `Seek` and meaningless to the rest. */
+  seekPositionTicks?: number;
 };
 
 export type DisplayPreferencesOptions = {
@@ -1611,6 +1688,40 @@ export function createJellyfinGateway(options: JellyfinGatewayOptions): Jellyfin
       requestWithoutAnswer(
         'POST',
         `/Sessions/Playing/Ping${query({ playSessionId })}`,
+      ),
+
+    getControllableSessions: (options) =>
+      request<SessionInfoDto[]>(
+        'GET',
+        `/Sessions${query({
+          controllableByUserId: options.userId,
+          activeWithinSeconds: options.activeWithinSeconds,
+        })}`,
+      ),
+    // No body, deliberately: every argument of this endpoint is a query
+    // parameter (`jellyfin-playback.md` §11), and a `POST` with a JSON body
+    // would have the Server ignore all of it.
+    playOnSession: (options) =>
+      requestWithoutAnswer(
+        'POST',
+        `/Sessions/${encodeURIComponent(options.sessionId)}/Playing${query({
+          playCommand: options.playCommand ?? 'PlayNow',
+          itemIds: options.itemIds.join(','),
+          ...(options.startPositionTicks === undefined
+            ? {}
+            : { startPositionTicks: options.startPositionTicks }),
+        })}`,
+      ),
+    commandPlaystate: (options) =>
+      requestWithoutAnswer(
+        'POST',
+        `/Sessions/${encodeURIComponent(options.sessionId)}/Playing/${encodeURIComponent(
+          options.command,
+        )}${query({
+          ...(options.seekPositionTicks === undefined
+            ? {}
+            : { seekPositionTicks: options.seekPositionTicks }),
+        })}`,
       ),
 
     getDisplayPreferences: (options) =>

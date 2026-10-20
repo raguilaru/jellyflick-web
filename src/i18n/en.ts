@@ -627,6 +627,59 @@ export const en = {
    */
   'player.castUnavailable': 'Jellyflick could not reach a Cast device.',
 
+  /**
+   * Play On (#34), which is **not** Cast: telling another running Jellyfin app
+   * on this Server to play the Title. The control says the glossary's own
+   * words, because the two sit side by side in one menu and a User has to be
+   * able to tell them apart — "Cast" is a television protocol, "Play on" is
+   * another app.
+   */
+  'player.playOn': 'Play on',
+  'player.playOnLabel': 'Play on another app',
+  'player.playOnHeading': 'Other Jellyfin apps',
+  /**
+   * The list takes a round trip, and unlike Cast it is a round trip that can
+   * answer "nowhere" — so saying what is happening beats an empty panel.
+   */
+  'player.playOnLooking': 'Looking for other Jellyfin apps…',
+  /**
+   * The ordinary answer on a Server where nothing else is signed in, which is
+   * most of them most of the time. It names what is missing rather than
+   * saying nothing was found: a User whose television is on expects to see it
+   * here, and "ready to play" is the part they can do something about.
+   */
+  'player.playOnNowhere': 'No other Jellyfin app on this Server is ready to play.',
+  /** A Server that would not say what else is signed in, which is not "nowhere". */
+  'player.playOnUnavailable': 'Jellyflick could not ask the Server what else is signed in.',
+  /** What one app in the list is doing now (the third acceptance criterion). */
+  'player.playOnIdle': 'Nothing playing',
+  'player.playOnNowPlaying': (p: { name: string }) =>
+    p.name === '' ? 'Playing something' : `Playing ${p.name}`,
+  'player.playOnDone': 'Done',
+  /**
+   * Where the Title went, beside the picture for the reason `castingTo` is
+   * there: the press was inside a menu that closed behind it, so this is the
+   * only thing on the screen that says another app is playing.
+   */
+  'player.playingOn': (p: { name: string }) => `Playing on ${p.name}.`,
+  /**
+   * Why this device went quiet, said in the panel rather than beside the
+   * picture — it answers a question only a User who is looking at the remote
+   * controls would have. One Title has one place in it on the Server, and two
+   * apps reporting the same playback would leave that place belonging to
+   * whichever stopped last.
+   */
+  'player.playOnHandedOver': 'Paused here, so the Server keeps one place in this Title.',
+  /**
+   * One message for a list that came back and a command that was refused
+   * alike: the Server named the app, this app could not drive it, and there is
+   * the same one thing a User can do about every cause.
+   */
+  'player.playOnFailed': 'Jellyflick could not tell that app what to play.',
+  'player.playOnPause': 'Pause',
+  'player.playOnResume': 'Resume',
+  'player.playOnStop': 'Stop',
+
   'nav.sections': 'Sections',
   'nav.home': 'Home',
   'nav.movies': 'Movies',

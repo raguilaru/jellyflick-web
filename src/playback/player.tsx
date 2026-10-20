@@ -9,6 +9,8 @@ import type { PlayTarget } from '../title/play-target';
 import { resolveNextEpisode } from '../title/play-target';
 import { showAirPlayPicker, watchAirPlayTargets } from './air-play';
 import { castReceiverId, JELLYFIN_CAST_NAMESPACE, playNowMessage } from './cast';
+import { playOnTargets, SESSIONS_ACTIVE_WITHIN_SECONDS, type RemoteSession } from './play-on';
+import { PlayOnPanel, type PlayOnSessions } from './play-on-panel';
 import { useIdleControls } from './controls-visibility';
 import { readMediaSegments, skipOffered, type MediaMarker } from './media-segments';
 import { NextEpisodeOffer } from './next-episode';
@@ -261,6 +263,20 @@ export function Player({
    * otherwise get a control that opens an empty picker. See `air-play.ts`.
    */
   const [airPlayAvailable, setAirPlayAvailable] = useState(false);
+  /**
+   * Play On (#34): whether the panel is open, what the Server last said is
+   * signed in, and which app this Title was handed to.
+   *
+   * `playingOn` is a **name beside an id** rather than a lookup into
+   * `playOnSessions`, because the two disagree at the one moment that matters:
+   * an app told to stop is no longer playing anything, and a panel that lost
+   * its heading at that instant would take the controls with it.
+   */
+  const [playOnOpen, setPlayOnOpen] = useState(false);
+  const [playOnSessions, setPlayOnSessions] = useState<PlayOnSessions>('reading');
+  const [playingOn, setPlayingOn] = useState<{ id: string; name: string } | undefined>(undefined);
+  /** Whether a command could not be sent, so it can be said once. */
+  const [playOnFailed, setPlayOnFailed] = useState(false);
 
   // Back closes the player, through the one Back handler rather than a key
   // listener of this screen's own. A layout effect, which is why #8 made it one.
@@ -798,6 +814,145 @@ export function Player({
     showAirPlayPicker(element);
   }, []);
 
+  /**
+   * Play On (#34): telling another running Jellyfin app on this Server to play
+   * this Title, and driving it from here.
+   *
+   * **It is not Cast, and the shape of the feature says so.** Cast cannot know
+   * whether there is anywhere to send a Title without loading an SDK
+   * (`decisions.md` §8), so it draws a control on a device capability and lets
+   * the press be the answer. Play On has `GET /Sessions`, which answers — so
+   * the control needs no capability at all, is offered on every device
+   * including the Chromium 68 floor, and what it opens is **this app's own
+   * list** rather than the browser's. Nothing here loads anything, nothing
+   * here reads `window`, and no credential goes in a message: the other app
+   * is already signed in to this Server.
+   *
+   * The list is read when a User **opens the panel**, not when the player
+   * opens. Nothing else in the app has any use for the answer, and a Title
+   * played with no interest in Play On should cost nothing — which is the same
+   * trade Cast's lazy SDK makes, by a cheaper road.
+   */
+  const readPlayOnSessions = useCallback(async (): Promise<void> => {
+    try {
+      const sessions = await gateway.getControllableSessions({
+        userId,
+        activeWithinSeconds: SESSIONS_ACTIVE_WITHIN_SECONDS,
+      });
+      // This device is dropped here, by DeviceId: the Server answers with the
+      // caller's own session and cannot know which one that is.
+      setPlayOnSessions(playOnTargets(sessions, { ownDeviceId: gateway.identity.deviceId }));
+    } catch {
+      /*
+       * A Server that would not say is **not** a Server with nothing on it,
+       * and the panel says the two differently: one is something wrong, the
+       * other is a house with the television off.
+       */
+      setPlayOnSessions('unavailable');
+    }
+  }, [gateway, userId]);
+
+  const openPlayOn = useCallback((): void => {
+    setOptionsOpen(false);
+    setPlayOnFailed(false);
+    setPlayOnSessions('reading');
+    setPlayOnOpen(true);
+    void readPlayOnSessions();
+  }, [readPlayOnSessions]);
+
+  /**
+   * **Then it hands over**, and that is this ticket's own call rather than
+   * something inherited: #33 left `handOver` as a thing the player *calls*
+   * precisely because "and keep it playing here too" is a reading a User might
+   * mean. It is not the reading this takes, and the reason is the Server
+   * rather than the room.
+   *
+   * The other end is a **Jellyfin client signed in to the same Server as the
+   * same User**, and it opens a session and reports progress of its own. Two
+   * sessions for one Title leave the Server with a resume point belonging to
+   * whichever stopped last, so Continue Watching would show whichever device
+   * was switched off second — which is exactly Cast's problem and has the same
+   * answer. Play On has one of its own on top: the position is **sent** in the
+   * `PlayNow`, so the other app starts where this User had got to, and a
+   * player left running here would later report a stop further along and
+   * overwrite the point the other room is actually watching from. Pausing here
+   * is what makes "carry on in the next room" true rather than a race.
+   *
+   * What a User loses by it is small and is said in the panel: the picture
+   * here stops. What they would lose without it is the place they had reached.
+   */
+  const startPlayOn = useCallback(
+    async (session: RemoteSession): Promise<void> => {
+      if (plan === undefined) return;
+      const at = video.current?.currentTime ?? position;
+      try {
+        await gateway.playOnSession({
+          sessionId: session.id,
+          // One Title: the endpoint takes a queue, and the next Episode is
+          // #31's business on whichever device is playing it.
+          itemIds: [plan.itemId],
+          startPositionTicks: ticksOfSeconds(at),
+        });
+      } catch {
+        // The press closed the menu, so this is said beside the picture — and
+        // nothing was handed over, so the Title is still playing here.
+        setPlayOnFailed(true);
+        setPlayOnOpen(false);
+        return;
+      }
+      setPlayingOn({ id: session.id, name: session.deviceName });
+      // After the other app has taken it and never before: a command that was
+      // refused leaves the Title playing here.
+      playing.handOver();
+      // And the panel becomes the remote, showing what is playing over there.
+      void readPlayOnSessions();
+    },
+    [gateway, plan, position, readPlayOnSessions],
+  );
+
+  /**
+   * The ticket's second acceptance criterion: the play-state commands, from
+   * here. `Stop` leaves the other app idle and brings the panel back to the
+   * list — a User who has just switched the television off may well want the
+   * one in the kitchen, and the list is one press away rather than two.
+   */
+  const commandPlayOn = useCallback(
+    async (command: 'Pause' | 'Unpause' | 'Stop'): Promise<void> => {
+      const there = playingOn;
+      if (there === undefined) return;
+      try {
+        await gateway.commandPlaystate({ sessionId: there.id, command });
+      } catch {
+        setPlayOnFailed(true);
+        setPlayOnOpen(false);
+        return;
+      }
+      if (command === 'Stop') setPlayingOn(undefined);
+      // Read back rather than assumed: what the other app is playing is the
+      // Server's to say, and a command it took is the moment to ask again.
+      void readPlayOnSessions();
+    },
+    [gateway, playingOn, readPlayOnSessions],
+  );
+
+  /**
+   * What the panel heads itself with, which is the remembered app merged with
+   * the freshest thing the Server said about it. **A player that goes away
+   * does not stop it** — and that is the one place Play On and Cast part
+   * company on purpose. A Chromecast left with nothing driving it has no
+   * controls of its own, so #33 ends its session when the player closes; the
+   * app in the next room has its own screen and its own remote, and quite
+   * possibly somebody sitting in front of it. Closing this player is leaving
+   * the room, not switching their television off.
+   */
+  const playingOnNow =
+    playingOn === undefined
+      ? undefined
+      : {
+          name: playingOn.name,
+          ...there(playOnSessions, playingOn.id),
+        };
+
   /** Which skip is on the screen, if any: one reading of one moment. */
   const skip = skipOffered(markers, position);
 
@@ -1109,6 +1264,28 @@ export function Player({
       ) : null}
 
       {/*
+        Where the Title went (#34), beside the picture for `castingTo`'s
+        reason: the press was inside a panel that closed behind it, so this is
+        the only thing on the screen that says another app is playing. A plain
+        notice, because nothing has gone wrong.
+      */}
+      {playingOn === undefined ? null : (
+        <p class="notice" role="status">
+          {t('player.playingOn', { name: playingOn.name })}
+        </p>
+      )}
+
+      {/*
+        A command the Server would not take, said the way every other player
+        failure is: the press that failed also closed the panel.
+      */}
+      {playOnFailed ? (
+        <p class="notice notice--problem" role="alert">
+          {t('player.playOnFailed')}
+        </p>
+      ) : null}
+
+      {/*
         Skip Intro and Skip Credits (#31). Deliberately **outside** the controls
         and drawn whenever the Server says there is a marker here: the controls
         get out of the way after a few seconds, and an offer good only for the
@@ -1222,9 +1399,34 @@ export function Player({
           {...(pictureInPictureOffered
             ? { onPictureInPicture: togglePictureInPicture, inPictureInPicture }
             : {})}
+          /*
+            Play On (#34) is **not** behind a device gate, and that is the one
+            way it does not follow the seam #33 left for it: there is no
+            browser without it, because the whole feature is one `POST` to a
+            Server this app is already talking to.
+          */
+          onPlayOn={openPlayOn}
           {...(castOffered ? { onCast: toggleCast, ...(castingTo === undefined ? {} : { castingTo }) } : {})}
           {...(airPlayOffered && airPlayAvailable ? { onAirPlay: showAirPlay } : {})}
           onClose={() => setOptionsOpen(false)}
+        />
+      ) : null}
+
+      {/*
+        The other Jellyfin apps on this Server, and the remote for the one
+        playing (#34). Like the two menus above it, it claims Back on top of
+        the player's own claim, so Back closes it and leaves the Title where
+        it is.
+      */}
+      {playOnOpen ? (
+        <PlayOnPanel
+          sessions={playOnSessions}
+          {...(playingOnNow === undefined ? {} : { playingOn: playingOnNow })}
+          onPlayOn={(session) => void startPlayOn(session)}
+          onPauseThere={() => void commandPlayOn('Pause')}
+          onResumeThere={() => void commandPlayOn('Unpause')}
+          onStopThere={() => void commandPlayOn('Stop')}
+          onClose={() => setPlayOnOpen(false)}
         />
       ) : null}
 
@@ -1634,4 +1836,22 @@ function onSeekBar(target: EventTarget | null): boolean {
 
 function ticksIf(resumeTicks: number | undefined): { resumeTicks?: number } {
   return resumeTicks === undefined || resumeTicks <= 0 ? {} : { resumeTicks };
+}
+
+/**
+ * The freshest thing the Server said about one other app: what it is playing
+ * and whether that is paused. A list that has not arrived, a Server that would
+ * not answer and an app that has dropped off it all read the same here —
+ * nothing known — which is right, because the heading beside it comes from
+ * what the User pressed rather than from this.
+ */
+function there(
+  sessions: PlayOnSessions,
+  id: string,
+): { nowPlaying: string | undefined; paused: boolean } {
+  const live =
+    sessions === 'reading' || sessions === 'unavailable'
+      ? undefined
+      : sessions.find((session) => session.id === id);
+  return { nowPlaying: live?.nowPlaying, paused: live?.paused === true };
 }

@@ -106,7 +106,15 @@ export function playOnTargets(
 function remoteSession(session: SessionInfoDto): RemoteSession {
   const deviceName = (session.DeviceName ?? '').trim();
   const client = (session.Client ?? '').trim();
-  const playing = session.NowPlayingItem;
+  /*
+   * `?? undefined` and not a bare read: a Server says "nothing is playing
+   * there" with an explicit **null** once an app has been told to stop, where
+   * an app that never played anything leaves the field out altogether. The two
+   * have to mean the same thing here, and a `null` read as present throws on
+   * the way to its `Name` — which in the player is a list that empties itself
+   * one press after a Stop that worked.
+   */
+  const playing = session.NowPlayingItem ?? undefined;
   return {
     id: session.Id ?? '',
     // A device with no name of its own is still somewhere to send a Title, so
