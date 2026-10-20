@@ -259,6 +259,31 @@ report** rather than a settings save, and that is the one the `afterEach`
 position cannot catch. #52 is the report of what it costs: half of all full
 runs red, in a different file each time, and never when the file is run alone.
 
+**#52 was then verified closed rather than assumed closed**, and the check is
+worth repeating whenever a file starts playing something. Three things were
+looked at: that `playing-a-title.test.tsx` settles *before* it forgets the write
+log and reseeds; that every unit file which opens a **reported** playback has
+the same `beforeEach` (nine of them — the seven #32 folded in, plus
+`casting-a-title` and `playing-on-another-app`); and that the two files which
+open a player *without* the guard cannot leak one. They cannot, and for two
+different reasons, both measured rather than reasoned:
+`series-on-the-title-page.test.tsx` closes the player inside each test, so the
+stop report is sent and has landed before the test ends — instrumented to count
+writes arriving in the gap after each test, and the count was zero every time;
+and `hover-cards-on-home.test.tsx` ends with the player open but sends **no
+start report at all**, because the negotiation has not answered by the time the
+test ends, so there is no session to stop — instrumented to count starts and
+stops at the end of each test, and both were zero. Then ten consecutive full
+`npx vitest run`s: **1132 passed in 85 files, ten times out of ten.**
+
+The residual, filed rather than widened into: a stop report leaked by a
+player-open test is only caught by the **next** file's own settle, so a file
+that does not play anything and does not settle is still in principle a victim
+— of a stray `playbackPositions` or `lastPlayedDates` write, which is what the
+fake records from a stop. The one-line fix is a global `beforeEach` in
+`test/setup.ts`, at a cost of roughly the quiet gap per test across the whole
+suite, and that trade is the host's rather than a ticket's.
+
 The browser suite has the same hazard in its own shape — a stop report can
 outlive a page context — and the same answer: reseed on the way *in* as well as
 on the way out.
