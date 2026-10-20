@@ -179,9 +179,8 @@ test.describe('the licence texts travel with it', () => {
     for (const name of scripts) {
       const code = await readFile(join(assets, name), 'utf8');
       for (const symbol of GPL_SYMBOLS) {
-        expect(code, `${name} contains rvfc-polyfill's ${symbol} — GPL-3.0 code is shipping`).not.toContain(
-          symbol,
-        );
+        const complaint = `${name} contains rvfc-polyfill's ${symbol} — GPL-3.0 code is shipping`;
+        expect(code, complaint).not.toContain(symbol);
       }
     }
   });
