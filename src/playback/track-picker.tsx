@@ -98,10 +98,30 @@ export function TrackPicker({
    * the menu is now drawn over, and the flow rule above only applies to focus
    * that is *inside* the fixed thing. A layout effect, so no frame goes by
    * with the menu drawn and focus behind it.
+   *
+   * **And it goes back out with it** (#53), which is the half this menu was
+   * missing: `playback-options.tsx` has the same two lines for the same reason
+   * and its note has the argument in full. The short of it — every way out of
+   * here removes the focused element (Done, Back, and a subtitle choice that
+   * needs no re-negotiation), so a browser hands focus to the **document**,
+   * and from there the arrow keys are not inside the player at all and the
+   * next press walks the title page behind the picture (#7, #40).
+   *
+   * The opener is only focused again if it is **still there**. Choosing a
+   * different sound track, or a subtitle track the Server has to burn into the
+   * picture (#30), re-negotiates and rebuilds the whole control row — so the
+   * button this was opened from is detached by the time this unmounts, and
+   * focusing a detached node is the very thing being avoided. The controls'
+   * own effect, which takes focus when they come back, is the right thing to
+   * leave that case to.
    */
   useLayoutEffect(() => {
+    const opener = document.activeElement;
     const first = panel.current?.querySelector('button');
     if (first instanceof HTMLElement) first.focus();
+    return () => {
+      if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
+    };
   }, []);
 
   /*

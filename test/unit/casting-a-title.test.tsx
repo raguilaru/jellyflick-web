@@ -67,6 +67,12 @@ async function stopReports(): Promise<Write[]> {
   return writes.filter((write) => write.path === '/Sessions/Playing/Stopped');
 }
 
+/** The start reports this device has sent (#59). */
+async function startReports(): Promise<Write[]> {
+  const writes = (await fakeWrites()) as unknown as Write[];
+  return writes.filter((write) => write.path === '/Sessions/Playing');
+}
+
 async function signIn(
   profile: CapabilityProfileName,
   castSender: FakeCastSender,
@@ -278,6 +284,41 @@ describe('casting a Title', () => {
     // The Title is still open on this device: ending a cast is not closing
     // the player, the same way leaving a picture-in-picture window is not.
     expect(screen.getByRole('region', { name: 'Playing Arrival' })).toBeTruthy();
+  });
+
+  /**
+   * **And playing it here again is a new play session** (#59), which is the
+   * half this test file was silent about until that issue: `stopped` is
+   * once-only by design, so the reporter the hand-over spent is spent for
+   * good, and a Title played here on a spent reporter is a Title the Server
+   * hears nothing about — no start, no progress, no stop, and a resume point
+   * frozen where the cast took it.
+   *
+   * The once-only `stopped` is **not** what changed: the stop count stays at
+   * one throughout, which is what proves the Server has one session for the
+   * hand-over rather than two.
+   */
+  it('opens a new play session when the User plays here again', async () => {
+    const sender = await play({ castSender: fakeCastSender({ receiverName: 'Living Room' }) });
+    await openOptions();
+    fireEvent.click(screen.getByRole('button', { name: 'Cast' }));
+    await waitFor(() => expect(sender.messages.length).toBe(1));
+    await waitFor(async () => expect((await stopReports()).length).toBe(1));
+
+    await openOptions();
+    fireEvent.click(screen.getByRole('button', { name: 'Stop casting' }));
+    await waitFor(() => expect(sender.ended).toBe(1));
+
+    // One playback so far: the one the cast ended.
+    expect((await startReports()).length).toBe(1);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Play Arrival' }));
+
+    await waitFor(async () => expect((await startReports()).length).toBe(2));
+    expect((await stopReports()).length).toBe(1);
+
+    // The second session is live and still writing as this test ends.
+    await savesHaveSettled();
   });
 
   /**

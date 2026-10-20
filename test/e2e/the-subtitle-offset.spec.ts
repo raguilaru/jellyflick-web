@@ -270,6 +270,69 @@ test('repeats while a button is held, and the Server keeps the offset', async ({
   );
 });
 
+/**
+ * **"Sync to this line" looks unavailable when it is** (#50).
+ *
+ * `aria-disabled` rather than `disabled` is the right call and is not in
+ * question: the button stays a focus stop a remote can reach, and pressing it
+ * says why nothing happened, where `disabled` would remove it from the arrow
+ * keys with nothing to explain the gap. But a screen reader was the only one
+ * being told — the only `aria-disabled` styling in `base.css` was scoped to
+ * `.player__track-group`, and the timing **panel** is a different element, so a
+ * sighted User found out by pressing it and reading a notice.
+ *
+ * This is a browser test because it is a fact about **computed style**: the
+ * unit journey loads no stylesheet at all, so the dim is invisible there in the
+ * strongest sense. It is asserted as the rule — the control that cannot be
+ * pressed is dimmer than the one beside it that can, and is not dimmed while it
+ * *can* be pressed — rather than against the figure in the file, which is a
+ * look and not a promise.
+ */
+test('dims "Sync to this line" while there is no line to sync to', async ({ page }) => {
+  await page.request.delete(`${FAKE_JELLYFIN_URL}/__fake/state`);
+  await signIn(page);
+  await openArrival(page);
+  await openSubtitleTiming(page);
+
+  const panel = page.getByRole('dialog', { name: 'Subtitle timing' });
+  const sync = panel.getByRole('button', { name: 'Sync to this line' });
+
+  /*
+   * Reset sits beside it in the same row, is the same kind of button, and is
+   * always pressable — so it is what "dimmer" is measured against, rather than
+   * the figure in `base.css`, which is a look and not a promise.
+   */
+  const opacityOf = (name: string): Promise<number> =>
+    panel
+      .getByRole('button', { name, exact: true })
+      .evaluate((node) => Number(getComputedStyle(node).opacity));
+
+  /*
+   * The panel was opened paused inside the first cue (0.5–3 s), so there is a
+   * line on the screen: the button can be pressed, and must not be dimmed.
+   * Without this half the test would pass against a rule that dimmed every
+   * button in the player.
+   */
+  await expect(sync).not.toHaveAttribute('aria-disabled', 'true');
+  expect(await opacityOf('Sync to this line')).toBe(await opacityOf('Reset'));
+
+  // Before the first cue, with the player still paused: nothing on the screen
+  // to sync to, which is a state rather than a window one frame wide.
+  await page.evaluate(() => {
+    const video = document.querySelector('video');
+    if (video !== null) video.currentTime = 0.2;
+  });
+  await expect(sync).toHaveAttribute('aria-disabled', 'true');
+
+  // Still a focus stop a remote can reach — the whole reason it is
+  // `aria-disabled` and not `disabled` — and now visibly unavailable.
+  await reachByArrowKeys(page, sync);
+  await expect(sync).toBeFocused();
+  const dimmed = await opacityOf('Sync to this line');
+  expect(dimmed).toBeLessThan(await opacityOf('Reset'));
+  expect(dimmed).toBeLessThan(1);
+});
+
 /** What the Server is holding for Rafael, as the offsets it was sent. */
 async function storedOffsets(request: APIRequestContext): Promise<unknown> {
   const state = (await (await request.get(`${FAKE_JELLYFIN_URL}/__fake/state`)).json()) as {

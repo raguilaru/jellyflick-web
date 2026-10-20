@@ -136,7 +136,16 @@ export function Player({
   const [unreported, setUnreported] = useState(false);
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState<number | undefined>(undefined);
-  /** Bumped by Retry: it is the whole of what asking again means. */
+  /**
+   * Bumped by Retry: it is the whole of what asking again means — and by
+   * coming back from a hand-over (#59), which needs a negotiation of its own
+   * for the new play session rather than a retry of a failure.
+   *
+   * A counter rather than only moving `restartTicks`, because the two
+   * hand-overs pause the picture: a User who casts, stops, and casts again
+   * without playing anything in between is at the **same position**, so the
+   * position alone would not change and nothing would be re-negotiated.
+   */
   const [attemptNumber, setAttemptNumber] = useState(0);
   /**
    * The tracks (#27). Each is a `MediaStream.Index` the **User** chose, as
@@ -386,6 +395,28 @@ export function Player({
     setOffsetSeconds(stored.current);
   }, [subtitleFile, settings.loaded]);
 
+  /**
+   * Playing here again after a hand-over (#59), which is a **new playback**
+   * rather than the one that was given away.
+   *
+   * `reporting.ts`'s `stopped` is once-only by design and has to be — #33's
+   * acceptance is exactly one `/Sessions/Playing/Stopped` after a hand-over,
+   * which is what proves the Server sees one session rather than two. So the
+   * reporter a hand-over spends is spent for good, and the way back cannot be
+   * to revive it: it is to negotiate again. That is wanted for its own sake as
+   * well as for the reporter — the Server ties a transcode job, a session and
+   * the resume point together through the `PlaySessionId`, and the job behind
+   * the old one may well have been reaped while the other device had the Title.
+   *
+   * The User's **place** is what is owed them, exactly as a change of quality
+   * or of sound track owes it: the next `PlaybackInfo` starts from where the
+   * hand-over left them rather than from the beginning.
+   */
+  const resumeHere = useCallback((): void => {
+    setRestartTicks(ticksOfSeconds(video.current?.currentTime ?? position));
+    setAttemptNumber((number) => number + 1);
+  }, [position]);
+
   const playing = usePlayback({
     video,
     gateway,
@@ -394,6 +425,14 @@ export function Player({
     duration,
     audioIndex,
     subtitleIndex,
+    /*
+     * Whether another device owns this playback **at this moment** (#59). While
+     * one does, this device must report nothing — so pressing Play here is left
+     * exactly as it was rather than opening a session for a Title the other
+     * room is already reporting. The fix is only about the way back.
+     */
+    handedAway: castingTo !== undefined || playingOn !== undefined,
+    onResumeHere: resumeHere,
     onPausedChange: setPaused,
     onPositionChange: setPosition,
     onDurationChange: setDuration,
@@ -1499,6 +1538,20 @@ function usePlayback(options: {
    */
   audioIndex: number | undefined;
   subtitleIndex: number | undefined;
+  /**
+   * Whether something else owns this playback now — a Chromecast, or another
+   * Jellyfin app (#59). It is what tells a press of Play apart from the two
+   * cases below: while this is true the other device is reporting and this one
+   * must not, and once it is false a spent reporter is simply a session that
+   * ended and a new one is owed.
+   */
+  handedAway: boolean;
+  /**
+   * Ask the screen for a **new play session** (#59): the Title is to play here
+   * again after a hand-over, and `stopped` is once-only, so there is nothing
+   * left to report with. See `resumeHere` in the player.
+   */
+  onResumeHere: () => void;
   onPausedChange: (paused: boolean) => void;
   onPositionChange: (seconds: number) => void;
   onDurationChange: (seconds: number | undefined) => void;
@@ -1520,6 +1573,14 @@ function usePlayback(options: {
   const reporter = useRef<PlaybackReporter | undefined>(undefined);
   /** The last position seen, so the stop report is where it really stopped. */
   const position = useRef(0);
+  /**
+   * Whether this playback has been given away (#59), which is the same thing as
+   * "the reporter in hand is spent": `stopped` counts once, so the session it
+   * belongs to is closed on the Server and nothing more can be said about it.
+   * A ref rather than state, because nothing draws it and a render for it would
+   * be a render for nothing.
+   */
+  const handedOver = useRef(false);
 
   useEffect(() => {
     const element = latest.current.video.current;
@@ -1542,6 +1603,8 @@ function usePlayback(options: {
     });
     reporter.current = sending;
     position.current = secondsOfTicks(plan.startTicks);
+    // A new plan is a new play session, so nothing has been given away yet.
+    handedOver.current = false;
 
     /** Reports, then says so if the Server would not take it. */
     const report = (sent: Promise<void>): void => {
@@ -1666,6 +1729,23 @@ function usePlayback(options: {
       const element = options.video.current;
       if (element === null) return;
       if (element.paused) {
+        /*
+         * Playing again after a hand-over is a **new playback** (#59). The
+         * reporter is spent — `stopped` counts once, and it must, because that
+         * is what keeps one hand-over to one stop — so starting the element
+         * here would play a Title the Server hears nothing more about: no
+         * start, no progress, no stop, and a resume point frozen where the
+         * other device took it. So the screen is asked to negotiate again, and
+         * the playback that comes back brings its own session with it.
+         *
+         * Only once nothing else owns it. While a Chromecast or another app is
+         * playing this Title, that device is the one reporting, and this is
+         * left as it was rather than opening a second session beside theirs.
+         */
+        if (handedOver.current && !latest.current.handedAway) {
+          latest.current.onResumeHere();
+          return;
+        }
         const started: unknown = element.play();
         if (started instanceof Promise) started.then(() => undefined, () => undefined);
       } else {
@@ -1698,11 +1778,16 @@ function usePlayback(options: {
      * `stopped` is once-only by design (see `reporting.ts`), so the effect
      * cleanup that reports the stop when the player closes becomes a no-op
      * after this: handing over cannot be reported twice.
+     *
+     * **And this reporter is finished with**, which is what `handedOver`
+     * records (#59): playing here again cannot resurrect a closed session, so
+     * `toggle` above asks for a new one instead.
      */
     handOver: () => {
       const element = options.video.current;
       const at = element?.currentTime ?? position.current;
       element?.pause();
+      handedOver.current = true;
       const sending = reporter.current;
       if (sending === undefined) return;
       void sending.stopped(at).then(() => {

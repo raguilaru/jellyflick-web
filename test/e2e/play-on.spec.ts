@@ -68,6 +68,15 @@ async function writesUnder(request: APIRequestContext, prefix: string): Promise<
   return writes.filter((write) => write.path.startsWith(prefix));
 }
 
+/**
+ * This device's own playback reports, by exact path. The prefix is shared with
+ * the `PlayNow` that hands the Title over — `POST /Sessions/{id}/Playing` —
+ * so a prefix match would count that as a start of our own.
+ */
+async function reportsAt(request: APIRequestContext, path: string): Promise<Write[]> {
+  return (await writesUnder(request, path)).filter((write) => write.path === path);
+}
+
 async function seedTheLivingRoom(page: Page): Promise<void> {
   await page.request.delete(`${FAKE_JELLYFIN_URL}/__fake/state`);
   await page.request.delete(`${FAKE_JELLYFIN_URL}/__fake/writes`);
@@ -392,4 +401,87 @@ test('pauses the other app, and leaves it playing when this player closes', asyn
   // Nothing stopped the other room, then or since.
   await page.waitForTimeout(250);
   expect(await writesUnder(request, '/Sessions/session-living-room/Playing/Stop')).toEqual([]);
+});
+
+/**
+ * **Coming back, and being reported again** (#59): the whole round trip in a
+ * browser — hand the Title to the next room, stop it there, press Play here,
+ * and watch the Server hear about this device a second time.
+ *
+ * It earns a browser for the reason the hand-over test above does, and more so:
+ * what was broken is a *spent reporter*, so what proves it fixed is a real
+ * `<video>` really decoding again while a real Server records a **new** play
+ * session for it. The position it resumes from, and the one it then reports, are
+ * facts about an element that has really moved.
+ *
+ * The first assertion of the pair is #33's own invariant, and it is the reason
+ * this is a new session rather than a repeatable `stopped`: **one**
+ * `/Sessions/Playing/Stopped` for the playback that was given away, however
+ * much happens here afterwards.
+ */
+test('playing here again after the hand-over is a new session the Server hears', async ({
+  page,
+  request,
+}) => {
+  await seedTheLivingRoom(page);
+  await signIn(page);
+  await playAndPauseArrival(page);
+
+  await openPlayOn(page);
+  await pressInDialog(page, 'Play on another app', /Living Room TV/);
+  await expect(page.getByText('Playing on Living Room TV.')).toBeVisible();
+  await expect.poll(() => pausedIn(page), { timeout: 20_000 }).toBe(true);
+  await expect.poll(async () => (await reportsAt(request, '/Sessions/Playing/Stopped')).length, {
+    timeout: 20_000,
+  }).toBe(1);
+  const handedOverAt =
+    Number((await reportsAt(request, '/Sessions/Playing/Stopped'))[0]?.body.PositionTicks ?? 0) /
+    10_000_000;
+  expect(handedOverAt).toBeGreaterThan(0.5);
+
+  // Stop the other app, which brings the panel back to the list and leaves the
+  // Title here, paused where the User left it — #34's deliberate behaviour.
+  await pressInDialog(page, 'Play on another app', 'Stop');
+  await expect(page.getByText('Playing on Living Room TV.')).toBeHidden();
+  await pressInDialog(page, 'Play on another app', 'Done');
+  await expect(page.getByRole('dialog', { name: 'Play on another app' })).toBeHidden();
+
+  // One playback so far, and one stop for it.
+  expect((await reportsAt(request, '/Sessions/Playing')).length).toBe(1);
+
+  const play = page.getByRole('button', { name: 'Play Arrival' });
+  await reachByArrowKeys(page, play);
+  await play.press('Enter');
+
+  // A second play session: before #59 this was nothing at all, for ever.
+  await expect
+    .poll(async () => (await reportsAt(request, '/Sessions/Playing')).length, { timeout: 30_000 })
+    .toBe(2);
+  // And still one stop for the session that was handed away.
+  expect((await reportsAt(request, '/Sessions/Playing/Stopped')).length).toBe(1);
+
+  // Really decoding again, and from where the hand-over left it rather than
+  // from the beginning: this is the User's place being owed back to them.
+  await expect.poll(() => pausedIn(page), { timeout: 20_000 }).toBe(false);
+  await expect
+    .poll(() => positionIn(page), { timeout: 20_000 })
+    .toBeGreaterThan(handedOverAt + 0.2);
+
+  /*
+   * The consequence a User pays for, which is the resume point: a progress
+   * report past the position the hand-over left behind. Pausing is what sends
+   * one at once — the player reports a change of play state immediately, where
+   * the position creeping along is throttled to ten seconds and this file is
+   * six seconds long.
+   */
+  await page.getByRole('button', { name: 'Pause Arrival' }).press('Enter');
+  await expect
+    .poll(
+      async () =>
+        (await reportsAt(request, '/Sessions/Playing/Progress')).some(
+          (write) => Number(write.body.PositionTicks ?? 0) / 10_000_000 > handedOverAt + 0.2,
+        ),
+      { timeout: 20_000 },
+    )
+    .toBe(true);
 });

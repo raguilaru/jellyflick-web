@@ -259,6 +259,31 @@ report** rather than a settings save, and that is the one the `afterEach`
 position cannot catch. #52 is the report of what it costs: half of all full
 runs red, in a different file each time, and never when the file is run alone.
 
+**#52 was then verified closed rather than assumed closed**, and the check is
+worth repeating whenever a file starts playing something. Three things were
+looked at: that `playing-a-title.test.tsx` settles *before* it forgets the write
+log and reseeds; that every unit file which opens a **reported** playback has
+the same `beforeEach` (nine of them — the seven #32 folded in, plus
+`casting-a-title` and `playing-on-another-app`); and that the two files which
+open a player *without* the guard cannot leak one. They cannot, and for two
+different reasons, both measured rather than reasoned:
+`series-on-the-title-page.test.tsx` closes the player inside each test, so the
+stop report is sent and has landed before the test ends — instrumented to count
+writes arriving in the gap after each test, and the count was zero every time;
+and `hover-cards-on-home.test.tsx` ends with the player open but sends **no
+start report at all**, because the negotiation has not answered by the time the
+test ends, so there is no session to stop — instrumented to count starts and
+stops at the end of each test, and both were zero. Then ten consecutive full
+`npx vitest run`s: **1132 passed in 85 files, ten times out of ten.**
+
+The residual, filed rather than widened into: a stop report leaked by a
+player-open test is only caught by the **next** file's own settle, so a file
+that does not play anything and does not settle is still in principle a victim
+— of a stray `playbackPositions` or `lastPlayedDates` write, which is what the
+fake records from a stop. The one-line fix is a global `beforeEach` in
+`test/setup.ts`, at a cost of roughly the quiet gap per test across the whole
+suite, and that trade is the host's rather than a ticket's.
+
 The browser suite has the same hazard in its own shape — a stop report can
 outlive a page context — and the same answer: reseed on the way *in* as well as
 on the way out.
@@ -2029,6 +2054,22 @@ built.
   language's translated name (`title.language`) and then to its index. A Server's
   label is data, like a Title's name, and it is what every other Jellyfin app
   shows for that track.
+- **Focus comes in with the menu and goes back out with it** (#53). The first
+  half was always here: the press that opened the menu was on a button the menu
+  is now drawn over, and the flow rule above only keeps focus inside something
+  fixed that focus is already inside. The second half was missing, and it is the
+  same defect #32 fixed in the options menu and #34 met a third variant of —
+  every way out of this menu removes the focused element (Done, Back, and a
+  subtitle choice that needs no re-negotiation), so a browser hands focus to the
+  **document**, and from there the arrow keys walk the title page *behind* the
+  picture (#40). The unmount hands focus back to the control the menu was opened
+  from, **only if it is still connected**: choosing a different sound track, or
+  a subtitle track the Server has to burn in (#30), re-negotiates and rebuilds
+  the control row, so focusing the old button would put focus on the document —
+  the very thing being avoided — and the controls' own effect answers that case.
+  The three shapes of this bug are now in the same family: a dialog that *goes
+  away* (here and #32), and a dialog that *stays and changes its contents*
+  (#34's panel, which needs the second effect instead).
 
 Where each thing is tested: parsing and timing in
 `test/unit/subtitle-cues.test.ts`, with the WebVTT and SubRip grammars as
@@ -2079,6 +2120,19 @@ offset in force and is the only thing that saves it.
   button with `aria-disabled` and says why **when it is pressed** — a notice
   that came and went with every pause in the dialogue would blink beside the
   number being read.
+- **And it is dimmed while it cannot be pressed** (#50). `aria-disabled` told a
+  screen reader and nothing told anyone else: the dim rule in `base.css` was
+  scoped to `.player__track-choices` for #27's undrawable tracks, repointed at
+  `.player__track-group` when #30 removed those, and the timing **panel** is
+  neither — so the one control left outside the selector was the one a User was
+  most likely to press. The rule is now **`.player .button[aria-disabled]`**,
+  which is what was always meant and which the next panel inherits rather than
+  rediscovering. It is still a focus stop a remote reaches and still explains
+  itself on a press; what changed is that a sighted User no longer has to press
+  it to find out. Asserted in `test/e2e/the-subtitle-offset.spec.ts`, because
+  computed style is not a thing the unit journey has at all — it loads no
+  stylesheet — and asserted as the rule: dimmer than the Reset beside it when
+  it cannot be pressed, and not dimmed at all when it can.
 - **An offset belongs to a subtitle file**, which is `subtitleFileOf`:
   `MediaStream.Path` where the Server gave one, and the media source plus the
   stream index otherwise. `decisions.md` §16 is why, and what to check against a
@@ -2691,6 +2745,55 @@ Where it is tested:
 
 **Still to come, and filed rather than carried**: the title page's own Play On
 entry point, which the ticket's prose mentions and its acceptance box does not.
+
+### Coming back from a hand-over (#59)
+
+Both hand-overs — Cast's and Play On's — leave the player open, paused, and
+holding a **spent reporter**: `stopped` counts once by design, and it has to,
+because the Title ending both reports the stop and closes the player, and
+because #33's acceptance is *exactly one* `/Sessions/Playing/Stopped` after a
+hand-over. That one stop is what proves the Server sees one session for one
+Title rather than two.
+
+What was missing was the **way back**. Pressing Stop on the receiver or on the
+other app brings the Title back here, paused where the User left it, and
+pressing Play then played it with nothing reported at all: no start, no
+progress, no stop. The resume point stayed where the hand-over had left it
+however long the User went on watching, no session existed for this device so
+no other app's Play On could see it, and a transcode went unpinged long enough
+for a Server to reap it mid-playback.
+
+- **The fix is a new play session, never a repeatable `stopped`.** `handOver`
+  marks the reporter as given away (`handedOver` in `usePlayback`), and a press
+  of Play on a reporter so marked asks the screen to **negotiate again**
+  (`resumeHere` in the player) instead of starting the element. The playback
+  that comes back brings its own `PlaySessionId`, which is what the Server ties
+  a transcode job, a session and the resume point together through — and the
+  job behind the old one may well have been reaped while the other device had
+  the Title.
+- **The User's place is owed back to them**, exactly as a change of quality or
+  of sound track owes it: `restartTicks` is set to where the hand-over left
+  them, so the next `PlaybackInfo` starts from there rather than the beginning.
+- **It is `attemptNumber` as well as `restartTicks`**, and that is not
+  belt-and-braces: a hand-over pauses the picture, so a User who casts, stops
+  and casts again without watching anything is at the *same* position — the
+  position alone would not change and nothing would be re-negotiated.
+- **Lazily, on the press, rather than on Stop.** Re-negotiating when the cast
+  ends would re-attach a source and start playing, and #33's deliberate
+  behaviour is that the Title comes back **paused** where the User left it.
+  Doing it on Play is also the honest reading: the new session begins when the
+  User asks for one.
+- **Nothing changes while the other device still owns it.** The resume is
+  gated on `handedAway`, so pressing Play here while a Chromecast is still
+  playing is left as it was rather than opening a second session beside the
+  one the other room is reporting.
+
+Where it is tested: the journey in `test/unit/playing-on-another-app.test.tsx`
+and `test/unit/casting-a-title.test.tsx` — a second start report, still one
+stop, one new session rather than one per press, and a progress report past the
+hand-over's position — and in a browser in `test/e2e/play-on.spec.ts`, where a
+real `<video>` really decodes again from where it was handed over while the
+Server records the second session.
 
 ## The fake Jellyfin serves real video
 

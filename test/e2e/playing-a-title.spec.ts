@@ -391,3 +391,72 @@ test('chooses the subtitles with the arrow keys, and draws them over the picture
   // browser rather than against a `currentTime` a test set by hand.
   await expect(cue).toContainText('Adiós', { timeout: 10_000 });
 });
+
+/**
+ * **Focus comes back out of the track picker with it** (#53): the same defect
+ * #32 met in the options menu and #34 met a third variant of, and the one this
+ * menu was left with — Done closes the dialog, the focused button goes with
+ * it, and a browser hands focus to the **document**. From there the arrow keys
+ * are not inside the player at all, because the flow rule can only keep focus
+ * in an overlay focus is already in (#7, #40), so the next press walks the
+ * **title page behind the picture**: #32's e2e watched a remote land on My
+ * List, then Mark as watched, then a suggestion Row, with the player still
+ * open in front of it.
+ *
+ * It is unsayable in happy-dom — `focusableItems()` drops zero-sized elements
+ * and every box there is zero-sized, so the arrow keys move nothing and every
+ * assertion is green either way. And it is asserted as **the rule, not the
+ * geometry that exposed it** (#40): the control the menu was opened from has
+ * focus, and the arrow keys stay inside the player, at whichever width this
+ * runs.
+ */
+test('closing the track picker leaves focus on the control it was opened from', async ({
+  page,
+  request,
+}) => {
+  // Reseeded here for the reason the test above gives: a stop report from the
+  // previous test's context can land after its `afterEach` and leave a resume
+  // point near the end of a six-second file.
+  await request.delete(`${FAKE_JELLYFIN_URL}/__fake/state`);
+
+  await signIn(page);
+  await playArrival(page);
+  await expect(page.getByRole('slider', { name: 'Seek through Arrival' })).toBeVisible();
+
+  // Really playing before it is paused, and paused so that walking the menu
+  // does not race the file's six seconds.
+  await expect.poll(() => positionIn(page), { timeout: 10_000 }).toBeGreaterThan(0.4);
+  await page.getByRole('button', { name: 'Pause Arrival' }).press('Enter');
+  await expect(page.getByRole('button', { name: 'Play Arrival' })).toBeVisible();
+
+  const open = page.getByRole('button', { name: 'Audio and subtitles for Arrival' });
+  await reachByArrowKeys(page, open);
+  await open.press('Enter');
+
+  const picker = page.getByRole('dialog', { name: 'Audio and subtitles' });
+  await expect(picker).toBeVisible();
+  await expect(picker.locator(':focus')).toBeVisible();
+
+  // Done is the way out this issue was filed about.
+  const done = picker.getByRole('button', { name: 'Done', exact: true });
+  await reachByArrowKeys(page, done);
+  await done.press('Enter');
+  await expect(picker).toBeHidden();
+
+  // The control it was opened from, which is where the next press belongs.
+  await expect(open).toBeFocused();
+
+  /*
+   * And the arrow keys are therefore still the player's, in every direction —
+   * the escape this defect really caused. Before the fix, focus was on the
+   * document here and the first press landed on the title page behind the
+   * picture.
+   */
+  for (const key of ['ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown']) {
+    await page.keyboard.press(key);
+    expect(
+      await page.evaluate(() => document.activeElement?.closest('.player') !== null),
+      `${key} left the player`,
+    ).toBe(true);
+  }
+});
