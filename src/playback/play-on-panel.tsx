@@ -85,6 +85,36 @@ export function PlayOnPanel({
     };
   }, []);
 
+  /**
+   * **And focus is caught when the panel changes what it is**, which is the
+   * same defect again by a third road and the one only a browser found.
+   *
+   * This panel is two panels: the list, and the remote for the app that took
+   * the Title. Pressing a row swaps one for the other, so the button that was
+   * focused is **removed by its own press** — and a browser then hands focus
+   * to the document, from where the arrow keys are not inside the player at
+   * all and walk the title page behind the picture (#40). Stop swaps it back
+   * and loses focus the same way.
+   *
+   * It is `playback-options.tsx`'s rule, which handles the case where the
+   * whole menu goes away; this is the case where the menu stays and its
+   * contents are replaced, and nothing in the app had met it before. The guard
+   * is "only if focus has fallen out", so a User who has already moved on is
+   * never dragged back to the first button.
+   *
+   * `test/e2e/play-on.spec.ts` is the only place this can be seen:
+   * `focusableItems()` drops zero-sized elements and happy-dom gives every box
+   * a zero size, so in the unit journey the arrow keys move nothing and every
+   * assertion is green either way.
+   */
+  const remote = playingOn !== undefined;
+  useLayoutEffect(() => {
+    const root = panel.current;
+    if (root === null || root.contains(document.activeElement)) return;
+    const first = root.querySelector('button');
+    if (first instanceof HTMLElement) first.focus();
+  }, [remote]);
+
   return (
     <div
       class="player__options"
