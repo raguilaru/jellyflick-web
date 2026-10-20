@@ -18,6 +18,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { startJellyflickServer, type JellyflickServer } from '../../server/jellyflick-server';
+import {
+  MDBLIST_GAME_OF_THRONES,
+  MDBLIST_MATRIX,
+  mdbListRatings,
+} from '../fixtures/mdblist';
 import type { TitleDetails } from '../../src/catalogue/catalogue';
 import {
   extraRatingsFrom,
@@ -76,12 +81,68 @@ describe('which Title MDBList is asked about', () => {
   });
 });
 
+describe('reading MDBList’s real answer, as captured with the host’s key (#45)', () => {
+  it('draws all four badges for a Movie every source has rated', () => {
+    // The Matrix, byte for byte from MDBList. Rotten Tomatoes' audience score
+    // is on the wire as `popcorn` — `tomatoes` is the critics' tomatometer the
+    // Server already sends as `CriticRating` — so this is the test that fails
+    // if the adapter stops translating MDBList's names into the app's own.
+    const ratings = extraRatingsFrom(MDBLIST_MATRIX);
+
+    expect(ratings).toEqual([
+      { source: 'metacritic', value: 73 },
+      { source: 'trakt', value: 87 },
+      { source: 'audience', value: 85 },
+      { source: 'letterboxd', value: 4.2 },
+    ]);
+  });
+
+  it('leaves out Letterboxd for a Series, which Letterboxd does not rate', () => {
+    // Game of Thrones: `letterboxd` is `null`, and so are `rogerebert` and
+    // `myanimelist`. Story 81 wants a missing rating left out, not a zero.
+    const ratings = extraRatingsFrom(MDBLIST_GAME_OF_THRONES);
+
+    expect(ratings).toEqual([
+      { source: 'metacritic', value: 86 },
+      { source: 'trakt', value: 89 },
+      { source: 'audience', value: 85 },
+    ]);
+  });
+
+  it('has no `audience` source to read, whatever §19’s table used to say', () => {
+    // `audience` is MDBList's `return_rating` query parameter on the *list*
+    // endpoints, not a `ratings[]` element's `source`: a real response never
+    // carries one, and the app's own name for the source is not MDBList's.
+    expect(mdbListRatings(MDBLIST_MATRIX).map(sourceOf)).not.toContain('audience');
+    expect(extraRatingsFrom({ ratings: [{ source: 'audience', value: 85 }] })).toEqual([]);
+  });
+
+  it('reads the scale MDBList publishes, not the one it normalises to', () => {
+    // Every element also carries an undocumented `score`, a 0–100 version of
+    // `value` (Letterboxd's 4.2 stars are `score: 84`). The app deliberately
+    // shows Letterboxd out of five, so `value` is what is read — decisions.md
+    // §15. A reader that took `score` would make this 84/5.
+    const letterboxd = mdbListRatings(MDBLIST_MATRIX).find(
+      (entry) => sourceOf(entry) === 'letterboxd',
+    );
+
+    expect(letterboxd).toMatchObject({ value: 4.2, score: 84 });
+    expect(extraRatingsFrom(MDBLIST_MATRIX)).toContainEqual({ source: 'letterboxd', value: 4.2 });
+  });
+});
+
+/** One captured element's `source`, which is a bare object like any other. */
+function sourceOf(entry: unknown): unknown {
+  return (entry as { source?: unknown }).source;
+}
+
 describe('reading MDBList’s answer', () => {
   it('keeps the four sources Jellyfin does not already give, and names them', () => {
     const ratings = extraRatingsFrom({
       title: 'Arrival',
       ratings: [
-        { source: 'audience', value: 82 },
+        // `popcorn` on the wire is this app's `audience` (#45).
+        { source: 'popcorn', value: 82 },
         { source: 'metacritic', value: 81 },
         { source: 'letterboxd', value: 3.9 },
         { source: 'trakt', value: 78 },
@@ -118,7 +179,7 @@ describe('reading MDBList’s answer', () => {
     const ratings = extraRatingsFrom({
       ratings: [
         { source: 'rogerebert', value: 75 },
-        { source: 'audience', value: 82 },
+        { source: 'popcorn', value: 82 },
       ],
     });
 
@@ -131,7 +192,7 @@ describe('reading MDBList’s answer', () => {
     // own scale is as absent as no number at all.
     const ratings = extraRatingsFrom({
       ratings: [
-        { source: 'audience', value: null },
+        { source: 'popcorn', value: null },
         { source: 'metacritic' },
         { source: 'letterboxd', value: 93 },
         { source: 'trakt', value: 78 },
@@ -194,11 +255,18 @@ function fakeMdbList(answer: (url: string) => { status: number; body: unknown })
   return { fetch: fetchUpstream, calls };
 }
 
+/**
+ * What MDBList answers for Arrival, in **MDBList's own vocabulary** — see
+ * `test/fixtures/mdblist.ts` for a whole captured response. `tomatoes` is the
+ * critics' tomatometer the Server already sends, and `popcorn` is the audience
+ * score the app calls `audience`: the two are different scores and the app
+ * shows only the second of them (#45).
+ */
 const ARRIVAL_RATINGS = {
   title: 'Arrival',
   ratings: [
     { source: 'tomatoes', value: 94 },
-    { source: 'audience', value: 82 },
+    { source: 'popcorn', value: 82 },
     { source: 'metacritic', value: 81 },
     { source: 'letterboxd', value: 3.9 },
     { source: 'trakt', value: 78 },

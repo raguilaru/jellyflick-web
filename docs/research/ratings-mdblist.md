@@ -92,14 +92,19 @@ Response: `{ provider_id: string, provider_rating: number, mediatype: string, ra
 
 ### The documented rating sources
 
-The `return_rating` enum above is the most authoritative list of source identifiers MDBList publishes. Cross-checked against the `sort` enums on `GET /lists/{listid}/items` and `GET /catalog/movie`, which use the internal column names:
+> **⚠️ This table is NOT the `ratings[]` element vocabulary, and #45 was filed because it was read as one.**
+> `return_rating` is a **path/query parameter of the list and batch-ratings endpoints** — it chooses which rating a *list* is sorted, filtered or returned by. The `source` strings inside a single lookup's `ratings[]` are a different, measured set, listed under "Response shape — single lookup" below.
+>
+> The one that bit: this table's **`audience`** does not exist as a `ratings[]` source. Rotten Tomatoes' audience score is **`popcorn`** there, and `tomatoes` is the critics' tomatometer. #20 coded `audience` from this table, so the audience badge was silently never drawn until #45 (`decisions.md` §15). **Read the measured list below before coding against any name in this table.**
+
+The `return_rating` enum above is the most authoritative list of source identifiers MDBList publishes *for those parameters*. Cross-checked against the `sort` enums on `GET /lists/{listid}/items` and `GET /catalog/movie`, which use the internal column names:
 
 | Source | `return_rating` value | `sort` value |
 | --- | --- | --- |
 | IMDb | `imdb` | `imdbrating` (also `imdbvotes`, `imdbpopular`) |
 | TMDb | `tmdb` | `tmdbpopular` |
 | **Rotten Tomatoes — critics** | **`tomatoes`** | `rtomatoes` |
-| **Rotten Tomatoes — audience** | **`audience`** | `rtaudience` |
+| **Rotten Tomatoes — audience** | **`audience`** *(this parameter only — the `ratings[]` source is **`popcorn`**)* | `rtaudience` |
 | **Metacritic** | **`metacritic`** | `metacritic` |
 | **Letterboxd** | **`letterboxd`** | `letterrating` (also `lettervotes`) |
 | **Trakt** | **`trakt`** | *(not in the sort enum)* |
@@ -108,7 +113,7 @@ The `return_rating` enum above is the most authoritative list of source identifi
 | MDBList score | `score` | `score` |
 | MDBList average score | `score_average` | `score_average` |
 
-**All four sources story 80 asks for are confirmed available: Rotten Tomatoes audience (`audience` / `rtaudience`), Metacritic (`metacritic`), Letterboxd (`letterboxd` / `letterrating`), Trakt (`trakt`).**
+**All four sources story 80 asks for are confirmed available, and #45 confirmed each one against a real response — under the `ratings[]` names, which for the audience score is `popcorn` and not this table's `audience`: Rotten Tomatoes audience (`popcorn`), Metacritic (`metacritic`), Letterboxd (`letterboxd`), Trakt (`trakt`).**
 
 ### How the API key is passed
 
@@ -155,9 +160,19 @@ Documented properties of the 200 response ("Media item with ratings and metadata
 | `next_episode` | object, nullable — shows only |
 | `last_episode` | object, nullable — shows only |
 
-**`ratings[]` item shape: NOT DOCUMENTED — to verify in implementation.** MDBList's OpenAPI schema types the array elements as a bare `{"type": "object"}` with no properties, and no example anywhere in the schema shows one. The `/docs/score.html` page says only that "the score is calculated using all the ratings average and with a votes baseline" and names no keys. The docs navigation (`/docs/keywords.html`, `/docs/list_types.html`, `/docs/popular_lists.html`, `/docs/score.html`, `/docs/external_lists.html`, `/docs/import_from_names.html`, how-tos, RSS, third-party, `/docs/api`, `/docs/supporter.html`) contains no example response JSON.
+**`ratings[]` item shape: still undocumented, but now MEASURED (#45).** MDBList's OpenAPI schema types the array elements as a bare `{"type": "object"}` with no properties, and no example anywhere in the schema shows one. The `/docs/score.html` page says only that "the score is calculated using all the ratings average and with a votes baseline" and names no keys. The docs navigation (`/docs/keywords.html`, `/docs/list_types.html`, `/docs/popular_lists.html`, `/docs/score.html`, `/docs/external_lists.html`, `/docs/import_from_names.html`, how-tos, RSS, third-party, `/docs/api`, `/docs/supporter.html`) contains no example response JSON.
 
-What to do: make one real call with the host's key during implementation and record the actual item shape here. The field names are very likely a source identifier plus a value plus a vote count (the `return_rating` enum gives the probable source identifiers), but **do not code against a guessed shape** — write the adapter so an unrecognised source is skipped rather than crashing, which story 81 ("missing ratings left out") wants anyway.
+So #45 made two real calls with the host's key and kept both answers: `test/fixtures/mdblist-imdb-movie-tt0133093.json` (The Matrix) and `test/fixtures/mdblist-imdb-show-tt0944947.json` (Game of Thrones), behind `test/fixtures/mdblist.ts`. An element is:
+
+```json
+{ "source": "popcorn", "value": 85, "score": 85, "votes": 1307885, "url": "/m/matrix" }
+```
+
+`value` and `votes` are nullable, `score` is an undocumented 0–100 normalisation of `value` (Letterboxd `4.2` → `84`), and `url` is a path string, a bare number or `null`. The full reading, and what the app does about each part, is `decisions.md` §15. The adapter still skips what it does not recognise, which story 81 ("missing ratings left out") wants anyway.
+
+**The ten `source` values a real `ratings[]` carries** — this, and not the `return_rating` enum below, is the element vocabulary:
+
+`imdb`, `metacritic`, `metacriticuser`, `trakt`, `tomatoes`, `popcorn`, `tmdb`, `letterboxd`, `rogerebert`, `myanimelist`.
 
 The other open shapes, also undocumented and also to verify if needed: `streams[]`, `recommendations[]`, `next_episode`, `last_episode`. For `episode_ratings` the description *does* give the shape:
 
@@ -202,6 +217,6 @@ Daily caps by tier, from <https://docs.mdblist.com/docs/api>:
 | Rotten Tomatoes critic score | **Jellyfin** | `BaseItemDto.CriticRating` (0–100) |
 | IMDb / TMDb community score | **Jellyfin** | `BaseItemDto.CommunityRating` (0–10; **absent when 0**) |
 | Age rating | **Jellyfin** | `BaseItemDto.OfficialRating` |
-| RT audience, Metacritic, Letterboxd, Trakt | **MDBList** | `GET /{imdb|tmdb}/{movie|show}/{id}/?apikey=…` → `ratings[]` (item shape to verify) |
+| RT audience, Metacritic, Letterboxd, Trakt | **MDBList** | `GET /{imdb|tmdb}/{movie|show}/{id}/?apikey=…` → `ratings[]`, sources `popcorn` / `metacritic` / `letterboxd` / `trakt` (item shape measured in #45, §19 above) |
 
 The join key is `BaseItemDto.ProviderIds.Imdb` (preferred) or `.Tmdb` — exact spellings, see `jellyfin-api.md` §17.

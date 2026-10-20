@@ -165,6 +165,11 @@ test/
                         direction alone" search two of them lean on.
   device/profiles.ts    Fixed device layers: fixed clock, fixed randomness,
                         one capability profile per device class.
+  fixtures/             Real answers from a system boundary, kept verbatim
+                        because they settled something nobody could read from
+                        the docs. Only MDBList's so far (#45): two captured
+                        `ratings[]` responses behind `fixtures/mdblist.ts`.
+                        Not for payloads a test can simply write itself.
   fake-jellyfin/        The fake Jellyfin. See below.
 ```
 
@@ -1777,14 +1782,27 @@ side; the container's route under it is "The ratings route" below.
   with the title page's detail fields, so a Row's Titles never carry one. IMDb
   is preferred and TMDb is the fallback; `Movie` is MDBList's `movie` and
   `Series` its `show`. A Title with neither id is never asked about at all.
-- **The shape of MDBList's `ratings[]` is undocumented** — its own OpenAPI
-  schema types the elements as a bare object (`docs/research/ratings-mdblist.md`
-  §19) — so `extraRatingsFrom` reads `{ source, value }` defensively and
-  **skips** anything it does not recognise: an unknown source, a missing or
-  non-numeric value, and a number off its source's own scale. Three sources
-  publish a percentage and Letterboxd publishes stars out of five, which is why
-  the scale is part of the model and not part of the message. `decisions.md`
-  §13 records what this cost and what would confirm it.
+- **The shape of MDBList's `ratings[]` is undocumented but measured** — its own
+  OpenAPI schema types the elements as a bare object
+  (`docs/research/ratings-mdblist.md` §19), so #45 made two real calls and kept
+  the answers in `test/fixtures/` (see `test/fixtures/mdblist.ts`).
+  `extraRatingsFrom` still reads `{ source, value }` defensively and **skips**
+  anything it does not recognise: an unknown source, a missing or non-numeric
+  value, and a number off its source's own scale. Three sources publish a
+  percentage and Letterboxd publishes stars out of five — the real response
+  also carries a uniform 0–100 `score`, and the app deliberately does not use
+  it — which is why the scale is part of the model and not part of the message.
+  `decisions.md` §15 records the whole shape.
+- **MDBList's name for a source is translated at this boundary and nowhere
+  else.** `SOURCE_BY_WIRE_NAME` in `extra-ratings.ts` maps the wire's `popcorn`
+  onto the app's `audience`: Rotten Tomatoes' audience score really is
+  `popcorn` on the wire, there is no `audience` source at all, and until #45
+  that badge was silently never drawn. Everything downstream — `SOURCE_LABELS`,
+  the `ratings.audience` messages, every screen test — speaks the app's own
+  vocabulary and knows nothing about MDBList's. A test payload is therefore
+  written in MDBList's names and asserted in the app's; `tomatoes`, the
+  critics' tomatometer, stays unshown because the Server already sends it as
+  `CriticRating`.
 - **The cache is per Title and holds promises**, so a Row of cards appearing at
   once shares one request rather than starting one each. A *failure* is
   forgotten rather than remembered, so a blip does not switch a Title's ratings
@@ -1812,7 +1830,7 @@ Where it is tested:
 
 | Where | What it covers |
 | --- | --- |
-| `test/unit/extra-ratings.test.ts` | The reading, over HTTP, through the container's **real** ratings route with MDBList faked at the `fetch` seam: which Title is asked about, what comes out of the answer, the cache, no key, a Title MDBList does not know, and every way of failing. `@vitest-environment node`, because happy-dom applies the Same Origin Policy and the container sends no CORS headers — in the image it is the app's own origin. |
+| `test/unit/extra-ratings.test.ts` | The reading, over HTTP, through the container's **real** ratings route with MDBList faked at the `fetch` seam: which Title is asked about, what comes out of the answer — including out of the two **real captured responses** in `test/fixtures/` — the cache, no key, a Title MDBList does not know, and every way of failing. `@vitest-environment node`, because happy-dom applies the Same Origin Policy and the container sends no CORS headers — in the image it is the app's own origin. |
 | `test/unit/extra-ratings-on-a-screen.test.tsx` | What the badges say, and that a Title with none adds nothing to the page. |
 | `test/unit/title-page-journey.test.tsx` | That a title page with no container behind it at all still comes up, with the Server's own ratings and nothing extra. |
 | `test/e2e/extra-ratings-on-the-title-page.spec.ts` | The whole chain in a browser — real container, real build — plus the layout at 375px and the key being nowhere the browser can read it. |

@@ -36,15 +36,18 @@ const PASSWORD = 'correct horse';
 const HOST_KEY = 'secret-key-42';
 
 /**
- * What MDBList answers for Arrival. `tomatoes` and `imdb` are in it on purpose:
- * the Server already sends both as `CriticRating` and `CommunityRating`, and
- * the page must not show either of them twice.
+ * What MDBList answers for Arrival, in **MDBList's own vocabulary**: a whole
+ * captured response is `test/fixtures/mdblist.ts`. `tomatoes` and `imdb` are in
+ * it on purpose — the Server already sends both as `CriticRating` and
+ * `CommunityRating`, and the page must not show either of them twice — and
+ * Rotten Tomatoes' audience score is `popcorn`, which the app draws under its
+ * own name, "Audience" (#45).
  */
 const ARRIVAL_RATINGS = {
   title: 'Arrival',
   ratings: [
     { source: 'tomatoes', value: 94 },
-    { source: 'audience', value: 82 },
+    { source: 'popcorn', value: 82 },
     { source: 'metacritic', value: 81 },
     { source: 'letterboxd', value: 3.9 },
     { source: 'trakt', value: 78 },

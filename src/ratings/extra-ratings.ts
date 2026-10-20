@@ -20,13 +20,47 @@ import type { TitleDetails } from '../catalogue/catalogue';
  * MDBList's OpenAPI schema types `ratings[]` as a bare object and documents no
  * keys at all (`docs/research/ratings-mdblist.md` §19), which is exactly why
  * {@link extraRatingsFrom} skips what it does not recognise rather than trusting
- * a shape.
+ * a shape. #45 measured the real shape against two live responses, kept in
+ * `test/fixtures/` — `decisions.md` §15 — and it is also where MDBList's own
+ * names for the sources are translated into this app's: see
+ * {@link SOURCE_BY_WIRE_NAME}.
  */
 
-/** The sources this app shows, by MDBList's own identifier for each. */
+/**
+ * The sources this app shows, in **this app's** vocabulary — which is not
+ * always MDBList's: see {@link SOURCE_BY_WIRE_NAME}. These are the names the
+ * badges, the i18n keys and every screen know a source by.
+ */
 export const EXTRA_RATING_SOURCES = ['audience', 'metacritic', 'letterboxd', 'trakt'] as const;
 
 export type ExtraRatingSource = (typeof EXTRA_RATING_SOURCES)[number];
+
+/**
+ * MDBList's own `source` on the wire, mapped to the app's name for it. This is
+ * the whole of the translation, and the reason it exists is one source:
+ *
+ * **Rotten Tomatoes' audience score is `popcorn`.** There is no `audience`
+ * source in a real `ratings[]` — the ten MDBList sends are `imdb`,
+ * `metacritic`, `metacriticuser`, `trakt`, `tomatoes`, `popcorn`, `tmdb`,
+ * `letterboxd`, `rogerebert` and `myanimelist`. `audience` came from the
+ * `return_rating` enum in `docs/research/ratings-mdblist.md` §19, which is a
+ * query parameter of the *list* endpoints and not this element's vocabulary, so
+ * `extraRatingOf` rejected the one element story 80 most wanted and the badge
+ * was never drawn (#45). `tomatoes` is deliberately **not** here: that is the
+ * critics' tomatometer, which the Server already sends as `CriticRating`.
+ *
+ * The app keeps `audience` as its own name because that is what a User is told
+ * — "Audience", `ratings.audience` in both dictionaries — and because
+ * `popcorn` is a Rotten Tomatoes brand name that means nothing in a badge. So
+ * the wire name is translated here, at the one place the payload is read, and
+ * nothing downstream of this module knows MDBList has a different word for it.
+ */
+const SOURCE_BY_WIRE_NAME: Readonly<Record<string, ExtraRatingSource>> = {
+  popcorn: 'audience',
+  metacritic: 'metacritic',
+  letterboxd: 'letterboxd',
+  trakt: 'trakt',
+};
 
 /** One source's score for one Title. */
 export type ExtraRating = {
@@ -38,9 +72,15 @@ export type ExtraRating = {
 /**
  * The scale each source publishes its score on, which is also how a value is
  * checked. A number outside its source's range is treated as absent rather than
- * shown: the shape of `ratings[]` is undocumented, so a scale that turns out to
- * be wrong omits a rating (story 81's own behaviour) instead of showing a
- * nonsense one.
+ * shown, so a scale that turns out to be wrong omits a rating (story 81's own
+ * behaviour) instead of showing a nonsense one.
+ *
+ * **All four were confirmed against real responses in #45** and none needed
+ * correcting. Every element also carries an undocumented `score`, the same
+ * rating normalised to 0–100 — Letterboxd's 4.2 stars arrive as `score: 84` —
+ * and the app deliberately does not read it: story 80's badges show each source
+ * the way its own site does, and Letterboxd publishes stars. `decisions.md`
+ * §15.
  */
 export const SOURCE_SCALES: Readonly<Record<ExtraRatingSource, { readonly outOf: number }>> = {
   // Percentages, as both sites publish them.
@@ -91,11 +131,14 @@ export function ratingsLookupFor(details: TitleDetails): RatingsLookup | undefin
  * - a source the app does not show, which includes the two the Server already
  *   sends — `tomatoes` is `CriticRating` and `imdb` is `CommunityRating`, and
  *   two numbers for one thing is worse than one
- * - a source with no number on it, which is what MDBList sends for a source it
- *   has no value from
+ * - a source with no number on it: `value` is genuinely nullable, and a Series
+ *   has a `null` Letterboxd rating because Letterboxd does not rate television
  * - a number off its source's own scale, which is a shape this app guessed
  *   wrong rather than a rating a User should see
  * - a second rating from a source already read, keeping MDBList's own first
+ *
+ * The sources arrive under MDBList's names and leave under this app's: see
+ * {@link SOURCE_BY_WIRE_NAME}.
  */
 export function extraRatingsFrom(payload: unknown): readonly ExtraRating[] {
   const listed = (payload as { ratings?: unknown } | null | undefined)?.ratings;
@@ -116,9 +159,17 @@ function extraRatingOf(entry: unknown): ExtraRating | undefined {
   if (typeof entry !== 'object' || entry === null) return undefined;
   const { source, value } = entry as { source?: unknown; value?: unknown };
   if (typeof source !== 'string') return undefined;
-  if (!(EXTRA_RATING_SOURCES as readonly string[]).includes(source)) return undefined;
-  const known = source as ExtraRatingSource;
+  // MDBList's name for the source, not the app's: `popcorn` is this app's
+  // `audience`, and anything not in the map is a source the app does not show.
+  const known = SOURCE_BY_WIRE_NAME[source];
+  if (known === undefined) return undefined;
   if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+  // `<= 0` and not `< 0`, which means a genuine score of zero is treated as
+  // absent. Left that way in #45 on purpose: MDBList's own way of saying "no
+  // value" is `null`, neither captured response has a zero anywhere, and
+  // Jellyfin does the same thing one field over — `CommunityRating` is absent
+  // when 0. The cost is one unlikely Title losing one badge, which is story
+  // 81's behaviour anyway. `decisions.md` §15.
   if (value <= 0 || value > SOURCE_SCALES[known].outOf) return undefined;
   return { source: known, value };
 }
