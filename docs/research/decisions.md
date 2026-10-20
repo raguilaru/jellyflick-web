@@ -346,30 +346,107 @@ written down here so the next person reads it as a line that was drawn rather
 than as a case that was missed. `Commercial` stays out regardless: it is a Live
 TV concern and this app shows no Live TV.
 
-## 15. MDBList's `ratings[]` shape is a guess, and so is every scale in it
+## 15. MDBList's `ratings[]` really looks like this, and the audience score is `popcorn`
 
-Decided in #20, which is the client side of ADR 0004. Three things nobody could
-settle from the research, because MDBList documents none of them.
+Guessed in #20, which is the client side of ADR 0004, because MDBList documents
+none of it. **Settled in #45 with the host's own key**, against two live calls
+to `GET https://api.mdblist.com/imdb/{movie|show}/{id}/` — The Matrix
+(`tt0133093`) and Game of Thrones (`tt0944947`). Both answers are kept verbatim
+in `test/fixtures/`, behind `test/fixtures/mdblist.ts`, so nobody has to guess
+or call again.
 
-- **The shape of a `ratings[]` item is not published.** MDBList's own OpenAPI
-  schema types the array elements as a bare `{"type": "object"}` and no example
-  anywhere in its docs shows one (`ratings-mdblist.md` §19, which says in as
-  many words: do not code against a guessed shape). There was no host key to
-  make a real call with, so the adapter reads `{ source, value }` — the shape
-  the container's own fixture already assumed in #5 — and **skips anything it
-  does not recognise** rather than trusting it. That is also what story 81
-  wants: a rating that cannot be read is a rating left out, not a zero.
-- **The scales are a guess too, and are checked rather than trusted.** The app
-  shows `audience`, `metacritic` and `trakt` as percentages and `letterboxd` as
-  stars out of five. A value outside its source's range is treated as absent, so
-  a scale that turns out to be wrong **omits** a rating instead of showing one
-  that is wrong by a factor of twenty. `SOURCE_SCALES` in
-  `src/ratings/extra-ratings.ts` is the one place to correct.
-- **What would settle both**: one real `GET /{imdb}/{movie}/{id}/` with the
-  host's key, and the item shape written into `ratings-mdblist.md` §19 where it
-  says "to verify in implementation". Until then this is the project's one
-  piece of coded-against-unverified-shape, and it is deliberately the piece
-  that degrades to nothing.
+### The element shape, as it really is
+
+```json
+{ "source": "popcorn", "value": 85, "score": 85, "votes": 1307885, "url": "/m/matrix" }
+```
+
+- **`{ source, value }` was right**, and is still all the adapter reads.
+- **`value` is nullable.** Real nulls on real Titles: `letterboxd` and
+  `rogerebert` on the Series, `myanimelist` on both. Letterboxd does not rate
+  television, so this is the ordinary case and not a failure — the adapter's
+  `typeof value !== 'number'` guard already handled it, and story 81's "leave a
+  missing rating out" is what a User sees.
+- **`score` is undocumented and present for every source**: `value` normalised
+  to 0–100, so Letterboxd's `value: 4.2` comes with `score: 84`.
+- **`votes` is there too**, and is sometimes `null` (`popcorn` on the Series).
+- **`url` is not usefully typed**: a path string (`"/the-matrix"`), a bare
+  **number** (`imdb`'s is `181`), or `null`. The adapter ignores it. Do not
+  start reading it without narrowing all three.
+- **`tomatoes` alone carries a `"fresh": 1`.** Nothing reads it.
+
+The ten sources MDBList actually sends: `imdb`, `metacritic`, `metacriticuser`,
+`trakt`, `tomatoes`, `popcorn`, `tmdb`, `letterboxd`, `rogerebert`,
+`myanimelist`.
+
+### The defect this found: there is no `audience` source
+
+`EXTRA_RATING_SOURCES` contained `'audience'`, and **a real `ratings[]` has no
+such element**. Rotten Tomatoes' two scores are `tomatoes`, the critics'
+tomatometer, and **`popcorn`, the audience popcornmeter — the one story 80 asks
+for**. So `extraRatingOf` rejected it on every real response and the audience
+badge was never drawn: #45's quiet failure mode exactly, and invisible because
+"no key", "lookup failed" and "guessed wrong" all look like nothing on the page.
+The wrong name came from `ratings-mdblist.md` §19's `return_rating` table, which
+is a query parameter of the **list** endpoints and not this element's
+vocabulary; §19 now says so.
+
+**Fixed at the adapter boundary, not by renaming the app's vocabulary.**
+`SOURCE_BY_WIRE_NAME` in `src/ratings/extra-ratings.ts` maps MDBList's `popcorn`
+onto this app's `audience`, at the one place the payload is read, and nothing
+downstream knows MDBList has another word for it. `audience` stays the app's own
+name because it is what a User is told — `ratings.audience` in both
+dictionaries, "Audience" and "Público" — and `popcorn` is a brand name that says
+nothing in a badge. `tomatoes` is deliberately still not shown: it is a
+different score, the Server already sends it as `CriticRating`, and nobody asked
+for it.
+
+The test that holds this: the captured responses go through `extraRatingsFrom`
+in `test/unit/extra-ratings.test.ts`, and every faked payload in the unit and
+e2e suites now sends `popcorn` **on the wire** while asserting `audience` as the
+adapter's **output**. Drop the mapping and both ends fail.
+
+### The scales were all four correct, and `value` stays what is read
+
+`metacritic` 73/86, `trakt` 87/89, `popcorn` 85 — percentages. `letterboxd` 4.2
+— stars out of five, which its own `score: 84` confirms is not a percentage.
+`SOURCE_SCALES` needed no correction, and the out-of-range check still turns a
+future wrong guess into an omitted rating rather than one wrong by a factor of
+twenty.
+
+**Why not switch to the uniform `score` now that it exists.** It would collapse
+four scales to one and remove the range check's reason to exist — and the app
+would then show Letterboxd as 84%, which is not how Letterboxd publishes it.
+Showing each source the way its own site does is the point of story 80's badges,
+so `value` + `SOURCE_SCALES` stay.
+
+### Left as it is: a genuine 0 is treated as absent
+
+`extraRatingOf` rejects `value <= 0`, so a real score of zero — a film every
+Trakt voter hated — is omitted rather than shown. **Not changed in #45**, for
+three reasons: nothing in either captured response has a zero, MDBList's own
+convention for "no value" is `null` rather than `0` and the guard predates
+knowing that, and Jellyfin already does the same thing one field over
+(`CommunityRating` is **absent when 0**, `jellyfin-api.md` §17), so the app is
+at least consistent about it. The cost is one unlikely Title losing one badge,
+which is story 81's own behaviour; the fix, if a real 0 ever shows up, is to
+reject only `value < 0` and leave the upper bound alone.
+
+### Still true from #20, and unchanged
+
+- **"Nothing is requested when no key is configured" is one request, not
+  none.** ADR 0004 deliberately leaves the browser no capability flag to check,
+  so the route's 503 is the only way to learn there is no key. It is remembered
+  per origin, so a host without a key pays one request for a whole visit instead
+  of one per Title. A flag in the runtime config would cost a round trip less
+  and is not worth reopening ADR 0004 for.
+- **The title page's facts and actions lines wrap.** They were one grid row of
+  `max-content` columns, which made the sheet 635px wide on a 375px screen and
+  pushed the Mark watched button and the new ratings off the side. Found by
+  looking at the page, not by a test: Playwright scrolls an element into view
+  before touching it, so every assertion passed throughout. #17's CSS, changed
+  in #20 because its own feature was among what ran off the screen, and now
+  guarded by a scroll-width assertion at 375px.
 
 Two smaller calls, both of which extend the spec rather than contradict it:
 

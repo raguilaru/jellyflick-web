@@ -263,10 +263,11 @@ test.describe('a touch device', () => {
 const DIST = join(import.meta.dirname, '..', '..', 'dist');
 const ENTRYPOINT = join(import.meta.dirname, '..', '..', 'deploy', 'entrypoint.sh');
 
+/** In MDBList's own vocabulary: the audience score is `popcorn` (#45). */
 const ARRIVAL_RATINGS = {
   title: 'Arrival',
   ratings: [
-    { source: 'audience', value: 82 },
+    { source: 'popcorn', value: 82 },
     { source: 'metacritic', value: 81 },
     { source: 'letterboxd', value: 3.9 },
     { source: 'trakt', value: 78 },
