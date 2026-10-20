@@ -1044,6 +1044,19 @@ two screens rather than one, which is why one component answers both addresses.
   navigation journeys in all three projects; the hop from one section to the
   other goes back through Home on `phone`, which is the real journey at that
   width.
+- **The pair is spaced by margins, not by flex `gap`** (#61). As #51 shipped it
+  the row spaced them with `gap`, which is Chrome 84, so on the floor the
+  declaration was dropped and **the two links touched each other** — #49's
+  class of defect, and invisible to the whole suite because a desktop Chromium
+  honours `gap`. It is #44's shape now, the one #56 gave the Billboard's rows:
+  wrapped flex, `var(--space-1)` margins on the children, a matching negative
+  side margin on the row, no `gap`. The children's rule is written
+  `.home__sections > .button`, which beats `.button`'s own `margin-top`
+  outright rather than tying with it and being decided by source order (#49's
+  trap). **Neither existing assertion could see it**: the row wraps, so the
+  scroll-width check reports no overflow, and nothing is clipped, so #56's
+  own-right-edge loop is green too. A spacing defect is only visible as a
+  space, which is what the new test measures.
 
 ## The suggestion Rows
 
@@ -2996,6 +3009,30 @@ ADR 0002 sets the floor. These are the traps inside it.
   Billboard's rows wrap, silently invalidates any `start` already on it. It
   ships raw past the minifier and nothing warns: the declaration is simply
   dropped on the target and the row keeps whatever alignment it had.
+- **Both of those were swept for, and the sweep is done** (#61) — do not repeat
+  it. `base.css` has **no** flex `gap` left: the last one was
+  `.home__sections`, which #61 converted to #44's shape, and every other `gap`
+  in the file is on a grid container, where it is Chrome 66. And all **seven**
+  `justify-content: start` are on grid containers — `.card__hover-actions`,
+  `.top-bar__sections`, `.layout-row__buttons`, `.layout-add`,
+  `.series__seasons`, `.settings-choices`, `.accents` — so all seven are fine;
+  the one that mattered was the row #56 converted from grid to flex, and #56
+  changed it to `flex-start`. Both checks were done by parsing rule blocks
+  rather than grepping lines, so a declaration and its `display` had to be in
+  the same block to count. **What this does not do is stay true**: it is a
+  statement about the file as of #61, and the way to keep it is to reach for
+  grid, or for margins, rather than to re-run the sweep.
+- **A test can only see an inert declaration if it simulates the floor.** This
+  suite runs a desktop Chromium where all of the above *work*, which is why
+  both #49 and #61 were found by eye rather than by a test, and why #61's own
+  assertion in `movies-and-series.spec.ts` measures the row **twice**: once as
+  the browser draws it, and once with flex `gap` forced to zero through
+  `addStyleTag`, which is exactly and only what Chromium 68 does to it. Only
+  the second measurement can fail while the defect is present. The pattern
+  generalises to any declaration in this list — neutralise the modern feature
+  and assert the fallback still holds — and it is worth preferring to an
+  assertion on the computed style, which would couple the test to how the
+  spacing is written rather than to the space itself.
 - **CSS that is downleveled for you, so use it freely:** `clamp()`, `min()`,
   `max()`, logical properties, nesting, space/slash colour syntax. Native and
   safe: custom properties, grid, flex, grid `gap`, `position: sticky`,
