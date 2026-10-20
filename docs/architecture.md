@@ -2535,7 +2535,9 @@ two-sessions question Cast does, and the answer is the same call. Whether Play
 On should hand over at all is #34's to decide — a Title sent to the television
 in the next room is the Cast case, but a User may well mean "and keep it here
 too" — so `handOver` is deliberately a thing the player calls rather than
-something `usePlayback` does on its own.
+something `usePlayback` does on its own. **#34 decided to hand over** — see
+the next section for why, and for the one prediction above that did not hold:
+Play On needs no device gate at all.
 
 Where it is tested:
 
@@ -2545,6 +2547,106 @@ Where it is tested:
 | `test/unit/airplay-on-the-element.test.ts` | Which of the two APIs an element has and which wins, the watch and its cancellation, the string availability, and a dismissed picker. Elements shaped by hand, because happy-dom has neither API and a real element would have `remote` in Chromium and nothing here. |
 | `test/unit/casting-a-title.test.tsx` | The journey: the control only where the device layer says so, nothing loaded until the press, the account's receiver reaching the sender, the handover leaving one session, the notice, stopping again, a failure said beside the picture, and a dismissed picker saying nothing. |
 | `test/e2e/cast-and-airplay.spec.ts` | What needs a browser: that nothing asks `gstatic.com` for anything until the press, that a real `<script>`, a real `error` event and a real `__onGCastApiAvailable` behave as `cast-sender.ts` assumes, that the `<video>` really pauses and the Server records exactly one stop, and AirPlay's WebKit fallback against a real element and a real event. |
+
+### Play On: another Jellyfin app on the same Server (#34)
+
+**Play On is not Cast**, and the glossary is explicit because the two look
+identical in the menu and share nothing underneath. Play On is telling
+**another running Jellyfin app on this Server** to play the Title: `GET
+/Sessions` to find it, `POST /Sessions/{id}/Playing` to start it, `POST
+/Sessions/{id}/Playing/{command}` to drive it. No receiver, no SDK, no
+credentials in a message — the other app is already signed in to this Server
+and reports its own progress under its own session. `cast.ts` and
+`loadCastSender` are not reused and could not be.
+
+| | Cast (#33) | Play On (#34) |
+| --- | --- | --- |
+| Is there anywhere to send it | unknowable without the SDK (`decisions.md` §8) | `GET /Sessions` answers |
+| Who draws the list | the **browser's** own picker | **this app**, in `play-on-panel.tsx` |
+| What loads on the press | the Cast SDK, off `gstatic.com` | nothing |
+| What the control is gated on | `playbackTargets().cast` | nothing: every device has it |
+| Who plays | Jellyfin's receiver | a Jellyfin app with its own screen and its own remote |
+| Closing the player | ends the session | **leaves it playing** |
+
+- **It hands over, and that was this ticket's call rather than #33's.** The seam
+  was left deliberately open — `handOver` is something the player *calls*,
+  because "and keep it playing here too" is a reading a User might mean. It is
+  not the reading taken, and the reason is the Server rather than the room. The
+  other end is a Jellyfin client signed in **as the same User**, so two
+  sessions for one Title leave the Server with a resume point belonging to
+  whichever stopped last — Cast's problem exactly, with the same answer. Play
+  On has a second reason of its own, and it is the stronger one: **the position
+  is sent in the `PlayNow`**, so the other app starts where this User had got
+  to, and a player left running here would later report a stop *further along*
+  and overwrite the place the other room is actually watching from. Pausing
+  here is what makes "carry on next door" true rather than a race. What a User
+  loses by it is one sentence in the panel; what they would lose without it is
+  the place they had reached.
+- **The control is not behind a device gate, which is the one way it does not
+  follow the seam's prediction.** `onPlayOn` is **required** on
+  `PlaybackOptions` where `onCast` and `onAirPlay` are optional, because there
+  is no browser without Play On: it is one `POST` to a Server this app is
+  already authenticated against, so the webOS 5 floor — which has neither Cast
+  nor AirPlay nor picture-in-picture — has this. An optional handler would
+  invite a caller to leave out a control that always works.
+- **`controllableByUserId` is what makes the answer a list of candidates.**
+  `jellyfin-playback.md` §11 traces it to `SessionManager.GetSessions`, which
+  filters on `SupportsRemoteControl` only when it is given; without it the
+  Server answers with every app signed in to it. The two filters it does *not*
+  do are `play-on.ts`'s, and they are not interchangeable: **`PlayableMediaTypes`
+  must carry `Video`**, because a music-only client is not somewhere to send a
+  Movie, and **this device is dropped by DeviceId**, because the Server cannot
+  know which session is asking and answers with the caller's own. The fake
+  answers with it too, deliberately — a fake that helpfully removed it would
+  hide the bug that filter exists for.
+- **`activeWithinSeconds` is five minutes, and the figure is ours** — the API
+  documents no default, and leaving the parameter off would offer a television
+  switched off an hour ago. It is `decisions.md` §11's footing, and §20 records
+  it.
+- **The list is read when the panel is opened, not when the player opens.**
+  Nothing else in the app has any use for the answer, so a Title played with no
+  interest in Play On costs nothing — the same trade Cast's lazy SDK makes, by
+  a much cheaper road.
+- **A Server that will not answer and a Server with nothing on it are two
+  different messages**, and that distinction is the whole reason the panel has
+  three empty states rather than one. A User whose television is on, looking at
+  "no other Jellyfin app is ready to play", knows to look at the television; the
+  same User looking at "Jellyflick could not ask the Server" knows to look at
+  this app.
+- **One panel is both the list and the remote**, for #32's width reason: a
+  second control in the options row that is only ever useful when the first is
+  not is a control the row has no space for. Which is also where the hardest
+  bug in the ticket lived — see below.
+- **A Server says "nothing playing there" with an explicit `null`**, and
+  `@jellyfin/sdk` types both `NowPlayingItem` and `PlayState` as non-nullable,
+  so the compiler says that answer cannot happen. Read as present it throws on
+  the way to `Name`. The symptom was a Stop that worked followed, one render
+  later, by a panel reporting the Server as unreachable — `typecheck` green
+  throughout. `decisions.md` §20 records it; the generated types are not the
+  Server's word on nullability, which is §3's lesson again.
+- **A dialog whose contents are replaced under it loses focus, and nothing in
+  the app had met that before.** Pressing a row swaps the list for the remote,
+  so the focused button is removed **by its own press** and the browser hands
+  focus to the document — from where the arrow keys walk the title page behind
+  the picture (#40). It is #53's defect and #32's fix by a third road: those
+  two are about a dialog that *goes away*, where this is a dialog that *stays*
+  and changes. `play-on-panel.tsx` therefore has two focus effects — one for
+  the panel's life, one keyed on which half it is showing, guarded on "only if
+  focus has fallen out" so a User who has moved on is never dragged back.
+  **Found by the e2e and unsayable without one**: `focusableItems()` drops
+  zero-sized elements and happy-dom gives every box a zero size, so the arrow
+  keys move nothing there and the unit journey is green either way.
+
+Where it is tested:
+
+| Where | What it covers |
+| --- | --- |
+| `test/unit/playing-on-another-app.test.ts` | The arithmetic: which sessions are offered and which three are dropped and why, the label and its fallback, what the other app is playing including the Server's `null`, and the five minutes. |
+| `test/unit/playing-on-another-app.test.tsx` | The journey, against the **real** fake Server rather than a faked device — Play On has nothing to fake: the control on a device that can do nothing else, nothing asked until the panel opens, the query's own parameters, the three empty states, the `PlayNow` with no body, the handover leaving one session, the commands, the read-back, and the player closing without switching the other room off. |
+| `test/e2e/play-on.spec.ts` | What needs a browser: every control's **own right edge** against the viewport (#56's rule — measured, and the document reports no overflow while the buttons run off a 390px screen), a remote reaching the control and then the rows, focus staying inside the player when the panel closes, and a real `<video>` really pausing with exactly one stop recorded. |
+
+**Still to come, and filed rather than carried**: the title page's own Play On
+entry point, which the ticket's prose mentions and its acceptance box does not.
 
 ## The fake Jellyfin serves real video
 
