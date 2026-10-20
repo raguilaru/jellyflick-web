@@ -2539,6 +2539,121 @@ browser can say is `test/e2e/skipping-and-the-next-episode.spec.ts`: the picture
 really moving, an Episode really running out, a remote reaching every new button
 by direction, and the two offers measured against the viewport.
 
+### Trickplay, the speed, picture-in-picture and the quality (#32)
+
+The four things a User chooses while a Title is already playing: the thumbnail
+under the scrub, how fast it plays, a window of its own, and a ceiling on what
+is asked for. They share one panel — `src/playback/playback-options.tsx` — and
+`playback-speed.ts`, `max-quality.ts` and `trickplay.ts` hold the rules it draws.
+
+- **The thumbnails are arithmetic first and drawing second**, which is why
+  `trickplay.ts` has no DOM in it at all. Every number in a manifest comes off a
+  Server and any of them can be missing, zero or nonsense: a `0` `Interval` is a
+  division by zero and a preview drawn at `NaN` pixels. `trickplayFor` picks
+  **the smallest set the Server has that is still at least as wide as the preview
+  will be drawn** (`jellyfin-playback.md` §13), and falls back to the widest
+  there is rather than to nothing — a slightly soft thumbnail is the feature and
+  no thumbnail is not. A source with no thumbnails, a Server with trickplay off
+  and a manifest whose numbers cannot be drawn with are **one answer**, and it is
+  "hide the feature" rather than an error a User is told about.
+- **One tile image holds a whole sheet of thumbnails**, `TileWidth x TileHeight`
+  of them, so `trickplay-preview.tsx` is a box with a `background-position`
+  rather than an `<img>` per frame — otherwise the same sheet is re-requested for
+  every thumbnail in it. The box is `aria-hidden`: the bar already says where it
+  is in words through `aria-valuetext`, and a second announcement of the same
+  number on every pointer move would be noise. It is a sighted aid and says so.
+- **The speed range stops where the sound does.** `playbackRate` is Chrome 3 and
+  needs no feature test, no polyfill and no device seam at all
+  (`player-subtitles.md` §8b), so the only real decision is which rates to offer:
+  **0.5x to 2x**, because Chromium mutes audio outside roughly 0.5x–4x when its
+  pitch preservation gives up, and a speed control that silently takes the sound
+  away is worse than none. `clampSpeed` exists because a rate can arrive from
+  somewhere other than a press — a stored value, a remote, a later ticket —
+  and a media element will accept 16x and play it in silence.
+- **Both `defaultPlaybackRate` and `playbackRate` are written, and that is the
+  point.** `playbackRate` is what is playing now; `defaultPlaybackRate` is what
+  the element returns to when a **new source is attached**, which happens on
+  every re-negotiation. Without it, a User who slowed a Title down and then
+  changed the sound track — or the quality — is jolted back to full speed with
+  nothing to explain it. The effect is keyed on the plan as well as the speed, so
+  it is re-applied *after* the source a re-negotiation attached.
+- **The maximum quality is the only setting in this app kept in device storage
+  rather than in Client Settings**, and the split is deliberate rather than an
+  oversight. A household's Client Settings follow a User between devices; the
+  whole point of this one is that it does not, because a phone on a mobile
+  connection and the television beside it belong to the same User and want
+  opposite answers. It lives in `device.storage()` under one key owned by
+  `max-quality.ts` and written by nothing else — the arrangement `src/session/`
+  already uses.
+- **Auto is the absence of a choice, not a value.** There is no "Auto" bitrate: a
+  Server asked for no ceiling sends the best the DeviceProfile can take, which is
+  what every other Jellyfin client means by Auto. So the stored value is either a
+  number of bits per second or nothing at all, and **anything unreadable is Auto**
+  — a storage that refused to answer, a value from a later version of this app, a
+  number somebody edited by hand. A device that cannot remember a ceiling asks for
+  the best picture, which is what this app did before the setting existed.
+- **The ceilings are bitrates rather than resolutions**, which is the honest
+  labelling: what is being limited is data, which is what story 93 asks for, and
+  4 Mbps does not promise any particular picture height — the Server picks what
+  fits. Naming them 1080p and 720p would promise something this app does not ask
+  for.
+- **Choosing a ceiling asks the Server again**, exactly as choosing a sound track
+  does and for the same kind of reason: the ceiling is part of the DeviceProfile,
+  and the profile *is* the negotiation. What is owed the User is their **place**,
+  so the next `PlaybackInfo` starts from where they are rather than from the
+  beginning. It is written to device storage **at the press** rather than when the
+  player closes, because the press is the whole of the decision and a User who
+  shuts the lid of a laptop has still chosen.
+- **Picture-in-picture is offered only where the device layer says the device has
+  it.** `pictureInPicture` is `document.pictureInPictureEnabled`, which is false
+  on Chromium 68 — the feature is Chrome 69, one version above the floor — and
+  false again where a browser's policy forbids it. Absent means **no control at
+  all** rather than one that cannot be pressed: a feature the browser does not
+  have is not something a User can be told about usefully. The browser requires
+  the press to be a User's (`requestPictureInPicture` rejects without a gesture),
+  so it is called straight out of the click and never out of an effect, and a
+  refusal is said beside the picture like every other player failure — the Title
+  is still playing and a window that would not open has cost nothing else.
+- **One panel rather than three controls**, and that is about the row it is opened
+  from. The controls already carry play/pause, the tracks and Close; three more
+  buttons beside them is a row wider than a phone, which is exactly the failure
+  #44 shipped and every e2e assertion passed through. So the speed, the quality
+  and picture-in-picture share a panel as the sound and the subtitles share
+  theirs. Within it, picture-in-picture is a **press and not a choice**, so it is
+  a plain button below the two groups rather than another `aria-pressed` row. It
+  is `TrackPicker`'s shape in every other respect, deliberately: a `<button>` with
+  `aria-pressed` per choice and never a radio group, because `src/navigation/`
+  owns Left and Right for moving focus; a Back claim on top of the player's, so
+  Back closes the menu and leaves the Title playing; and `position: fixed` inside
+  the player, which is also fixed, so focus stays inside it with no
+  focus-trapping code (#7, #40).
+- **The menu hands focus back to the control it was opened from — but only if
+  that control is still there.** The player's own rule is that controls which
+  appear take focus unless focus is already inside it (#26); this is its mirror,
+  and without it a speed, a quality and picture-in-picture each end with a
+  remote somewhere a User cannot see. A **quality choice re-negotiates and
+  rebuilds the whole control row**, so the opener is gone by then, and the
+  controls' own effect — which takes focus when they come back — is the right
+  thing to leave it to. #32's e2e found this on a 390px screen with every unit
+  assertion green before and after.
+- **#54 is still open** on whether a chosen speed should survive the player
+  closing. What is written above is what the code does now, not what it ought to.
+
+Where each thing is tested: the manifest arithmetic and the three ways there is
+nothing to draw in `test/unit/trickplay-thumbnails.test.ts`, and what a User sees
+— the panel, the two properties being written, the ceiling reaching the next
+negotiation, and the refusal message — in
+`test/unit/scrubbing-speed-and-quality.test.tsx`. Note that `clampSpeed` and
+`readMaxQuality` have **no direct unit test of their own**; both are exercised
+only through the player, which is worth knowing before relying on either
+elsewhere. What only a browser can say is
+`test/e2e/trickplay-speed-and-quality.spec.ts`: a real tile image fetched and
+cropped to one frame of its sheet, the preview following a pointer onto the
+second row of that sheet, a preview at the end of the bar kept inside a 375px
+screen, a picture-in-picture window really opened and really left, a chosen
+speed surviving the re-negotiation a lower quality causes, and a ceiling
+remembered on the device and applied to the next playback.
+
 ### Cast: Chromecast and AirPlay (#33)
 
 Sending the Title somewhere else, with this app as the remote. **Cast is
