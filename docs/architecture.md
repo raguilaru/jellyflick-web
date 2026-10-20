@@ -850,6 +850,45 @@ More info, and its local trailer.
   the `inset` shorthand (Chrome 87), its height is a `clamp()` rather than
   `aspect-ratio` (88), and the scrim is a gradient rather than
   `backdrop-filter` (76).
+- **Both its rows of controls wrap, and both are measured by their own right
+  edge** (#56). Play and More info, and the trailer's sound and pause buttons,
+  were each a single grid row of `max-content` columns — a row as wide as its
+  contents whatever the screen is, which is #44's defect exactly. It put "Pause
+  the trailer" 3.23px past the right edge of a 390px screen in English and
+  **62.02px past it in Spanish**, where the row reads "Activar el sonido del
+  tráiler" then "Pausar el tráiler"; at 375px those become 18.23px and 77.02px.
+  They now wrap the way `.title__facts` and `.title__actions` were made to in
+  #44 — wrapped flex with `var(--space-1)` margins on the children and a
+  matching negative margin on the row, never flex `gap` (84). The children's
+  rule is written `.billboard__actions > .button` rather than on the class
+  alone, because `.button` is further down `base.css` and would otherwise win
+  `margin-top` on source order at equal specificity — #49's trap.
+
+### The scroll-width assertion is blind to a clipped control (#56)
+
+Worth more than the pixels, and the reason the own-edge loop exists in
+`test/e2e/the-billboard.spec.ts` and `test/e2e/play-on.spec.ts`:
+
+- **A clipped control does not lengthen the document.** In all four measured
+  cases above — two languages × two widths — `document.documentElement`'s
+  `scrollWidth` was *exactly* its `clientWidth`. The scroll-width check this
+  project adopted after #44 as "the one shape scrolling cannot paper over"
+  reported no overflow in every one of them. It catches a strictly smaller
+  class than the own-edge loop: a container too wide for the screen, not a
+  control clipped by it. Keep both, as `play-on.spec.ts` does.
+- **Playwright scrolls a control into view before touching it**, so the presses
+  in `the local trailer plays by itself…` passed throughout. No assertion in
+  either suite could see this; the integrator found it by rendering Home at
+  phone width and looking, as #35 and #44 were found.
+- **Held against its own failure.** Restoring the `max-content` grid row with
+  the new test in place turned both languages red (405.23 and 464.02 against a
+  390px viewport) while `scrollWidth` stayed 390 — so the loop fails for the
+  reason it claims to, and the scroll-width line still would not have.
+- **A separate finding worth keeping:** breaking it instead with
+  `flex-wrap: nowrap` **passed**, because flex items shrink by default and the
+  two buttons squeezed from 187.64px to 173.30px to fit. Wrapping is the fix,
+  but flex-shrink is a second net that the old grid row did not have — a row of
+  `max-content` columns cannot shrink at all.
 
 Two tests elsewhere had to change because Home now has a Billboard, and both
 were assertions about Home's *shape* rather than about their own subject: the
@@ -2847,6 +2886,13 @@ ADR 0002 sets the floor. These are the traps inside it.
   **`:where()` and `:is()` ship raw too** (88 and 88), and a rule using one is
   dropped whole on the target — write selector lists out.
   Container queries and `dvh` are banned outright by ADR 0002.
+- **`justify-content: start` / `end` on a *flex* container is Chrome 93** (#56),
+  while `flex-start` / `flex-end` have always worked. The bare keywords are
+  Chrome 66 on a **grid** container, which is why they are safe elsewhere in
+  `base.css` — so converting a grid row to flex, as #56 did to make the
+  Billboard's rows wrap, silently invalidates any `start` already on it. It
+  ships raw past the minifier and nothing warns: the declaration is simply
+  dropped on the target and the row keeps whatever alignment it had.
 - **CSS that is downleveled for you, so use it freely:** `clamp()`, `min()`,
   `max()`, logical properties, nesting, space/slash colour syntax. Native and
   safe: custom properties, grid, flex, grid `gap`, `position: sticky`,
