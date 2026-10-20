@@ -2056,6 +2056,19 @@ offset in force and is the only thing that saves it.
   button with `aria-disabled` and says why **when it is pressed** — a notice
   that came and went with every pause in the dialogue would blink beside the
   number being read.
+- **And it is dimmed while it cannot be pressed** (#50). `aria-disabled` told a
+  screen reader and nothing told anyone else: the dim rule in `base.css` was
+  scoped to `.player__track-choices` for #27's undrawable tracks, repointed at
+  `.player__track-group` when #30 removed those, and the timing **panel** is
+  neither — so the one control left outside the selector was the one a User was
+  most likely to press. The rule is now **`.player .button[aria-disabled]`**,
+  which is what was always meant and which the next panel inherits rather than
+  rediscovering. It is still a focus stop a remote reaches and still explains
+  itself on a press; what changed is that a sighted User no longer has to press
+  it to find out. Asserted in `test/e2e/the-subtitle-offset.spec.ts`, because
+  computed style is not a thing the unit journey has at all — it loads no
+  stylesheet — and asserted as the rule: dimmer than the Reset beside it when
+  it cannot be pressed, and not dimmed at all when it can.
 - **An offset belongs to a subtitle file**, which is `subtitleFileOf`:
   `MediaStream.Path` where the Server gave one, and the media source plus the
   stream index otherwise. `decisions.md` §16 is why, and what to check against a

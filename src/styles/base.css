@@ -2109,23 +2109,30 @@ html[data-input='pointer'] [tabindex]:focus {
 }
 
 /*
- * A control in the subtitle menu that is offered but cannot be pressed, which
- * since #30 means exactly one thing: **Subtitle timing on a track the Server
- * burned into the picture.** It used to mean a bitmap track this app could not
- * draw, and that no longer exists — every track in the list is now one a User
- * can choose and see.
+ * **Any** control in the player that is offered but cannot be pressed. There
+ * are two of them: Subtitle timing on a track the Server burned into the
+ * picture (#30), and "Sync to this line" with no line on the screen (#28).
  *
- * It is still a focus stop and still named — `aria-disabled`, not `disabled` —
- * so a remote can reach it and read the reason the group gives in words, where
- * `disabled` would remove it from the arrow keys with nothing to explain the
- * gap. Which is exactly why it has to *look* unavailable too: without this,
- * the only difference between the control and a working one is discovered by
- * pressing it and watching nothing happen. Found by looking at a screenshot.
+ * Each is a focus stop and each is named — `aria-disabled`, not `disabled` —
+ * so a remote can reach it and read the reason in words, where `disabled`
+ * would remove it from the arrow keys with nothing to explain the gap. Which
+ * is exactly why it has to *look* unavailable too: without this, the only
+ * difference between the control and a working one is discovered by pressing
+ * it and watching nothing happen.
+ *
+ * **Scoped to the player rather than to a group inside it** (#50). It was
+ * `.player__track-choices` for #27's undrawable tracks, then
+ * `.player__track-group` when #30 removed those — and the timing *panel* is
+ * neither, so the one control left outside the selector was the one a User was
+ * most likely to press. A rule about the player says what is actually meant,
+ * and the next panel inherits it instead of repeating the bug. There is no
+ * control in here that is deliberately undimmed: a feature a device does not
+ * have is not drawn at all (see `playback-options.tsx`).
  *
  * It sits well below `.button`, so it wins on source order at equal
  * specificity (#49) rather than by accident.
  */
-.player__track-group .button[aria-disabled='true'] {
+.player .button[aria-disabled='true'] {
   opacity: 0.55;
   cursor: default;
 }
