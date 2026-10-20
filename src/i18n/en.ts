@@ -309,6 +309,14 @@ export const en = {
   'settings.homeHeading': 'Home',
   'settings.homeExplanation': 'Choose the Rows on your Home and the order they come in.',
 
+  // The licence texts the app owes for the code it serves (#48). The link
+  // leaves the app for a plain text file served from `public/licences/`, which
+  // is why there is no screen and no heading of its own to translate.
+  'settings.licencesHeading': 'Open-source licences',
+  'settings.licencesExplanation':
+    'Jellyflick is built on other people’s open-source work, and your browser downloads some of it to draw subtitles and play video. These are the licences that work comes under.',
+  'settings.licencesLink': 'Read the licences',
+
   'search.heading': 'Search',
   'search.fieldLabel': 'Search for a Movie or Series',
   'search.searching': 'Searching…',

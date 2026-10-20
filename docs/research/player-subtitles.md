@@ -128,6 +128,16 @@ This is the most consequential finding in this file, and it needs a deliberate d
 
 `jassub@2.5.18`, published 2026-10-03, repo `ThaUnknown/jassub` pushed the same day. Licence is a compound: `LGPL-2.1-or-later AND (FTL OR GPL-2.0-or-later) AND MIT AND MIT-Modern-Variant AND ISC AND NTP AND Zlib AND BSL-1.0` (it is libass + freetype + fontconfig + harfbuzz + fribidi compiled to WASM; the repo itself is MIT). **[verified]** from the tarball's `package.json` and the GitHub API.
 
+> **Corrected by #48, which read the shipped binaries rather than the manifest.** The
+> compound identifier above is accurate, but the parenthesised list of what is inside is
+> not: **`fontconfig` is not in the build.** No fontconfig symbol appears in either
+> `jassub-worker.wasm` or `jassub-worker-modern.wasm` — JASSUB does its own font
+> selection. What is there is libass, FreeType, HarfBuzz 8.5.0 and FriBidi 1.0.16.
+> #48 also found three components this line does not mention whose bytes reach a browser:
+> `abslink` (Apache-2.0), `lfa-ponyfill` (MIT) and `rvfc-polyfill` (**GPL-3.0**, see #57),
+> plus the Liberation Sans 2.00.5 fallback font. The authoritative inventory is
+> `public/licences/NOTICE.txt`.
+
 From its README, verbatim:
 
 > At minimum WASM + TextDecoder + OffscreenCanvas + Web Workers + Proxy + Fetch + Promise + getVideoPlaybackQuality/requestVideoFrameCallback are required for JASSUB to work.

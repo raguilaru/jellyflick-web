@@ -488,4 +488,36 @@ describe('the rest of a User’s settings', () => {
 
     expect(await screen.findByRole('heading', { name: 'Edit Home', level: 1 })).toBeTruthy();
   });
+
+  /**
+   * The licence texts the app owes for the code it serves (#48). This is the
+   * "something reachable that names them" the ticket asks for, and the reason
+   * it is a plain link to a file rather than a screen: the texts are served
+   * out of `public/licences/`, so there is nothing to render and nothing to
+   * keep translated.
+   *
+   * The assertion is on the `href`, because for this link the `href` *is* the
+   * behaviour — it leaves the app for a static file, which is a real
+   * navigation happy-dom cannot follow. That the file is actually there and
+   * actually served is `the-licence-texts.test.ts` and the container e2e.
+   */
+  it('points at the licences of the code it serves', async () => {
+    await signInAndLand();
+    await openSettings();
+
+    const link = screen.getByRole('link', { name: 'Read the licences' });
+
+    expect(link.getAttribute('href')).toBe('/licences/NOTICE.txt');
+    // The section says what it is about, so the link is not the only clue.
+    expect(screen.getByRole('heading', { name: 'Open-source licences' })).toBeTruthy();
+    /*
+     * And it has to escape the router, which otherwise swallows every
+     * same-origin link and answers this one with "there is nothing at this
+     * address" — the bug an e2e caught here. `_top` is the only target that
+     * both bypasses `preact-iso` and still navigates this tab rather than
+     * opening a new one. This assertion is the cheap guard for it; the e2e in
+     * `settings.spec.ts` is the one that proves the press really arrives.
+     */
+    expect(link.getAttribute('target')).toBe('_top');
+  });
 });
