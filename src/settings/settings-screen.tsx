@@ -347,14 +347,23 @@ export function SettingsScreen({ device }: SettingsScreenProps) {
               what the host chose: the texts are served straight out of
               `public/licences/`, so there is nothing to render, nothing to
               keep in step with the files and nothing to translate — a
-              translated licence is not the licence. `target` is deliberately
-              absent: a new tab is a dead end on a TV, and Back is the one
-              control every remote has. */}
+              translated licence is not the licence.
+
+              **`target="_top"` is load-bearing, not decoration.** The router
+              intercepts every same-origin link and turns it into a client-side
+              route, so without this the press lands on "There is nothing at
+              this address" instead of the text — which is exactly what it did
+              until an e2e caught it. `_top` is the one escape hatch that still
+              navigates *this* tab: `preact-iso` ignores a link whose target is
+              anything but `_self`, and `_blank` would open a new tab, which is
+              a dead end on a TV where Back is the only control a remote has.
+              `download` would also bypass the router, but it would save the
+              file instead of showing it. */}
           <section class="settings-group">
             <h2 class="settings-group__heading">{t('settings.licencesHeading')}</h2>
             <p class="notice">{t('settings.licencesExplanation')}</p>
             <p class="settings-choices">
-              <a class="button button--quiet" href={LICENCES_PATH}>
+              <a class="button button--quiet" href={LICENCES_PATH} target="_top">
                 {t('settings.licencesLink')}
               </a>
             </p>

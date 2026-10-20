@@ -316,3 +316,62 @@ test('the Home Layout editor is reached from the settings screen', async ({ page
 
   await expect(page.getByRole('heading', { level: 1, name: 'Edit Home' })).toBeVisible();
 });
+
+/**
+ * The licence texts (#48). The app serves other people's code to a browser, so
+ * the texts travel with it, and this is the line in Settings that makes them
+ * reachable from the running app.
+ *
+ * The press is Enter rather than a click, so this holds in the keyboard-only
+ * project too: a User on a remote has to be able to get to it.
+ */
+test('the licences of the code the app serves are reached from the settings screen', async ({
+  page,
+}) => {
+  await signInAndLand(page);
+  await openSettings(page);
+
+  await page.getByRole('link', { name: 'Read the licences' }).press('Enter');
+
+  // This leaves the app for a served text file, so what proves it arrived is
+  // the text itself — and specifically the component with the strictest
+  // obligation, named together with its licence and where its source is.
+  await expect(page.locator('body')).toContainText('libass');
+  await expect(page.locator('body')).toContainText('LGPL-2.1-or-later');
+  await expect(page.locator('body')).toContainText('github.com/libass/libass');
+  expect(new URL(page.url()).pathname).toBe('/licences/NOTICE.txt');
+});
+
+/**
+ * The new row, at phone width, measured rather than trusted (#56).
+ *
+ * A control clipped by the edge of the screen is invisible to the rest of this
+ * suite: Playwright scrolls into view before touching it, and a clipped
+ * element does not lengthen the document, so the scroll-width assertion #44
+ * added cannot see it either. #35 shipped nine languages running off the side
+ * with a green suite for exactly this reason. So this checks the document's
+ * scroll width *and* the link's own right edge against the viewport.
+ */
+test.describe('at phone width', () => {
+  test.use({ viewport: { width: 375, height: 812 } });
+
+  test('the licences row sits inside the screen', async ({ page }) => {
+    await signInAndLand(page);
+    await openSettings(page);
+
+    const link = page.getByRole('link', { name: 'Read the licences' });
+    await expect(link).toBeVisible();
+
+    const viewport = await page.evaluate(() => window.innerWidth);
+    // The document does not scroll sideways...
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+      viewport,
+    );
+    // ...and this control in particular is wholly inside it, which the line
+    // above cannot tell you: a clipped element adds no scroll width.
+    const box = await link.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box?.x ?? -1).toBeGreaterThanOrEqual(0);
+    expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(viewport);
+  });
+});

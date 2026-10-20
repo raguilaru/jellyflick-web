@@ -510,5 +510,14 @@ describe('the rest of a User’s settings', () => {
     expect(link.getAttribute('href')).toBe('/licences/NOTICE.txt');
     // The section says what it is about, so the link is not the only clue.
     expect(screen.getByRole('heading', { name: 'Open-source licences' })).toBeTruthy();
+    /*
+     * And it has to escape the router, which otherwise swallows every
+     * same-origin link and answers this one with "there is nothing at this
+     * address" — the bug an e2e caught here. `_top` is the only target that
+     * both bypasses `preact-iso` and still navigates this tab rather than
+     * opening a new one. This assertion is the cheap guard for it; the e2e in
+     * `settings.spec.ts` is the one that proves the press really arrives.
+     */
+    expect(link.getAttribute('target')).toBe('_top');
   });
 });

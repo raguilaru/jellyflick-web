@@ -10,7 +10,7 @@ Jellyflick does not ship this font on its own account: `jassub` carries it as
 `dist/default.woff2` and uses it as the stand-in for Liberation Sans when a
 subtitle asks for a font the Server has not embedded. The copyright lines and
 the licence statement above are the font file's own, read from its `name`
-table — ids 0, 1, 5, 8, 9, 13 and 14.
+table -- ids 0, 1, 5, 8, 9, 13 and 14.
 
 Upstream: https://github.com/liberationfonts/liberation-fonts
 

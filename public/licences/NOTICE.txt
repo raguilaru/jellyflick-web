@@ -1,4 +1,4 @@
-Jellyflick — the licences of the code it serves
+Jellyflick -- the licences of the code it serves
 ==============================================
 
 Jellyflick is a web client, so opening it makes your browser download and run
@@ -8,15 +8,15 @@ are copied into the container image, and the settings screen links to this
 file so they are reachable from the running app rather than only from the
 source.
 
-Everything stated below was read from the installed package itself — its own
+Everything stated below was read from the installed package itself -- its own
 licence file, the `license` field of its own `package.json`, the strings
-compiled into the WebAssembly binary, or a font's own `name` table — and every
+compiled into the WebAssembly binary, or a font's own `name` table -- and every
 component listed is one whose bytes are really in the build output. Nothing
 here is taken from a summary elsewhere.
 
 The full texts are the other files in this directory, named after the licence
-they carry. Where a licence is short enough that its text *is* the notice —
-MIT and the two like it — the text is quoted in full below instead, which is
+they carry. Where a licence is short enough that its text *is* the notice --
+MIT and the two like it -- the text is quoted in full below instead, which is
 all those licences ask for.
 
 
@@ -40,7 +40,7 @@ strings inside those binaries.
 
 libass
 ------
-  What it is:  the subtitle renderer itself — it parses ASS/SSA subtitles and
+  What it is:  the subtitle renderer itself -- it parses ASS/SSA subtitles and
                rasterises them, which is the whole of Jellyflick's styled
                subtitle support.
   Licence:     LGPL-2.1-or-later. Full text: LGPL-2.1.txt
@@ -56,8 +56,8 @@ libass
     as built here     https://github.com/ThaUnknown/jassub
                       (`lib/libass`, with `run-docker-build.sh`)
 
-  The build paths left in the binary — `/code/lib/libass/libass/ass.c` and its
-  neighbours — are that submodule.
+  The build paths left in the binary -- `/code/lib/libass/libass/ass.c` and its
+  neighbours -- are that submodule.
 
 FriBidi 1.0.16
 --------------
@@ -69,7 +69,7 @@ FriBidi 1.0.16
 
 HarfBuzz 8.5.0
 --------------
-  What it is:  the text shaper — it turns characters into positioned glyphs,
+  What it is:  the text shaper -- it turns characters into positioned glyphs,
                which is what makes ligatures and complex scripts come out
                right.
   Licence:     the "Old MIT" licence (SPDX: MIT-Modern-Variant).
@@ -88,7 +88,7 @@ FreeType
 
   The FTL asks that credit be given in the documentation. This is it:
 
-    Portions of this software are copyright © The FreeType Project
+    Portions of this software are copyright (c) The FreeType Project
     (https://www.freetype.org). All rights reserved.
 
   `fontconfig` is *not* part of this build: JASSUB does its own font
@@ -99,7 +99,7 @@ FreeType
 2. JAVASCRIPT THE BROWSER DOWNLOADS
 ===================================
 
-jassub 2.5.20 — MIT
+jassub 2.5.20 -- MIT
 -------------------
   What it is:  the JavaScript wrapper and worker around the WebAssembly above.
   Source:      https://github.com/ThaUnknown/jassub
@@ -130,7 +130,7 @@ jassub 2.5.20 — MIT
     OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
     USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-abslink 1.3.1 — Apache-2.0
+abslink 1.3.1 -- Apache-2.0
 --------------------------
   What it is:  the remote-procedure layer JASSUB talks to its worker over. It
                is a separate chunk in the build output.
@@ -141,7 +141,7 @@ abslink 1.3.1 — Apache-2.0
   its `package.json` declares, and the text in this directory is the canonical
   one that identifier names.
 
-lfa-ponyfill 1.1.1 — MIT
+lfa-ponyfill 1.1.1 -- MIT
 ------------------------
   What it is:  a stand-in for `queryLocalFonts`, so JASSUB can find out which
                fonts are available for a subtitle to ask for.
@@ -171,7 +171,7 @@ lfa-ponyfill 1.1.1 — MIT
     OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
     USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-rvfc-polyfill 1.0.8 — GPL-3.0
+rvfc-polyfill 1.0.8 -- GPL-3.0
 -----------------------------
   What it is:  a polyfill for `HTMLVideoElement.requestVideoFrameCallback`,
                which JASSUB uses to draw a subtitle in step with the video
@@ -184,7 +184,7 @@ rvfc-polyfill 1.0.8 — GPL-3.0
   Jellyflick as a whole depends on the licence Jellyflick itself takes, which
   is not chosen yet. See section 5.
 
-libpgs 0.9.0 — MIT
+libpgs 0.9.0 -- MIT
 ------------------
   What it is:  the PGS (Blu-ray bitmap) subtitle decoder, downloaded as its own
                worker chunk.
@@ -213,7 +213,7 @@ libpgs 0.9.0 — MIT
     OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
     USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-hls.js 1.7.3 — Apache-2.0
+hls.js 1.7.3 -- Apache-2.0
 -------------------------
   What it is:  the HLS player, fetched only when a Title has to be transcoded.
   Licence:     Apache-2.0. Full text: Apache-2.0.txt
@@ -242,7 +242,7 @@ hls.js 1.7.3 — Apache-2.0
     That work is also covered by the Apache 2 License, following copyright:
     Copyright (c) 2013-2015 Brightcove
 
-Preact 11.0.1 and preact-iso 2.12.2 — MIT
+Preact 11.0.1 and preact-iso 2.12.2 -- MIT
 -----------------------------------------
   What it is:  the UI library the whole app is built on, and its routing
                helper. Both are in the main bundle.
@@ -280,7 +280,7 @@ Preact 11.0.1 and preact-iso 2.12.2 — MIT
 3. FONTS
 ========
 
-Liberation Sans 2.00.5 — OFL-1.1
+Liberation Sans 2.00.5 -- OFL-1.1
 --------------------------------
   What it is:  the fallback font JASSUB uses when a subtitle asks for a font
                the Server has not embedded. It is `jassub`'s own
@@ -289,7 +289,7 @@ Liberation Sans 2.00.5 — OFL-1.1
                copyright lines: liberation-sans-OFL.txt
   Source:      https://github.com/liberationfonts/liberation-fonts
 
-Bebas Neue — OFL-1.1
+Bebas Neue -- OFL-1.1
 --------------------
   What it is:  Jellyflick's own display face, self-hosted.
   Licence:     SIL Open Font License 1.1. Its text has always lived beside the
