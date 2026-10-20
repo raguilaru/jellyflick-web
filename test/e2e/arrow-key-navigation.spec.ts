@@ -58,6 +58,38 @@ function scrollLeftOfRow(page: Page): Promise<number> {
   return strip(page).evaluate((element) => element.scrollLeft);
 }
 
+/**
+ * How far from zero still counts as a Row sitting at its start.
+ *
+ * `reveal.ts` asks for *exactly* zero when the first card is focused, and that
+ * is not in doubt: the first card starts 8px into the strip — the padding that
+ * makes room for the focus ring — and the margin a Row keeps clear is 24px, so
+ * the offset it wants is negative and clamps to zero.
+ * `revealing-the-focused-item.test.ts` pins that case, and it is exact there.
+ *
+ * What a browser then *realises* is not. A Row is moved by
+ * `scrollTo({ behavior: 'smooth' })`, an animation nothing here starts or can
+ * see the end of, and under load it has been seen to stop a few pixels short
+ * and stay there — with focus already on the first card, nothing re-runs the
+ * reveal to finish the job. So the exact arithmetic is the unit test's business
+ * and the question here is the one a User could see: whether the Row is at its
+ * start or scrolled along it.
+ *
+ * The least a Row that has really scrolled can be is a whole card and its gap,
+ * 166px — twenty times this — so a Row that genuinely starts scrolled, the
+ * thing this test exists to catch, still fails.
+ */
+const AT_ITS_START = 8;
+
+/**
+ * The Row is at its start, polled rather than read once: a layout that is still
+ * settling moves what a test is pointing at (`docs/architecture.md`), and the
+ * Billboard's artwork can shift the page after the Rows are drawn.
+ */
+async function expectRowAtItsStart(page: Page): Promise<void> {
+  await expect.poll(() => scrollLeftOfRow(page)).toBeLessThanOrEqual(AT_ITS_START);
+}
+
 test.describe('driving Home with the arrow keys', () => {
   test.use({ viewport: TOP_BAR_AND_A_ROW_THAT_SCROLLS });
 
@@ -133,7 +165,9 @@ test.describe('driving Home with the arrow keys', () => {
     expect(
       await strip(page).evaluate((element) => element.scrollWidth - element.clientWidth),
     ).toBeGreaterThan(0);
-    expect(await scrollLeftOfRow(page)).toBe(0);
+    // It starts unscrolled: no card has been focused yet, so the Row is still
+    // showing its first card at its own start.
+    await expectRowAtItsStart(page);
 
     await strip(page).getByRole('listitem', { name: ROW[0] }).focus();
     for (let press = 0; press < ROW.length - 1; press += 1) {
@@ -148,7 +182,9 @@ test.describe('driving Home with the arrow keys', () => {
       await page.keyboard.press('ArrowLeft');
     }
     await expect.poll(() => focused(page)).toBe(ROW[0]);
-    await expect.poll(() => scrollLeftOfRow(page)).toBe(0);
+    // And it settles unscrolled: having been scrolled out and back, the Row
+    // comes to rest at its start again rather than somewhere along itself.
+    await expectRowAtItsStart(page);
   });
 
   test('a Row scrolls on its own, so a swipe moves it and not the page', async ({ page }) => {
