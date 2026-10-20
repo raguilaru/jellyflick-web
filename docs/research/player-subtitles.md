@@ -137,6 +137,14 @@ This is the most consequential finding in this file, and it needs a deliberate d
 > `abslink` (Apache-2.0), `lfa-ponyfill` (MIT) and `rvfc-polyfill` (**GPL-3.0**, see #57),
 > plus the Liberation Sans 2.00.5 fallback font. The authoritative inventory is
 > `public/licences/NOTICE.txt`.
+>
+> **#57 then removed `rvfc-polyfill` from the build** — `vite.config.ts` aliases it to an
+> empty module, because GPL-3.0 on the combined work would have constrained Jellyflick's
+> own licence. One consequence lands on the table below: the
+> `requestVideoFrameCallback` row is now a hard requirement the browser must meet itself,
+> and it rules out more than Chromium 68. **Firefox shipped rVFC only in 132**, so
+> Firefox 105-131 — which has `transferControlToOffscreen` — flattens to plain text, as
+> does Chrome 80-82. See `architecture.md`, "No strong copyleft in the bundle".
 
 From its README, verbatim:
 

@@ -2846,9 +2846,8 @@ of WebAssembly they are there for.
 bytes reach a browser, says what each one *is*, which licence it is under and
 where its source is, and quotes the short licences in full. The longer ones are
 separate files beside it — `LGPL-2.1.txt`, `FTL.txt`, `Apache-2.0.txt`,
-`GPL-3.0.txt`, `harfbuzz-MIT.txt`, `liberation-sans-OFL.txt`. Bebas Neue keeps
-its text beside the font file it covers, which is the precedent the directory
-follows.
+`harfbuzz-MIT.txt`, `liberation-sans-OFL.txt`. Bebas Neue keeps its text beside
+the font file it covers, which is the precedent the directory follows.
 
 **The inventory was read off the artifacts, not off a dependency list**, and
 that matters because a dependency list gets four of them wrong:
@@ -2860,12 +2859,9 @@ that matters because a dependency list gets four of them wrong:
 - The fallback font in the bundle is **Liberation Sans 2.00.5 under OFL-1.1**,
   established by decoding the `name` table of `jassub`'s `default.woff2` — ids
   0, 1, 5 and 13 — not by trusting a filename called `default`.
-- **`rvfc-polyfill` is GPL-3.0**, and `jassub` imports it unconditionally, so
-  it is in `dist/assets/jassub-*.js` whether a browser needs the polyfill or
-  not. Its text ships; what a GPL-3.0 dependency means for the terms the app
-  itself can be offered under is **#57**, not this one's. Worth knowing when
-  #57 is picked up: the browsers that reach this code path have the API
-  natively, so dropping the polyfill may be purely technical.
+- **`rvfc-polyfill` was GPL-3.0 and is no longer in the build** — see "No
+  strong copyleft in the bundle" below, which is #57 and is the one entry here
+  that changed the build rather than describing it.
 - **`fontconfig` is *not* in this build.** Earlier research says JASSUB bundles
   it; no fontconfig symbol appears in either `.wasm`, so the notice does not
   claim it. JASSUB does its own font selection.
@@ -2899,7 +2895,68 @@ from the screen and measures the new row against a 375px viewport.
 
 **`org.opencontainers.image.licenses="NOASSERTION"` is deliberately untouched.**
 It waits on Jellyflick choosing its own licence, which the spec's "later" list
-holds and which #48 did not settle.
+holds and which neither #48 nor #57 settled.
+
+### No strong copyleft in the bundle
+
+Story: #57. #48's inventory turned up one licence unlike the others.
+`rvfc-polyfill` is **GPL-3.0** — strong copyleft on the *combined work*, where
+everything else in the bundle is permissive or weak copyleft, and weak copyleft
+reaches the library rather than the app that links it. Nobody chose the
+dependency: `jassub` does `import 'rvfc-polyfill'` on its first line, so the
+polyfill was linked into `dist/assets/jassub-*.js` for every visitor. That
+**constrains the licence Jellyflick itself can take**, which is backwards —
+that choice is on the spec's "later" list and should not be settled by a
+polyfill nobody needs.
+
+**`vite.config.ts` aliases the package to an empty module**
+(`build/rvfc-polyfill-not-shipped.js`). That is the whole mechanism: no
+`patch-package`, no postinstall step, nothing to re-apply when `node_modules`
+is rebuilt. The jassub chunk went from 15.15 kB to 13.87 kB raw (5.84 → 5.45 kB
+gzipped); nothing else in the bundle moved.
+
+**The reasoning it was approved on was not quite right, and the fix is a line
+in the capability gate.** "Every browser that can run JASSUB has
+`requestVideoFrameCallback` natively" holds for the Chromium 68 floor — JASSUB
+cannot run there at all — and for every current browser, but there are two real
+windows where it does not:
+
+| Browser | `transferControlToOffscreen` | native rVFC | polyfill was |
+| --- | --- | --- | --- |
+| Chrome | 69 | 83 | load-bearing on **80–82** |
+| Firefox | 105 | **132** | load-bearing on **105–131** |
+| Safari | 16.4 | 15.4 | never needed |
+
+(from MDN BCD, read from the data rather than from caniuse prose.) Firefox is
+the one that matters: rVFC shipped there only in **132**, so every Firefox from
+105 to 131 cleared the old gate and depended on the polyfill. Below those
+windows the polyfill was already inert — it feature-detects
+`getVideoPlaybackQuality`, which is Chrome 80, so Chrome 69–79 passed the gate
+and then threw regardless.
+
+So **`canRunJassub()` in `src/device/styled-subtitle-renderer.ts` now tests for
+`requestVideoFrameCallback`**, which it previously and deliberately did not,
+precisely because JASSUB brought its own. On those versions styled subtitles
+now fall back to the flattened words — the loss is ASS positioning and styling,
+not subtitles. **That trade is the one thing here a human should re-examine**
+if Firefox 105–131 is considered a supported target.
+
+Gating it is not optional once the polyfill is gone: JASSUB calls rVFC *after*
+`renderer.ready` resolves, on the first frame, so without the check those
+browsers get a successfully-resolved renderer and then a throw from inside the
+engine — past the only point where the seam can still choose the words. The new
+unit test fails with `channel.on is not a function` from inside JASSUB if the
+gate line is removed, which is what that failure mode looks like.
+
+Where it is tested: `test/unit/the-jassub-engine-gate.test.ts` holds the
+refusal contract at the device layer's public interface, stubbing the browser
+globals the way `device-layer.test.ts` does.
+`test/e2e/the-container-serves-the-app.spec.ts` greps every built chunk for
+`_rvfcpolyfillmap` and `mozPresentedFrames` — the polyfill's **own symbols,
+never its package name**, because a bundler rewrites module names away and a
+name grep would pass on a bundle still carrying every byte. The paired test in
+`the-licence-texts.test.ts` fails if the notice ever claims GPL-3.0 again, so
+the text and the bundle cannot drift apart in either direction.
 
 ## Runtime config
 

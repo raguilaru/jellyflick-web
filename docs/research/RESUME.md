@@ -157,6 +157,25 @@ shrink the chunk.
 **`org.opencontainers.image.licenses="NOASSERTION"` is untouched, as briefed**, and #57 is
 a reason to leave it that way a while longer.
 
+#### #57 is now done, on `ticket/57-gpl-polyfill`, and it corrected its own premise
+
+The host chose option 2 and it worked: a `resolve.alias` in `vite.config.ts` to an empty
+module in `build/`, no `patch-package`, nothing to re-apply after `npm ci`. Both symbols
+are gone from `dist/`, the jassub chunk went 15.15 → 13.87 kB raw (5.84 → 5.45 kB gz), and
+`GPL-3.0.txt` plus its `NOTICE.txt` entry came out in the same change.
+
+**But "every browser that can run JASSUB has `requestVideoFrameCallback` natively" is
+false, and the next person to reason from §6a should know it.** rVFC is **Firefox 132** —
+not an old API everywhere, which is the easy assumption — against
+`transferControlToOffscreen` at Firefox 105. So **Firefox 105–131 and Chrome 80–82** clear
+every other requirement and have no rVFC; the polyfill was genuinely load-bearing there.
+`canRunJassub()` now tests for rVFC (it deliberately did not, *because* JASSUB brought its
+own), so those versions flatten to plain text instead of resolving a renderer that throws
+on the first frame — JASSUB calls rVFC after `ready`, past the point the seam can still
+fall back. **The one judgement left for a human is whether losing ASS styling on Firefox
+105–131 is acceptable**; if not, the fallbacks are option 1 or option 3 on the issue.
+Written up in `architecture.md`, "No strong copyleft in the bundle", with the BCD table.
+
 ### A fifth trap for the router, and the e2e that caught it
 
 `preact-iso` intercepts **every** same-origin anchor and turns it into a client-side
