@@ -2653,6 +2653,55 @@ Where it is tested:
 **Still to come, and filed rather than carried**: the title page's own Play On
 entry point, which the ticket's prose mentions and its acceptance box does not.
 
+### Coming back from a hand-over (#59)
+
+Both hand-overs — Cast's and Play On's — leave the player open, paused, and
+holding a **spent reporter**: `stopped` counts once by design, and it has to,
+because the Title ending both reports the stop and closes the player, and
+because #33's acceptance is *exactly one* `/Sessions/Playing/Stopped` after a
+hand-over. That one stop is what proves the Server sees one session for one
+Title rather than two.
+
+What was missing was the **way back**. Pressing Stop on the receiver or on the
+other app brings the Title back here, paused where the User left it, and
+pressing Play then played it with nothing reported at all: no start, no
+progress, no stop. The resume point stayed where the hand-over had left it
+however long the User went on watching, no session existed for this device so
+no other app's Play On could see it, and a transcode went unpinged long enough
+for a Server to reap it mid-playback.
+
+- **The fix is a new play session, never a repeatable `stopped`.** `handOver`
+  marks the reporter as given away (`handedOver` in `usePlayback`), and a press
+  of Play on a reporter so marked asks the screen to **negotiate again**
+  (`resumeHere` in the player) instead of starting the element. The playback
+  that comes back brings its own `PlaySessionId`, which is what the Server ties
+  a transcode job, a session and the resume point together through — and the
+  job behind the old one may well have been reaped while the other device had
+  the Title.
+- **The User's place is owed back to them**, exactly as a change of quality or
+  of sound track owes it: `restartTicks` is set to where the hand-over left
+  them, so the next `PlaybackInfo` starts from there rather than the beginning.
+- **It is `attemptNumber` as well as `restartTicks`**, and that is not
+  belt-and-braces: a hand-over pauses the picture, so a User who casts, stops
+  and casts again without watching anything is at the *same* position — the
+  position alone would not change and nothing would be re-negotiated.
+- **Lazily, on the press, rather than on Stop.** Re-negotiating when the cast
+  ends would re-attach a source and start playing, and #33's deliberate
+  behaviour is that the Title comes back **paused** where the User left it.
+  Doing it on Play is also the honest reading: the new session begins when the
+  User asks for one.
+- **Nothing changes while the other device still owns it.** The resume is
+  gated on `handedAway`, so pressing Play here while a Chromecast is still
+  playing is left as it was rather than opening a second session beside the
+  one the other room is reporting.
+
+Where it is tested: the journey in `test/unit/playing-on-another-app.test.tsx`
+and `test/unit/casting-a-title.test.tsx` — a second start report, still one
+stop, one new session rather than one per press, and a progress report past the
+hand-over's position — and in a browser in `test/e2e/play-on.spec.ts`, where a
+real `<video>` really decodes again from where it was handed over while the
+Server records the second session.
+
 ## The fake Jellyfin serves real video
 
 `test/fake-jellyfin/routes/videos.ts` is the one place a fake owes a client

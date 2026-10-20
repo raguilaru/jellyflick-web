@@ -94,6 +94,23 @@ async function stopReports(): Promise<Write[]> {
   );
 }
 
+/**
+ * The start reports this device has sent (#59). Filtered to the **exact** path,
+ * because the `PlayNow` that hands the Title to the other app is
+ * `POST /Sessions/{id}/Playing` and shares the prefix with it.
+ */
+async function startReports(): Promise<Write[]> {
+  return (await writesTo('/Sessions/Playing')).filter(
+    (write) => write.path === '/Sessions/Playing',
+  );
+}
+
+async function progressReports(): Promise<Write[]> {
+  return (await writesTo('/Sessions/Playing/Progress')).filter(
+    (write) => write.path === '/Sessions/Playing/Progress',
+  );
+}
+
 async function signIn(profile: CapabilityProfileName): Promise<void> {
   render(
     <App
@@ -395,16 +412,16 @@ describe('playing it on another app', () => {
   });
 });
 
-describe('controlling the other app from here', () => {
-  /** Hands Arrival to the television and opens the remote on it. */
-  async function handOver(): Promise<void> {
-    await setFakeState({ sessions: [LIVING_ROOM] });
-    await play();
-    await openPlayOn();
-    fireEvent.click(await screen.findByRole('button', { name: /Living Room TV/ }));
-    await screen.findByText('Playing on Living Room TV.');
-  }
+/** Hands Arrival to the television and opens the remote on it. */
+async function handOver(): Promise<void> {
+  await setFakeState({ sessions: [LIVING_ROOM] });
+  await play();
+  await openPlayOn();
+  fireEvent.click(await screen.findByRole('button', { name: /Living Room TV/ }));
+  await screen.findByText('Playing on Living Room TV.');
+}
 
+describe('controlling the other app from here', () => {
   /**
    * The ticket's third acceptance criterion where it matters most: the panel
    * now shows what the **other** app is playing, read back off the Server
@@ -493,5 +510,89 @@ describe('controlling the other app from here', () => {
     await savesHaveSettled();
     const stops = await writesTo('/Sessions/session-living-room/Playing/Stop');
     expect(stops).toEqual([]);
+  });
+});
+
+/**
+ * Coming back to this device (#59), which is the half neither #33 nor #34
+ * built: both hand the Title over correctly, and `reporting.ts`'s `stopped` is
+ * once-only **by design**, so the reporter a hand-over spends is spent for
+ * good. A User who presses Stop and then Play here was playing a Title the
+ * Server had been told nothing about since — the resume point stayed where the
+ * hand-over left it however much they watched, no session appeared for this
+ * device, and a transcode went unpinged.
+ *
+ * **The once-only `stopped` is load-bearing and stays**: the first assertion in
+ * each test below is #33's own invariant — exactly one stop for the playback
+ * that was handed away — which is what proves the Server sees one session
+ * rather than two. What changes is that playing again is a **new** playback,
+ * with a new play session of its own.
+ */
+describe('coming back to this device', () => {
+  /** Hands the Title over, stops the other app, and closes the panel. */
+  async function comeBack(): Promise<void> {
+    await handOver();
+    fireEvent.click(await screen.findByRole('button', { name: 'Stop' }));
+    await waitFor(async () =>
+      expect((await writesTo('/Sessions/session-living-room/Playing/Stop')).length).toBe(1),
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Done' }));
+    await screen.findByRole('button', { name: 'Play Arrival' });
+  }
+
+  it('opens a new play session when the User plays here again', async () => {
+    await comeBack();
+
+    // One playback so far, and one stop for it: the hand-over's.
+    expect((await startReports()).length).toBe(1);
+    expect((await stopReports()).length).toBe(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play Arrival' }));
+
+    // A second session, so the Server hears this device again.
+    await waitFor(async () => expect((await startReports()).length).toBe(2));
+    // And still **one** stop: the hand-over's stop was not reported twice, and
+    // nothing here makes a spent reporter repeatable.
+    expect((await stopReports()).length).toBe(1);
+
+    /*
+     * And **one** new session rather than one per press: the playback that
+     * came back is an ordinary playback, so pausing and playing it is pause
+     * and play. Without this, a reporter that stayed marked as handed over
+     * would re-negotiate on every press — which a User would see as the Title
+     * starting over, and which no other assertion here would notice.
+     */
+    fireEvent.click(await screen.findByRole('button', { name: 'Pause Arrival' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Play Arrival' }));
+    await savesHaveSettled();
+    expect((await startReports()).length).toBe(2);
+
+    // The second session is live, so it is still writing as this test ends —
+    // settled here rather than left to be aborted by the teardown.
+    await savesHaveSettled();
+  });
+
+  /**
+   * The consequence a User actually pays for: the resume point. Without a live
+   * reporter nothing moves it, so Continue Watching stays at the hand-over's
+   * position however much is watched here afterwards.
+   */
+  it('reports where the User gets to after coming back', async () => {
+    await comeBack();
+    fireEvent.click(screen.getByRole('button', { name: 'Play Arrival' }));
+    await waitFor(async () => expect((await startReports()).length).toBe(2));
+
+    video().currentTime = 90;
+    fireEvent.timeUpdate(video());
+
+    // 90 seconds in Jellyfin's 100-nanosecond ticks, written out rather than
+    // computed the way the code computes it.
+    await waitFor(async () =>
+      expect(
+        (await progressReports()).some((write) => write.body.PositionTicks === 900_000_000),
+      ).toBe(true),
+    );
+
+    await savesHaveSettled();
   });
 });

@@ -56,6 +56,13 @@ export type PlaybackReporter = {
    * counts**: a play session stops once, and the Title ending both reports the
    * stop and closes the player, which would otherwise report it twice and
    * leave the Server with two stops for one session.
+   *
+   * **Do not make it repeatable** (#59). A player that comes back from a Cast
+   * or a Play On holds a reporter this has already finished, and the way to
+   * report playing here again is a **new** reporter for a new play session —
+   * which is what `usePlayback` does, by negotiating again. Reviving a closed
+   * session instead would give the Server two stops for one hand-over, and
+   * that one stop is #33's acceptance criterion.
    */
   stopped(positionSeconds: number, failed?: boolean): Promise<void>;
   /** Keeps a transcode alive without moving the position. */
