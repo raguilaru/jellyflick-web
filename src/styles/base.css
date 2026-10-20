@@ -1187,6 +1187,24 @@ html[data-input='pointer'] [tabindex]:focus {
   margin: 0;
 }
 
+/*
+ * The way to Movies and Series at phone width (#51), and only there: the
+ * bottom bar carries four items and neither is among them.
+ *
+ * It wraps, because this is a row of choices on the narrowest screen the app
+ * supports and nine languages name these two sections at nine lengths — #35
+ * shipped a row that ran off the side of a 375px screen with every test
+ * passing, because Playwright scrolls an element into view before looking at
+ * it. The links share the quiet button look with Edit Home below them, which
+ * is the nearest precedent for a non-Row element on Home.
+ */
+.home__sections {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+}
+
 .layout-rows {
   display: grid;
   gap: var(--space-2);
