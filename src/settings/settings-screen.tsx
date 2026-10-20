@@ -54,6 +54,19 @@ import { deviceLocaleFor, uiLocaleFor } from './ui-language';
 /** The screen's own address. Not in `SECTIONS`; see the note above. */
 export const SETTINGS_PATH = '/settings';
 
+/**
+ * Where the licence texts are served from (#48).
+ *
+ * **Not a route**: it is a real file on disk at `public/licences/NOTICE.txt`,
+ * which Vite copies verbatim into `dist/` and the container's server serves as
+ * `text/plain`. So following this link leaves the app, which is the point —
+ * the texts are the thing being distributed, not a view of it. The server's
+ * SPA fallback deliberately does not catch it: a path with an extension 404s
+ * rather than being answered with the shell, so if the file ever stopped
+ * shipping this link would fail loudly instead of showing a blank app.
+ */
+export const LICENCES_PATH = '/licences/NOTICE.txt';
+
 export type SettingsScreenProps = {
   /** For the device's own languages, which the language choice falls back to. */
   device: DeviceLayer;
@@ -322,6 +335,36 @@ export function SettingsScreen({ device }: SettingsScreenProps) {
             <p class="settings-choices">
               <a class="button button--quiet" href={HOME_LAYOUT_PATH}>
                 {t('homeLayout.heading')}
+              </a>
+            </p>
+          </section>
+
+          {/* The licences of the code the app serves (#48). Serving libass and
+              the rest to a browser is distribution, so the texts travel with
+              the app, and this is the thing that makes them reachable from it.
+
+              It is a link to a plain text file rather than a screen, which is
+              what the host chose: the texts are served straight out of
+              `public/licences/`, so there is nothing to render, nothing to
+              keep in step with the files and nothing to translate — a
+              translated licence is not the licence.
+
+              **`target="_top"` is load-bearing, not decoration.** The router
+              intercepts every same-origin link and turns it into a client-side
+              route, so without this the press lands on "There is nothing at
+              this address" instead of the text — which is exactly what it did
+              until an e2e caught it. `_top` is the one escape hatch that still
+              navigates *this* tab: `preact-iso` ignores a link whose target is
+              anything but `_self`, and `_blank` would open a new tab, which is
+              a dead end on a TV where Back is the only control a remote has.
+              `download` would also bypass the router, but it would save the
+              file instead of showing it. */}
+          <section class="settings-group">
+            <h2 class="settings-group__heading">{t('settings.licencesHeading')}</h2>
+            <p class="notice">{t('settings.licencesExplanation')}</p>
+            <p class="settings-choices">
+              <a class="button button--quiet" href={LICENCES_PATH} target="_top">
+                {t('settings.licencesLink')}
               </a>
             </p>
           </section>

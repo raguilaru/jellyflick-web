@@ -245,6 +245,13 @@ export const es: Messages = {
   'settings.homeHeading': 'Inicio',
   'settings.homeExplanation': 'Elige las filas de tu Inicio y el orden en que aparecen.',
 
+  // Los textos de licencia están en inglés porque son los originales: una
+  // licencia traducida no es la licencia. Lo que se traduce es cómo llegar.
+  'settings.licencesHeading': 'Licencias de código abierto',
+  'settings.licencesExplanation':
+    'Jellyflick se apoya en el trabajo de código abierto de otras personas, y tu navegador descarga parte de ese código para dibujar los subtítulos y reproducir el vídeo. Estas son sus licencias.',
+  'settings.licencesLink': 'Leer las licencias',
+
   'search.heading': 'Buscar',
   'search.fieldLabel': 'Busca una película o una serie',
   'search.searching': 'Buscando…',

@@ -107,6 +107,73 @@ files**, **510 Playwright passed / 42 skipped / 0 failed**, 0 flaky, main JS
 **188.81 kB / 56.64 kB gz**, CSS 21.63 kB. This one got a **full** e2e run from the
 integrator because its own gate never finished — see below.
 
+### #48's branch: the licence texts, gated on tip `6ae35e9`
+
+Branch `ticket/48-licences`, ports 4348 / 8348, touching `public/`, `src/settings/`,
+`src/i18n/` and the two test suites. Merged `origin/feat/jellyflick-v1` before gating;
+the merge was clean (RESUME.md only — the expected `i18n` conflict never materialised,
+because #34 had not landed).
+
+Each step its own exit code: `lint` 0, `typecheck` 0, `build` 0, **1092 unit tests in 82
+files** (+10 in +1 file), **522 Playwright passed / 42 skipped / 0 failed** under
+`E2E_CPU_THROTTLE=4`, main JS **189.48 kB / 56.80 kB gz** (+0.67 raw, +0.16 gz — the
+i18n strings and one more `settings-group`), Spanish chunk 17.59 kB (+0.33), CSS
+**21.63 kB unchanged**. The texts add ~100 kB to the image, which is noise beside the
+4.3 MB of WebAssembly they exist for.
+
+**The skip count did not move.** The 42 are the same 42 named above; no skip site
+anywhere in the tree changed. The +12 passes are six new tests across three projects.
+
+**The texts went in `public/licences/`**, which is the choice that made the rest free:
+Vite copies `public/` verbatim, the container's server already serves `dist/` and already
+maps `.txt` to `text/plain; charset=utf-8`, and the Dockerfile already copies `dist/` into
+the image. Repo, served app and image, with no new machinery.
+
+**Reading the artifacts rather than a dependency list changed the answer four times**, and
+this is the part worth carrying forward. The issue named libass, FreeType, HarfBuzz,
+FriBidi and libpgs. What actually ships also includes `abslink` (Apache-2.0) and
+`lfa-ponyfill` (MIT) — transitive, their own chunks, **neither publishes a licence file** —
+and **Liberation Sans 2.00.5 under OFL-1.1**, identified by decoding the `name` table of
+`jassub`'s `default.woff2` rather than trusting a file called `default`. Meanwhile
+**`fontconfig` is not in this build at all**: no fontconfig symbol is in either `.wasm`, so
+`player-subtitles.md` §6a is out of date on that point and the notice does not claim it.
+
+### #57, filed not fixed: `rvfc-polyfill` is GPL-3.0 and is in the bundle
+
+The fourth and most consequential find. `jassub` does `import 'rvfc-polyfill'`
+unconditionally, and that package is **GPL-3.0**; its symbols (`_rvfcpolyfillmap`,
+`mozPresentedFrames`) are in `dist/assets/jassub-*.js`. Every other licence in the bundle
+is permissive or weak copyleft, and strong copyleft on the combined work is a different
+kind of question — one that **constrains the project's own licence choice rather than
+following from it**, which matters because that choice is on the spec's "later" list.
+
+#48 met the notice obligation (the text ships, the notice names it honestly and says the
+question is open) and deliberately did not decide the compatibility question. #57 lays out
+three options; the cheap one is that the browsers which reach that code path have
+`requestVideoFrameCallback` natively — §6a already establishes JASSUB cannot run on the
+Chromium 68 target at all — so dropping the polyfill may be purely technical, and would
+shrink the chunk.
+
+**`org.opencontainers.image.licenses="NOASSERTION"` is untouched, as briefed**, and #57 is
+a reason to leave it that way a while longer.
+
+### A fifth trap for the router, and the e2e that caught it
+
+`preact-iso` intercepts **every** same-origin anchor and turns it into a client-side
+route. The settings link to `/licences/NOTICE.txt` therefore landed on "there is nothing
+at this address" instead of the text. `target="_top"` is the only escape hatch that still
+navigates the same tab — the router ignores any target but `_self`, `_blank` opens a tab a
+remote cannot close, `download` saves instead of showing. **Any later ticket linking out
+of the app to a served file inherits this**, so it is documented in `architecture.md`
+rather than only in a comment.
+
+Found by the e2e, not the unit test: the unit assertion on `href` passed the whole time.
+
+A second thing only a real browser showed: `vite preview` serves `.txt` with **no charset**,
+so em dashes and `©` came out as mojibake. The container's own server does send
+`charset=utf-8`, but the prose this repo wrote is ASCII now anyway — a licence notice
+should be legible wherever it is served from. The upstream texts keep their bytes verbatim.
+
 ### The fifth time a browser found what the unit suite could not — and it hid a whole feature
 
 **#33's e2e found that the Cast button never appeared at all.** The inherited capability

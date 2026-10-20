@@ -10,6 +10,9 @@ index.html              Loads /config.js (classic, blocking) then src/main.tsx,
                         and preloads the wordmark's font.
 public/config.js        Runtime config placeholder. The container overwrites it.
 public/fonts/           Bebas Neue, self-hosted, with its OFL licence beside it.
+public/licences/        The licence texts for the code the app serves, and the
+                        NOTICE.txt the settings screen links to. See "The
+                        licences of the code it serves" below.
 public/manifest.webmanifest
                         What makes the app installable. No service worker.
 public/icons/           The app icons, written by scripts/make-icons.mjs.
@@ -1043,8 +1046,11 @@ The editor, `src/settings/home-layout-screen.tsx`:
 
 `src/settings/settings-screen.tsx` is the screen a User changes their own things
 on: their Accent Colour, the language the app is in, what the Billboard features
-(#22) and the way to their Home Layout (#11), and under a "What plays"
-subheading the four their Jellyfin account carries (#35). Its address `/settings` is **not a section** — `src/shell/sections.ts`
+(#22) and the way to their Home Layout (#11), under a "What plays"
+subheading the four their Jellyfin account carries (#35), and at the foot of
+it the way out to the licence texts (#48 — see "The licences of the code it
+serves"), which is the one row that leaves the app rather than changing
+anything. Its address `/settings` is **not a section** — `src/shell/sections.ts`
 is still the one list of sections and this is not in it — but both navigation bars
 reach it: the top bar with a link of its own after the sections, and the phone's
 bottom bar through the User's picture, which is where a phone User looks for
@@ -2191,8 +2197,8 @@ drawing, and `src/device/styled-subtitle-renderer.ts` the engine.
   in the middle of a film, is not a trade this app makes for a closer match to a
   typesetter's intent.
 - **LGPL.** JASSUB bundles libass, and shipping the WASM binary is distribution.
-  The repo and image owe the licence texts; tracked as its own issue rather than
-  done here, since there is no licences screen yet to put them on.
+  Done in #48: the texts are in `public/licences/`, served, and linked from the
+  settings screen. See "The licences of the code it serves" below.
 
 Where each thing is tested: the ASS grammar — the `Format:` line, override
 tags, `\N`, `\h`, `Comment:` rows and drawing mode — in
@@ -2347,9 +2353,8 @@ gained `pgssub` at stream 6 and `dvdsub` at stream 7, in languages nothing else
 prefers so they cannot change which track the Server picks by default.
 
 **Licence.** `libpgs` is MIT, a notice obligation rather than LGPL's source
-one, and shipping the decoder means shipping its copyright line. Added to the
-existing licences issue beside libass's rather than filed separately, since
-both want the same screen that does not exist yet.
+one, and shipping the decoder means shipping its copyright line. Done in #48
+alongside libass's: see "The licences of the code it serves" below.
 
 ### Skipping, and the next Episode (#31)
 
@@ -2820,6 +2825,81 @@ Apple touch icon, and the browser's own Install item does the rest.
   requires; the 512px `maskable` one is what stops Android cropping the square
   into a circle with visible letterboxing. iOS reads none of them, which is what
   `rel="apple-touch-icon"` is for.
+
+## The licences of the code it serves
+
+Story: #48. Opening Jellyflick makes a browser download other people's code —
+libass and friends as WebAssembly, two subtitle workers, hls.js, Preact, a
+font — and that is distribution, so the licence texts have to travel with the
+app rather than only sit in the repository.
+
+**Everything lives in `public/licences/`, and that one choice does all three
+jobs the obligation has.** Vite copies `public/` verbatim into `dist/`; the
+container's server already serves `dist/` and already maps `.txt` to
+`text/plain; charset=utf-8`; and the Dockerfile already copies `dist/` into the
+image as `COPY --from=build /app/dist /srv/app`. So the repo, the running app
+and the image carry the same bytes, and no new machinery was added to any of
+them. The texts add about 100 kB to the image, which is noise beside the 4.3 MB
+of WebAssembly they are there for.
+
+`NOTICE.txt` is the index and the entry point: it names every component whose
+bytes reach a browser, says what each one *is*, which licence it is under and
+where its source is, and quotes the short licences in full. The longer ones are
+separate files beside it — `LGPL-2.1.txt`, `FTL.txt`, `Apache-2.0.txt`,
+`GPL-3.0.txt`, `harfbuzz-MIT.txt`, `liberation-sans-OFL.txt`. Bebas Neue keeps
+its text beside the font file it covers, which is the precedent the directory
+follows.
+
+**The inventory was read off the artifacts, not off a dependency list**, and
+that matters because a dependency list gets four of them wrong:
+
+- `abslink` (Apache-2.0) and `lfa-ponyfill` (MIT) are transitive deps of
+  `jassub` that become their own chunks in the build output, and **neither
+  publishes a licence file**, so the notice states the declared identifier and
+  carries the text.
+- The fallback font in the bundle is **Liberation Sans 2.00.5 under OFL-1.1**,
+  established by decoding the `name` table of `jassub`'s `default.woff2` — ids
+  0, 1, 5 and 13 — not by trusting a filename called `default`.
+- **`rvfc-polyfill` is GPL-3.0**, and `jassub` imports it unconditionally, so
+  it is in `dist/assets/jassub-*.js` whether a browser needs the polyfill or
+  not. Its text ships; what a GPL-3.0 dependency means for the terms the app
+  itself can be offered under is **#57**, not this one's. Worth knowing when
+  #57 is picked up: the browsers that reach this code path have the API
+  natively, so dropping the polyfill may be purely technical.
+- **`fontconfig` is *not* in this build.** Earlier research says JASSUB bundles
+  it; no fontconfig symbol appears in either `.wasm`, so the notice does not
+  claim it. JASSUB does its own font selection.
+
+The libass and FriBidi entries point at **two** places, which is the part of an
+LGPL notice that is usually missed: upstream, and the JASSUB repository, whose
+pinned submodule and Docker build are what the shipped binary was actually
+built from. A release tarball would not be the corresponding source.
+
+**The link out of the app carries `target="_top"`, and it is load-bearing.**
+`preact-iso` intercepts every same-origin anchor and turns it into a
+client-side route, so without it the press lands on "there is nothing at this
+address" instead of the notice — which is what it did until an e2e caught it.
+`_top` is the only target that both escapes the router and still navigates this
+tab; `_blank` opens a tab a remote cannot close, and `download` would save the
+file rather than show it. The server's SPA fallback helps here too: it declines
+to answer a path with an extension, so if a text ever stopped shipping the link
+404s loudly instead of quietly rendering the app shell.
+
+A notice is no use if it arrives as mojibake, so the prose this repo wrote is
+**pure ASCII** (`--`, `(c)`): `vite preview` serves `.txt` with no charset at
+all, and it showed. The upstream texts keep their own bytes unchanged.
+
+Where it is tested: `test/unit/the-licence-texts.test.ts` reads
+`public/licences/` the way `installable-app.test.ts` reads the manifest, and
+its last test fails if a new entry in `dependencies` arrives without a notice —
+the texts and the code they cover cannot drift apart silently.
+`test/e2e/the-container-serves-the-app.spec.ts` proves the real server hands
+them over from the real build, and `test/e2e/settings.spec.ts` follows the link
+from the screen and measures the new row against a 375px viewport.
+
+**`org.opencontainers.image.licenses="NOASSERTION"` is deliberately untouched.**
+It waits on Jellyflick choosing its own licence, which the spec's "later" list
+holds and which #48 did not settle.
 
 ## Runtime config
 
