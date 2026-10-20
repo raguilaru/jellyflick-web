@@ -90,15 +90,98 @@ section, fit a 375px screen`.
 375px measurement, outside `phone`) and 1 in `trickplay-speed-and-quality.spec.ts`.**
 Nothing pre-existing moved.
 
+### #33 merged at `59730d1`, #51 at `d6e485c`, both closed
+
+Both gated by the integrator on the merge result rather than taken from the reports, and
+both implementers' numbers matched exactly — as every implementer's have, which is the
+reason to keep checking rather than to stop.
+
+**#33 Cast.** `lint` 0, `typecheck` 0, `build` 0, **1076 unit tests in 80 files**, main JS
+**188.64 kB / 56.54 kB gz** (+3.64 raw, +1.06 gz), CSS 21.56 kB unchanged, `cast-sender`
+its own lazy chunk at 1.11 kB / 0.63 kB gz. Its merge tree was **byte-identical** to the
+tree it had run the full suite on (507 passed / 45 skipped / 0 failed), so that run carried
+rather than re-running the same bytes — the standing rule for a clean merge.
+
+**#51 Phone sections.** `lint` 0, `typecheck` 0, `build` 0, **1082 unit tests in 81
+files**, **510 Playwright passed / 42 skipped / 0 failed**, 0 flaky, main JS
+**188.81 kB / 56.64 kB gz**, CSS 21.63 kB. This one got a **full** e2e run from the
+integrator because its own gate never finished — see below.
+
+### The fifth time a browser found what the unit suite could not — and it hid a whole feature
+
+**#33's e2e found that the Cast button never appeared at all.** The inherited capability
+gate was `window.chrome`, copied from Jellyfin's own plugin bailing on `if (!chrome)` — but
+`window.chrome` is a Chrome **branding** object, absent from plain Chromium and from
+derivatives where the Cast SDK works perfectly. It is `window.PresentationRequest` now,
+with `window.chrome` behind it for older Chromium.
+
+This is the fifth player ticket in a row to ship something an entirely green unit suite was
+silent about, and the first where the thing hidden was **the whole feature**. The brief's
+instruction to hold the e2e against the failure it exists for is what caught it: the
+implementer broke four things deliberately and reported which break reddened which test.
+The most valuable break was removing the `<script>` `error` listener — dead code to the
+unit suite, since happy-dom loads no scripts, and without it a User on a LAN with no route
+out presses Cast and gets nothing, for ever.
+
+### The skip count went **down** for the first time: 45 → 42
+
+#51 removed `skipWithoutTheLinks` from `movies-and-series.spec.ts`, so #23's three `phone`
+journeys run everywhere now. **The 42 are: 26 original, 3 the screenshot tour, 10
+`desktop-hover-cards.spec.ts` in `keyboard-only`, 2 in `movies-and-series.spec.ts` (the
+375px measurement, outside `phone`) and 1 in `trickplay-speed-and-quality.spec.ts`.**
+Verified the way this doc has insisted since the fourth session, and the check is easier in
+this direction than it sounds: the only skip *site* that changed anywhere in the tree is the
+one removed, and the count moved by exactly the three it freed.
+
+### A session limit stopped both implementers of this wave, and the habit paid again
+
+The eighth and ninth interruptions on this run, both at once, with the limit resetting at
+4:10am. **#33 had already finished, gated and pushed.** #51 was stopped mid-gate, with its
+own message saying two tests had passed on re-run and it was starting a full suite for an
+authoritative number.
+
+Cost: almost nothing, because the commit-and-push-as-you-go rule was in both briefs. #51's
+two real commits were pushed; the only leftover was an **uncommitted relocation of its own
+prose** in this file, which it had written into the ninth session's section before the
+eleventh existed. The integrator read the diff, committed it as a relocation with the
+boundary named as the integrator's, and pushed. Then gated #51 fully, since its own gate
+never finished — which is the rule for any branch whose gate was interrupted.
+
+### #56: a control clipped by the edge of the screen is invisible to *every* assertion
+
+Found by the integrator while merging #51, by rendering Home at phone width and looking at
+it — which this doc has asked for since #35 and #44, and which found something on the first
+look.
+
+**The Billboard's trailer row does not wrap, and "Pause the trailer" is clipped by the
+right edge**: `right=393.23` on a 390px viewport. #51's own new links are well inside
+(`Movies` 127.7, `Series` 233.2), so this is #19's row, not #51's.
+
+What makes it worth a section rather than a line: **the document's `scrollWidth` is 390,
+exactly equal to `clientWidth`.** The control is *clipped*, not scrolled to, so it never
+lengthens the document — and the scroll-width assertion this project adopted after #44, as
+"the one shape of assertion scrolling cannot paper over", **is blind to it.** The honest
+assertion is each control's **own right edge against the viewport width**, which is what
+found it, and it catches a strictly larger class. The measurements are English; `es.ts`
+labels are longer and were not measured.
+
 ### What is left after this wave
 
-1. **#34 Play On**, alone, once #33 is merged.
+**#34 Play On and #48 licences are in flight now**, in integrator-created worktrees on
+ports 4334/8334 and 4348/8348 — `src/playback/` and `public/`+`src/settings/`+`Dockerfile`
+respectively, so they are in different conflict groups. **#34 is the last ticket in the
+spec's task graph.**
+
+1. ~~**#34 Play On**, alone, once #33 is merged.~~ In flight.
 2. **The player's three loose ends** — **#50** (the `aria-disabled` dim rule is scoped to
    tracks #30 removed, so "Sync to this line" looks pressable when it is not), **#53**
    (`TrackPicker` loses focus to the document when Done closes it — the *same* defect #32
    fixed in the options menu, so the fix is written already) and **#52** if anything of it
    survives #32's shared guard.
-3. **#48**, which is now an agent's.
+3. ~~**#48**, which is now an agent's.~~ In flight.
+3a. **#55** (`architecture.md` has no section for #32) and **#56** (the clipped trailer
+   button). #55 is a docs-only edit and collides with everything, so it belongs **between**
+   waves, which is the #43 precedent.
 4. **#42**, the `[desktop]` arrow-key Row-scroll assertion that has recurred twice — once
    on a line that is **already** an `expect.poll`, so the fix suggested on the issue is
    probably wrong, and both assertions really want to know whether `reveal.ts` is meant to
