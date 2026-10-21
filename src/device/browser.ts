@@ -254,7 +254,25 @@ function subtitleCapabilities(): SubtitleCapabilities {
   };
 }
 
+/**
+ * Worked out once and kept, because all three answers are properties of the
+ * browser and cannot change while the page is open.
+ *
+ * The call is not a cheap one: it builds a detached `<video>` purely to
+ * feature-test AirPlay. `player.tsx` asks three separate times in its render
+ * body — picture-in-picture, Cast, AirPlay — and re-renders about four times a
+ * second while a Title plays, as `setPosition` runs from `timeupdate`. That is
+ * a dozen throwaway media elements a second on a project whose floor is webOS 5
+ * on a television, for three constants.
+ */
+let targets: PlaybackTargets | undefined;
+
 function playbackTargets(): PlaybackTargets {
+  targets ??= detectPlaybackTargets();
+  return targets;
+}
+
+function detectPlaybackTargets(): PlaybackTargets {
   const video = document.createElement('video') as HTMLVideoElement & {
     webkitShowPlaybackTargetPicker?: unknown;
     remote?: unknown;

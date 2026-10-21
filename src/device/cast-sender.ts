@@ -31,6 +31,33 @@ import type { CastSender, CastSenderOptions, CastSession } from './types';
  * a User either way.
  */
 
+/**
+ * `chrome.cast.ErrorCode.CANCEL`, as its own value rather than read off the
+ * global: it is the one code this file compares against, the enum is a plain
+ * string, and reaching for `chrome.cast.ErrorCode` would mean handling the
+ * case where the SDK that just rejected is not there to be asked.
+ */
+const CAST_CANCELLED = 'cancel';
+
+/**
+ * The code out of whatever `requestSession()` rejected with.
+ *
+ * The CAF sender rejects with the bare `chrome.cast.ErrorCode` string, but the
+ * base API and some Chromium derivatives reject with a `chrome.cast.Error`
+ * carrying it in `code`. Both are read, because the difference decides whether
+ * a User is told their cast failed, and an unrecognised shape is treated as a
+ * failure — the louder of the two, and the right way round for a rejection
+ * nobody has seen before.
+ */
+function errorCodeOf(error: unknown): string | undefined {
+  if (typeof error === 'string') return error;
+  if (typeof error === 'object' && error !== null && 'code' in error) {
+    const { code } = error as { code?: unknown };
+    if (typeof code === 'string') return code;
+  }
+  return undefined;
+}
+
 /** The CAF Web Sender script, with the framework on top of the base API. */
 const CAST_SENDER_SDK =
   'https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1';
@@ -90,9 +117,24 @@ function loadSdk(): Promise<boolean> {
     };
     const script = document.createElement('script');
     script.src = CAST_SENDER_SDK;
-    // Offline, blocked, or a Server on a LAN with no route out: never a throw,
-    // just no Cast. The caller's one message covers it.
-    script.addEventListener('error', () => resolve(false));
+    /*
+     * Offline, blocked, or a Server on a LAN with no route out: never a throw,
+     * just no Cast. The caller's one message covers it.
+     *
+     * **The cache is dropped here, and only here.** The rationale above — a
+     * script appended twice would run an SDK that is already running — is
+     * about a script that *ran*; this one did not, so there is nothing to run
+     * twice and nothing to keep. Holding the failure would make a household
+     * whose internet blinked press Cast to the same message until they
+     * reloaded the page. `isAvailable === false` is left cached on purpose:
+     * that is a browser whose Cast is switched off, which pressing again
+     * cannot change.
+     */
+    script.addEventListener('error', () => {
+      script.remove();
+      loading = undefined;
+      resolve(false);
+    });
     document.head.append(script);
   });
   return loading;
@@ -122,21 +164,34 @@ export async function createCastSender(options: CastSenderOptions): Promise<Cast
     connect: async () => {
       try {
         await context.requestSession();
-      } catch {
+      } catch (error: unknown) {
         /*
          * **A dismissed picker and a receiver that would not start both land
-         * here**, and the SDK's own error codes are the only way to tell them
-         * apart — `cancel` against the rest. Rather than depend on a string,
-         * what is already known is used: a session exists after a connection
-         * and does not after a cancel. So the absence below answers both, and
-         * the caller shows a User nothing for either, which is right for the
-         * common one.
+         * here**, and the SDK's own error code is the only thing that tells
+         * them apart. `cancel` is the dismissal and the one silence this
+         * function keeps; `receiver_unavailable`, `timeout`, `session_error`
+         * and the rest are failures a User is owed a word about, so they
+         * rethrow and the player says what it already says for every other
+         * way a cast can fail.
+         *
+         * Absence of a session cannot stand in for this, which is what was
+         * tried first: it is equally absent after a receiver that would not
+         * start, so a failed launch read as a dismissal and said nothing at
+         * all.
          */
-        return undefined;
+        if (errorCodeOf(error) === CAST_CANCELLED) return undefined;
+        throw error;
       }
 
       const session = context.getCurrentSession();
-      if (session === null) return undefined;
+      /*
+       * `requestSession()` resolved and yet there is no session: not a
+       * dismissal — a dismissal rejects with `cancel` above — so it is a
+       * failure, and it is thrown rather than swallowed for the same reason.
+       */
+      if (session === null) {
+        throw new Error('The Cast SDK reported a session it then did not have.');
+      }
       return castSessionOf(session, context, options.namespace);
     },
   };

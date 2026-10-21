@@ -103,6 +103,17 @@ async function openTheSubtitleMenu(page: Page): Promise<void> {
   await expect(page.getByRole('dialog', { name: 'Audio and subtitles' })).toBeVisible();
 }
 
+/**
+ * The subtitle menu again, from inside the player rather than from Home —
+ * every choice closes it, so a test that makes two is a test that reopens it.
+ */
+async function reopenTheSubtitleMenu(page: Page): Promise<void> {
+  const open = page.getByRole('button', { name: 'Audio and subtitles for Arrival' });
+  await reachByArrowKeys(page, open);
+  await open.press('Enter');
+  await expect(page.getByRole('dialog', { name: 'Audio and subtitles' })).toBeVisible();
+}
+
 async function chooseSubtitles(page: Page, name: string): Promise<void> {
   const picker = page.getByRole('dialog', { name: 'Audio and subtitles' });
   await expect(picker).toBeVisible();
@@ -328,4 +339,103 @@ test('burns a VobSub track in, disables the timing panel, and stays inside a pho
     client: document.documentElement.clientWidth,
   }));
   expect(widths.scroll).toBeLessThanOrEqual(widths.client);
+});
+
+/**
+ * **#65's third finding: a decoder that will not start must not leave its
+ * worker behind.**
+ *
+ * `new PgsRenderer(...)` returns at once, having already spawned the worker,
+ * started the fetch and hooked the video's events; everything that can really
+ * go wrong happens afterwards, inside `ready`. A rejection that walked
+ * straight out of `await renderer.ready` skipped `dispose()`, so the worker
+ * stayed alive with stale listeners bound to a `<video>` that outlived them,
+ * and **every retry added another set**.
+ *
+ * Only a browser can say this. happy-dom spawns no workers, so there is
+ * nothing there to leak and nothing to count — the same reason this file
+ * exists at all.
+ *
+ * The failure is the realistic one and the one the renderer's own comment
+ * names: the worker's fetch of the raw stream does not arrive. Two attempts
+ * are made, because one leak is invisible against one live renderer and the
+ * finding was specifically that they accumulate.
+ */
+test('disposes the decoder when it fails to start, rather than leaking its worker', async ({
+  page,
+}) => {
+  await page.request.delete(`${FAKE_JELLYFIN_URL}/__fake/state`);
+
+  /*
+   * Counted on the page, where libpgs constructs them: `dispose()` terminates
+   * the worker, so a renderer that was cleaned up leaves `live` back at zero
+   * and one that leaked does not.
+   */
+  await page.addInitScript(() => {
+    const counts = { made: 0, terminated: 0 };
+    (window as unknown as { __workers: typeof counts }).__workers = counts;
+    const Native = window.Worker;
+    class CountedWorker extends Native {
+      constructor(url: string | URL, options?: WorkerOptions) {
+        super(url, options);
+        counts.made += 1;
+      }
+      override terminate(): void {
+        counts.terminated += 1;
+        super.terminate();
+      }
+    }
+    window.Worker = CountedWorker;
+  });
+
+  // The stream the worker asks for never arrives, so `ready` rejects.
+  await page.route('**/Subtitles/**/Stream.sup*', (route) => route.abort('failed'));
+
+  const workers = (): Promise<{ made: number; terminated: number }> =>
+    page.evaluate(() => (window as unknown as { __workers: { made: number; terminated: number } }).__workers);
+
+  await signIn(page);
+  await openTheSubtitleMenu(page);
+  await chooseSubtitles(page, 'Portuguese (PGS)');
+
+  // The player says so, which is the behaviour the throw is kept for.
+  await expect(page.getByText('Jellyflick could not read those subtitles from the Server.')).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect.poll(async () => (await workers()).made, { timeout: 30_000 }).toBeGreaterThan(0);
+  // **Nothing left running**: as many terminated as were ever made.
+  await expect
+    .poll(async () => {
+      const { made, terminated } = await workers();
+      return made - terminated;
+    }, { timeout: 30_000 })
+    .toBe(0);
+
+  const afterFirst = (await workers()).made;
+
+  /*
+   * Again, which is what a User does — and what used to pile a second worker
+   * and a second set of video listeners on top of the first. The menu is
+   * reopened from **inside the player**, where the first attempt left us,
+   * rather than walking in from Home again: a second journey would be a
+   * second page, and a leak does not survive one.
+   */
+  // Off and back: choosing the track that is already chosen is a no-op, and
+  // every choice closes the menu, so this is what a second attempt actually
+  // looks like from a User's side.
+  await reopenTheSubtitleMenu(page);
+  await chooseSubtitles(page, 'Off');
+  await reopenTheSubtitleMenu(page);
+  await chooseSubtitles(page, 'Portuguese (PGS)');
+  await expect(page.getByText('Jellyflick could not read those subtitles from the Server.')).toBeVisible({
+    timeout: 30_000,
+  });
+
+  await expect.poll(async () => (await workers()).made, { timeout: 30_000 }).toBeGreaterThan(afterFirst);
+  await expect
+    .poll(async () => {
+      const { made, terminated } = await workers();
+      return made - terminated;
+    }, { timeout: 30_000 })
+    .toBe(0);
 });

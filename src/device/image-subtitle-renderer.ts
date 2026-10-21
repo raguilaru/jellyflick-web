@@ -134,7 +134,21 @@ export async function createImageSubtitleRenderer(
    * Resolving before it would report success for a renderer that never draws,
    * and the caller would have no reason to say anything to the User.
    */
-  await renderer.ready;
+  try {
+    await renderer.ready;
+  } catch (error: unknown) {
+    /*
+     * **Disposed before the rejection leaves**, because by this point the
+     * constructor has already spawned the worker, started the fetch and
+     * hooked the video's events. Letting the rejection past without
+     * `dispose()` leaves all three alive and the listeners bound to a
+     * `<video>` that outlives them, and every retry or track switch adds
+     * another set. The caller's notice is unchanged: the throw still happens,
+     * it just does not cost a worker.
+     */
+    renderer.dispose();
+    throw error;
+  }
 
   return {
     setTimeOffset: (seconds) => {

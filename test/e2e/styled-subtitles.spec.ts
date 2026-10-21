@@ -198,3 +198,84 @@ test('draws over the picture and never over the controls', async ({ page }) => {
   // And the controls are below it, untouched.
   expect(box.y + box.height).toBeLessThanOrEqual(bar.y + 1);
 });
+
+/**
+ * **#65's fourth finding: a renderer that will not start must not leave its
+ * worker and its WASM instance behind.**
+ *
+ * The same shape as the PGS leak in `image-subtitles.spec.ts`, and the more
+ * dangerous of the two precisely because **nothing looks broken**: the
+ * constructor has already spawned the worker and instantiated the binary by
+ * the time `ready` rejects, the caller correctly falls back to the flattened
+ * words, and a User sees subtitles. The multi-megabyte instance left resident
+ * behind them is invisible, and every retry adds another.
+ *
+ * The rejection is produced the realistic way — the WASM binary does not
+ * arrive, which is one of the things the renderer's own comment names as
+ * happening inside `ready`. A browser is the only place that can: happy-dom
+ * fetches no WebAssembly and spawns no workers.
+ */
+test('destroys the renderer when it fails to start, rather than leaking its worker', async ({
+  page,
+}) => {
+  await page.request.delete(`${FAKE_JELLYFIN_URL}/__fake/state`);
+
+  await page.addInitScript(() => {
+    const counts = { made: 0, terminated: 0 };
+    (window as unknown as { __workers: typeof counts }).__workers = counts;
+    const Native = window.Worker;
+    class CountedWorker extends Native {
+      constructor(url: string | URL, options?: WorkerOptions) {
+        super(url, options);
+        counts.made += 1;
+      }
+      override terminate(): void {
+        counts.terminated += 1;
+        super.terminate();
+      }
+    }
+    window.Worker = CountedWorker;
+  });
+
+  // libass never arrives, so `ready` rejects.
+  await page.route('**/*.wasm', (route) => route.abort('failed'));
+
+  const workers = (): Promise<{ made: number; terminated: number }> =>
+    page.evaluate(
+      () => (window as unknown as { __workers: { made: number; terminated: number } }).__workers,
+    );
+  const leaked = async (): Promise<number> => {
+    const { made, terminated } = await workers();
+    return made - terminated;
+  };
+
+  await signIn(page);
+  await openTheSubtitleMenu(page);
+  await chooseSubtitles(page, 'Japanese (Styled)');
+
+  /*
+   * **The fallback really happened**, which is what makes this a leak rather
+   * than a visible failure: the words are on the screen and the styled canvas
+   * is gone, so nothing about the picture says anything went wrong.
+   */
+  await expect(page.locator('.player__subtitles')).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('.player__styled-subtitles')).toHaveCount(0);
+
+  await expect.poll(async () => (await workers()).made, { timeout: 30_000 }).toBeGreaterThan(0);
+  await expect.poll(leaked, { timeout: 30_000 }).toBe(0);
+
+  const afterFirst = (await workers()).made;
+
+  // Again: off, and back to the same track, which is what a second attempt
+  // looks like from a User's side — and what used to leave a second instance.
+  await page.getByRole('button', { name: 'Audio and subtitles for Arrival' }).press('Enter');
+  await chooseSubtitles(page, 'Off');
+  await page.getByRole('button', { name: 'Audio and subtitles for Arrival' }).press('Enter');
+  await chooseSubtitles(page, 'Japanese (Styled)');
+
+  await expect(page.locator('.player__subtitles')).toBeVisible({ timeout: 30_000 });
+  await expect
+    .poll(async () => (await workers()).made, { timeout: 30_000 })
+    .toBeGreaterThan(afterFirst);
+  await expect.poll(leaked, { timeout: 30_000 }).toBe(0);
+});

@@ -2435,6 +2435,17 @@ burned into the picture by the Server everywhere else.
   libpgs sets the canvas's `height` attribute to the stream's own 1080, so
   without `min-height: 0` the picture's row stretches to fit a 1080-pixel
   canvas and pushes the controls out of the window.
+- **A rejected `ready` disposes before it rethrows**, in *both* renderers, and
+  #65 found it in both for the same reason. Each constructor returns at once
+  and has already spawned its worker, started its fetch and hooked the video's
+  events by the time `ready` settles; a rejection that walks straight out —
+  which is what the awaits used to be — skips `dispose()` and `destroy()` and
+  leaves the worker alive with stale listeners bound to a `<video>` that
+  outlives them, plus, for JASSUB, a multi-megabyte WASM instance. Every retry
+  or track switch adds another set. The throw is still the point — it is what
+  makes the notice and `onUnsupported` honest — so the `try` only cleans up
+  and rethrows. The styled case is the one that would never have been noticed:
+  the caller falls back to the flattened words and nothing looks broken.
 
 Where each thing is tested: the decision per capability profile and per codec
 family in `test/unit/choosing-how-to-draw-subtitles.test.ts`; the profile's
@@ -2746,12 +2757,36 @@ they are two files:
   makes when it puts the token in the query as `ApiKey`, and for the same
   reason. A second caller there would be a sign something is building requests
   outside the gateway.
-- **A dismissed picker is a decision, not a failure**, and says nothing. The
-  SDK rejects `requestSession()` for both a cancel and a receiver that would
-  not start, and telling the two apart means depending on an error string — so
-  `cast-sender.ts` reads what it already knows instead: a session exists after
-  a connection and does not after a cancel. The absence answers both, and
-  silence is right for the common one.
+- **A dismissed picker is a decision, not a failure**, and says nothing — but
+  it is the *only* silence, and #65 is why that sentence has to be this
+  careful. The SDK rejects `requestSession()` for both a cancel and a receiver
+  that would not start. Reading the absence of a session instead of the error
+  code, which is what this file did first, makes the two indistinguishable: a
+  receiver that is asleep or has no receiver app installed also leaves no
+  session, so a genuinely failed launch took the dismissal's silence, the menu
+  closed, the Title kept playing locally and nothing was said. The bullet above
+  claiming "one message for every way it can fail" and this one were, between
+  them, describing a path that could not run. So `cast-sender.ts` does depend
+  on the error string after all: `cancel` returns `undefined` and stays silent,
+  every other code rethrows, and `requestSession()` resolving with no session
+  throws too. `errorCodeOf` reads both shapes the SDK families use — the bare
+  code string and a `chrome.cast.Error` with `.code` — and an unrecognised
+  shape counts as a failure, which is the right way round for a rejection
+  nobody has seen.
+- **A failed SDK load is not cached**, and the distinction is the point.
+  `loading ??=` holds the load promise so two presses in flight share one
+  `<script>`, but holding a *failure* meant a household whose internet blinked
+  for a minute — exactly the LAN-with-no-route-out case this feature is built
+  around — pressed Cast to the same message until they reloaded the page. The
+  `error` listener clears `loading`, so the next press tries again. An
+  `isAvailable(false)` stays cached on purpose: that is a browser whose Cast is
+  switched off, and pressing again cannot change it.
+- **`playbackTargets()` is worked out once.** It builds a detached `<video>` to
+  feature-test AirPlay, and `player.tsx` asks three times per render while
+  re-rendering about four times a second from `timeupdate` — a dozen throwaway
+  media elements a second, for three constants, on a floor of webOS 5 on a
+  television. The answers cannot change while the page is open, so they are
+  memoised in `browser.ts`.
 - **AirPlay's availability is watched, not assumed.** The capability can only
   say Safari has the API; a house with no Apple TV in it would otherwise get a
   control that opens an empty picker. `decisions.md` §8's order is followed —
