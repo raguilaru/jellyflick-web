@@ -742,6 +742,11 @@ export function Player({
        * **No session is a User who dismissed the picker**, which is a decision
        * and not a failure: nothing is said, because telling them something
        * went wrong would be telling them their own choice was an error.
+       *
+       * It is *only* ever the dismissal — the sender tells the two apart by
+       * the SDK's own error code and rejects for a receiver that would not
+       * start, so that case reaches the catch below and is spoken about,
+       * which is what the catch always claimed to do.
        */
       if (session === undefined) return;
 

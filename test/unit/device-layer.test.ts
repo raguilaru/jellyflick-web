@@ -32,6 +32,24 @@ describe('the browser device layer', () => {
     expect(second).not.toBe(first);
   });
 
+  /**
+   * #65's fifth finding. `playbackTargets()` builds a detached `<video>` to
+   * feature-test AirPlay, and `player.tsx` asks three times in its render
+   * body while re-rendering about four times a second from `timeupdate` — a
+   * dozen throwaway media elements a second, on a floor of webOS 5 on a
+   * television, for three answers that cannot change while the page is open.
+   *
+   * Identity is the assertion because it is the one that cannot pass by
+   * accident: two freshly built objects would be equal, and only a memoised
+   * one is the same object.
+   */
+  it('works its playback targets out once, rather than on every call', () => {
+    expect(device.playbackTargets()).toBe(device.playbackTargets());
+    // Including across device layers: the answers are the browser's, not an
+    // instance's, so a second layer must not pay for them again.
+    expect(createBrowserDeviceLayer().playbackTargets()).toBe(device.playbackTargets());
+  });
+
   it('always offers plain-text subtitle rendering, which is the common case', () => {
     expect(device.subtitleCapabilities().canRenderText).toBe(true);
   });

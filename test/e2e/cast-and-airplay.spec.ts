@@ -69,7 +69,19 @@ type CastRecord = {
  * answer the real SDK gives (a Chromium build with no Cast in it), and it is
  * the one branch a User sees a message for.
  */
-function castSdkStub(options: { available: boolean }): string {
+function castSdkStub(options: { available: boolean; requestSessionRejectsWith?: string }): string {
+  /*
+   * `undefined` is a `requestSession()` that resolves, and a string is the
+   * `chrome.cast.ErrorCode` the real SDK rejects with — `cancel` for a picker
+   * the User dismissed, and codes like `receiver_unavailable` or `timeout`
+   * for a receiver that would not start. Telling those two apart is the whole
+   * of #65's first finding, and the bare string is the shape the CAF sender
+   * really rejects with.
+   */
+  const rejection =
+    options.requestSessionRejectsWith === undefined
+      ? 'return Promise.resolve();'
+      : `return Promise.reject(${JSON.stringify(options.requestSessionRejectsWith)});`;
   return `
 (function () {
   var record = { setOptions: [], sessionsRequested: 0, messages: [], endings: [] };
@@ -91,7 +103,7 @@ function castSdkStub(options: { available: boolean }): string {
     },
     requestSession: function () {
       record.sessionsRequested += 1;
-      return Promise.resolve();
+      ${rejection}
     },
     getCurrentSession: function () {
       return session;
@@ -125,13 +137,28 @@ function castSdkStub(options: { available: boolean }): string {
  */
 async function serveCastSdk(
   page: Page,
-  options: { available?: boolean; failToLoad?: boolean } = {},
+  options: {
+    available?: boolean;
+    failToLoad?: boolean;
+    /*
+     * How many loads fail before the script is served — the household whose
+     * internet blinked and came back (#65's second finding). `failToLoad`
+     * is the same thing without end.
+     */
+    failFirstLoads?: number;
+    requestSessionRejectsWith?: string;
+  } = {},
 ): Promise<string[]> {
   const asked: string[] = [];
+  let failuresLeft = options.failFirstLoads ?? 0;
   page.on('request', (request) => {
     if (request.url().includes('gstatic.com')) asked.push(request.url());
   });
   await page.route(CAST_SDK_URL, (route) => {
+    if (failuresLeft > 0) {
+      failuresLeft -= 1;
+      return route.abort('failed');
+    }
     if (options.failToLoad === true) {
       /*
        * A LAN with no route out, which is most of what Jellyfin is used for.
@@ -144,7 +171,12 @@ async function serveCastSdk(
     return route.fulfill({
       status: 200,
       contentType: 'application/javascript',
-      body: castSdkStub({ available: options.available ?? true }),
+      body: castSdkStub({
+        available: options.available ?? true,
+        ...(options.requestSessionRejectsWith === undefined
+          ? {}
+          : { requestSessionRejectsWith: options.requestSessionRejectsWith }),
+      }),
     });
   });
   return asked;
@@ -484,6 +516,107 @@ test('says so when the SDK loads and reports no Cast available', async ({ page }
   // available is never configured.
   expect((await castRecord(page))?.setOptions ?? []).toEqual([]);
   await expect(page.getByRole('region', { name: 'Playing Arrival' })).toBeVisible();
+});
+
+/**
+ * **#65's first finding, and the one a User felt.** A receiver that will not
+ * start — asleep, no receiver app installed, a launch that timed out — used to
+ * be read as a dismissed picker and said nothing at all: the menu had already
+ * closed, the Title kept playing here, and the press looked like it had simply
+ * done nothing.
+ *
+ * The SDK rejects `requestSession()` for both, so only the error code tells
+ * them apart, and only a browser can produce the rejection — happy-dom has no
+ * SDK to reject. This is the regression test for the code being read.
+ */
+test('says so beside the picture when a receiver will not start', async ({ page, request }) => {
+  await page.request.delete(`${FAKE_JELLYFIN_URL}/__fake/state`);
+  await page.request.delete(`${FAKE_JELLYFIN_URL}/__fake/writes`);
+  await serveCastSdk(page, { requestSessionRejectsWith: 'receiver_unavailable' });
+
+  await signIn(page);
+  await playAndPauseArrival(page);
+  await openPlaybackOptions(page);
+  await pressInOptions(page, 'Cast');
+
+  await expect(page.getByText('Jellyflick could not reach a Cast device.')).toBeVisible({
+    timeout: 30_000,
+  });
+
+  // The picker really was asked, so the silence this replaces was not a
+  // feature that never ran: it is a launch that was attempted and failed.
+  await expect.poll(async () => (await castRecord(page))?.sessionsRequested ?? 0).toBe(1);
+  // And nothing was handed over, exactly as for a gstatic that cannot be
+  // reached: the Title is still here and the Server has been told no stop.
+  await expect(page.getByRole('region', { name: 'Playing Arrival' })).toBeVisible();
+  await expect(page.getByText('Casting to Living Room.')).toHaveCount(0);
+  expect((await writesTo(request, '/Sessions/Playing/Stopped')).length).toBe(0);
+});
+
+/**
+ * The other half of the same finding, and the reason it cannot simply be
+ * "say something whenever `requestSession()` rejects": **a dismissed picker
+ * still says nothing.** `cancel` is a User's own decision, and telling them
+ * something went wrong would be telling them their choice was an error.
+ */
+test('says nothing at all when a User dismisses the picker', async ({ page, request }) => {
+  await page.request.delete(`${FAKE_JELLYFIN_URL}/__fake/state`);
+  await page.request.delete(`${FAKE_JELLYFIN_URL}/__fake/writes`);
+  await serveCastSdk(page, { requestSessionRejectsWith: 'cancel' });
+
+  await signIn(page);
+  await playAndPauseArrival(page);
+  await openPlaybackOptions(page);
+  await pressInOptions(page, 'Cast');
+
+  await expect.poll(async () => (await castRecord(page))?.sessionsRequested ?? 0).toBe(1);
+  /*
+   * The menu has closed and the player is back. Waiting for the player to be
+   * the thing on screen is what makes the absence below meaningful rather
+   * than merely early — the message, if it came, would be beside the picture
+   * and would have come by now.
+   */
+  await expect(page.getByRole('region', { name: 'Playing Arrival' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Playback options' })).toHaveCount(0);
+  await expect(page.getByText('Jellyflick could not reach a Cast device.')).toHaveCount(0);
+  await expect(page.getByText('Casting to Living Room.')).toHaveCount(0);
+  expect((await writesTo(request, '/Sessions/Playing/Stopped')).length).toBe(0);
+});
+
+/**
+ * **#65's second finding.** The load promise is cached so two presses in
+ * flight share one `<script>`, and it used to cache failures too — so a
+ * household whose internet blinked got the same message on every later press,
+ * without a single request being attempted, until they reloaded the page.
+ *
+ * The first load is aborted and the second served. Two presses, two real
+ * requests to gstatic, and the second one casts.
+ */
+test('retries the SDK on a later press after a load that failed', async ({ page }) => {
+  await page.request.delete(`${FAKE_JELLYFIN_URL}/__fake/state`);
+  const asked = await serveCastSdk(page, { failFirstLoads: 1 });
+
+  await signIn(page);
+  await playAndPauseArrival(page);
+  await openPlaybackOptions(page);
+  await pressInOptions(page, 'Cast');
+
+  await expect(page.getByText('Jellyflick could not reach a Cast device.')).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect.poll(() => asked.length, { timeout: 20_000 }).toBe(1);
+
+  // The internet came back. The same press again, with nothing reloaded.
+  await openPlaybackOptions(page);
+  await pressInOptions(page, 'Cast');
+
+  /*
+   * **A second real request**, which is the whole finding: the cached failure
+   * used to short-circuit here and never reach the network at all.
+   */
+  await expect.poll(() => asked.length, { timeout: 20_000 }).toBe(2);
+  await expect(page.getByText('Casting to Living Room.')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText('Jellyflick could not reach a Cast device.')).toHaveCount(0);
 });
 
 /**

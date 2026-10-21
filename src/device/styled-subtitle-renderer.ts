@@ -137,7 +137,20 @@ export async function createStyledSubtitleRenderer(
    * no reason to fall back to the words. Rejecting here is what makes
    * `onUnsupported` honest.
    */
-  await renderer.ready;
+  try {
+    await renderer.ready;
+  } catch (error: unknown) {
+    /*
+     * **Destroyed before the rejection leaves.** The rejection is the point —
+     * it is what makes `onUnsupported` honest — but the constructor has
+     * already spawned the worker and instantiated the WASM binary, and a
+     * rejection that skips `destroy()` leaves both resident. The caller falls
+     * back to the flattened words and **nothing looks broken**, which is
+     * exactly why a multi-megabyte leak here would never be noticed.
+     */
+    void renderer.destroy();
+    throw error;
+  }
 
   return {
     setTimeOffset: (seconds) => {

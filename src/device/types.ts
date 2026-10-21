@@ -200,9 +200,12 @@ export type CastSender = {
   /**
    * Open the **device's own** Cast picker and connect to what the User chose.
    *
-   * `undefined` is a User who dismissed it, which is deliberately not a
-   * rejection: a dismissed picker is a decision rather than a failure, and the
-   * two are shown to a User completely differently.
+   * `undefined` is a User who dismissed it **and nothing else**, which is
+   * deliberately not a rejection: a dismissed picker is a decision rather than
+   * a failure, and the two are shown to a User completely differently. Every
+   * other way connecting can end — a receiver that would not start, one that
+   * is not there, a launch that timed out — **rejects**, so that the caller's
+   * silence for `undefined` stays the silence it was written to be.
    */
   connect(): Promise<CastSession | undefined>;
 };
