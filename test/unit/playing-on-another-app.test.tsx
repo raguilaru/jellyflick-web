@@ -159,6 +159,42 @@ function video(): HTMLVideoElement {
   return found as HTMLVideoElement;
 }
 
+/**
+ * Arrival's length in seconds, from the fake's own `RunTimeTicks` — 116
+ * minutes. Written out rather than read back off the bar, so a scrub's
+ * expected position below is a literal this file states and not one the
+ * player computed.
+ */
+const ARRIVAL_SECONDS = 116 * 60;
+
+/**
+ * Scrubs: presses the seek bar a fraction of the way along, which is the
+ * control #63 is about.
+ *
+ * happy-dom gives every box a zero size, so the bar is told how wide it is —
+ * the one thing a browser would have supplied, and the same stub
+ * `scrubbing-speed-and-quality.test.tsx` uses. `detail` has to be 1 as well: a
+ * press reporting zero clicks is one with no pointer behind it, which
+ * `player-controls.tsx` ignores on purpose rather than throwing the User back
+ * to the beginning.
+ */
+function scrubTo(fraction: number): void {
+  const bar = screen.getByRole('slider');
+  bar.getBoundingClientRect = () =>
+    ({
+      left: 0,
+      width: 1000,
+      top: 0,
+      height: 10,
+      right: 1000,
+      bottom: 10,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    }) as DOMRect;
+  fireEvent.click(bar, { clientX: 1000 * fraction, detail: 1 });
+}
+
 async function openOptions(): Promise<HTMLElement> {
   fireEvent.click(screen.getByRole('button', { name: 'Playback options for Arrival' }));
   return await screen.findByRole('dialog', { name: 'Playback options' });
@@ -593,6 +629,77 @@ describe('coming back to this device', () => {
       ).toBe(true),
     );
 
+    await savesHaveSettled();
+  });
+
+  /**
+   * **The seek bar is the other way back, and it is not one** (#63).
+   *
+   * The way back that #59 built is a press of Play, and it is a press of Play
+   * because that is where a new play session belongs. The bar was left alone,
+   * and `reporting.ts`'s asymmetry is why that was a defect rather than
+   * nothing: `stopped` is once-only by design, but `moved` is not, so a
+   * scrub on a spent reporter went to the Server as a `POST
+   * /Sessions/Playing/Progress` for a `PlaySessionId` the Server had already
+   * been told stopped.
+   *
+   * This one is the sharper of the two states, because it is the state
+   * `reporting.ts`'s own rule is about: the other app owns the Title and is
+   * reporting it, and the position this app sends in the `PlayNow` is the one
+   * the other room is watching from — so a progress report from here moves a
+   * resume point out from under them, which is the very thing #34's hand-over
+   * exists to prevent.
+   */
+  it('says nothing to the Server when the User scrubs while the other app has the Title', async () => {
+    await handOver();
+    await waitFor(async () => expect((await stopReports()).length).toBe(1));
+    await savesHaveSettled();
+    // The hand-over pauses the picture, and a pause is news, so progress has
+    // legitimately been reported by now. The count before is the baseline; it
+    // is what must not move.
+    const before = (await progressReports()).length;
+
+    scrubTo(0.25);
+
+    // The bar still moves the picture: only the reporting is suppressed. A
+    // quarter of the way along 116 minutes is 1740 seconds.
+    expect(video().currentTime).toBe(ARRIVAL_SECONDS * 0.25);
+    await savesHaveSettled();
+    expect((await progressReports()).length).toBe(before);
+    // And nothing revived the closed session: still exactly one stop, which is
+    // #33's and #34's invariant.
+    expect((await stopReports()).length).toBe(1);
+  });
+
+  /**
+   * And the same once the Title is back here but not yet playing, which is the
+   * state #59 leaves the player in: nothing owns the playback any more, but the
+   * reporter in hand belongs to a session the Server has been told stopped, so
+   * there is still nothing truthful to say with it.
+   *
+   * The press of Play afterwards is the half that proves the bar has not broken
+   * the way back — a second session is still opened, from where the User
+   * scrubbed to, because `resumeHere` reads the element's own position and the
+   * scrub moved it.
+   */
+  it('says nothing when the User scrubs after it comes back, and still plays from there', async () => {
+    await comeBack();
+    await savesHaveSettled();
+    const before = (await progressReports()).length;
+
+    scrubTo(0.25);
+
+    expect(video().currentTime).toBe(ARRIVAL_SECONDS * 0.25);
+    await savesHaveSettled();
+    expect((await progressReports()).length).toBe(before);
+    expect((await startReports()).length).toBe(1);
+
+    // The way back is still a press of Play, and it still negotiates.
+    fireEvent.click(screen.getByRole('button', { name: 'Play Arrival' }));
+    await waitFor(async () => expect((await startReports()).length).toBe(2));
+    expect((await stopReports()).length).toBe(1);
+
+    // The second session is live and still writing as this test ends.
     await savesHaveSettled();
   });
 });

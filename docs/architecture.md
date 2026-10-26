@@ -3006,6 +3006,40 @@ hand-over's position — and in a browser in `test/e2e/play-on.spec.ts`, where a
 real `<video>` really decodes again from where it was handed over while the
 Server records the second session.
 
+**The seek bar is scrubbed silently, and is not a way back (#63).** #59 fixed
+the press of Play and deliberately left the bar alone, which was a defect
+rather than nothing, and `reporting.ts` is where to see why: `stopped` is
+once-only **by design** and `moved` is not. So a scrub on a handed-away player
+— the bar, Left/Right, or a remote's Rewind and Fast Forward, which all come
+through `seekTo` — sent a `POST /Sessions/Playing/Progress` for a
+`PlaySessionId` the Server had already been told stopped.
+
+- **The guard is in `seekTo`, beside `toggle`'s, and reports nothing.** The
+  picture still moves: `currentTime` is set, the position is pushed to the
+  screen, and only the report is dropped.
+- **It is `handedOver` alone, where `toggle`'s is `handedOver && !handedAway`**,
+  and the difference is not an oversight. Both states want the same silence.
+  While the other device still owns the Title it is the one reporting, and the
+  position this app put in its `PlayNow` is where the other room is watching
+  from — so a report from here moves a resume point out from under them, which
+  is the very thing the hand-over exists to prevent. Once the Title has come
+  back, the session is merely closed, and a closed session that is still moving
+  is a lie whatever a real Server chooses to do with it.
+- **Scrubbing deliberately does not re-negotiate.** The other reading is that a
+  scrub means "I am watching this here now", the same as a press of Play, in
+  which case the bar would open a new session from the position scrubbed to.
+  It was weighed and not taken: it would start the picture playing from a drag
+  of the bar, which is a visible change of behaviour, and the way back is
+  better for being one control rather than two.
+- **Being quiet costs the User nothing**, which is what makes the small answer
+  whole rather than partial. `resumeHere` reads the element's own position, and
+  the scrub has just moved it, so the press of Play that follows a scrub opens
+  its new session from exactly where the User scrubbed to.
+
+Where it is tested: the same two journey files — a progress-report count that
+does not move across a scrub, in both states, while the playhead does move, and
+the press of Play afterwards still opening its one new session.
+
 ## The fake Jellyfin serves real video
 
 `test/fake-jellyfin/routes/videos.ts` is the one place a fake owes a client
