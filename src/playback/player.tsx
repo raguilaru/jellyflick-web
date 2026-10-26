@@ -1722,6 +1722,33 @@ function usePlayback(options: {
     element.currentTime = to;
     position.current = to;
     options.onPositionChange(to);
+    /*
+     * **A handed-away playback is scrubbed silently** (#63). The picture moves,
+     * because the bar is the bar; the Server hears nothing, because there is
+     * nothing truthful left to tell it with this reporter.
+     *
+     * `stopped` is once-only by design and `moved` is not — that asymmetry is
+     * the whole of the defect — so a seek here would otherwise send a `POST
+     * /Sessions/Playing/Progress` for a `PlaySessionId` the Server has already
+     * been told stopped. Both states it can be in want the same silence, which
+     * is why this is `handedOver` alone and not `toggle`'s pair of conditions:
+     *
+     * - while another device still owns it, that device is the one reporting,
+     *   and the position this app sent in its `PlayNow` is where the other
+     *   room is watching from — so a report from here moves a resume point out
+     *   from under them, which is what the hand-over exists to prevent;
+     * - once it has come back, the session is simply closed, and a closed
+     *   session that is still moving is a lie whatever a Server does with it.
+     *
+     * **Scrubbing is deliberately not a way back.** Pressing Play is (see
+     * `toggle`), and it stays the only one: a seek that re-negotiated would
+     * start the picture playing from a drag of the bar, which is a visible
+     * change of behaviour nobody asked for. The User's place is not lost by
+     * being quiet about it — `resumeHere` reads the element's own position, and
+     * the line above has just moved it — so a press of Play after a scrub
+     * opens its new session from where they scrubbed to.
+     */
+    if (handedOver.current) return;
     const sending = reporter.current;
     if (sending === undefined) return;
     void sending.moved(to, element.paused).then(() => {

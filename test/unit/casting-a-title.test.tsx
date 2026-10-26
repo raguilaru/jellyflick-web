@@ -73,6 +73,12 @@ async function startReports(): Promise<Write[]> {
   return writes.filter((write) => write.path === '/Sessions/Playing');
 }
 
+/** The progress reports this device has sent (#63). */
+async function progressReports(): Promise<Write[]> {
+  const writes = (await fakeWrites()) as unknown as Write[];
+  return writes.filter((write) => write.path === '/Sessions/Playing/Progress');
+}
+
 async function signIn(
   profile: CapabilityProfileName,
   castSender: FakeCastSender,
@@ -133,6 +139,39 @@ function video(): HTMLVideoElement {
 async function openOptions(): Promise<HTMLElement> {
   fireEvent.click(screen.getByRole('button', { name: 'Playback options for Arrival' }));
   return await screen.findByRole('dialog', { name: 'Playback options' });
+}
+
+/**
+ * Arrival's length in seconds, from the fake's own `RunTimeTicks` — 116
+ * minutes. Written out rather than read back off the bar, so a scrub's
+ * expected position below is a literal this file states.
+ */
+const ARRIVAL_SECONDS = 116 * 60;
+
+/**
+ * Scrubs: presses the seek bar a fraction of the way along, which is the
+ * control #63 is about.
+ *
+ * happy-dom gives every box a zero size, so the bar is told how wide it is —
+ * the one thing a browser would have supplied. `detail` has to be 1 as well: a
+ * press reporting zero clicks is one with no pointer behind it, which
+ * `player-controls.tsx` ignores on purpose.
+ */
+function scrubTo(fraction: number): void {
+  const bar = screen.getByRole('slider');
+  bar.getBoundingClientRect = () =>
+    ({
+      left: 0,
+      width: 1000,
+      top: 0,
+      height: 10,
+      right: 1000,
+      bottom: 10,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    }) as DOMRect;
+  fireEvent.click(bar, { clientX: 1000 * fraction, detail: 1 });
 }
 
 describe('where the Cast control appears', () => {
@@ -319,6 +358,46 @@ describe('casting a Title', () => {
 
     // The second session is live and still writing as this test ends.
     await savesHaveSettled();
+  });
+
+  /**
+   * **And scrubbing it is not a second way back** (#63). #59's way back is a
+   * press of Play, and it is the only one; the seek bar was left alone, and
+   * `reporting.ts`'s asymmetry is why that was a defect — `stopped` is
+   * once-only by design, but `moved` is not, so a scrub on the spent reporter
+   * went to the Server as progress for a `PlaySessionId` it had already been
+   * told stopped.
+   *
+   * Cast is the state that rule is really about: Jellyfin's receiver signs in
+   * to the Server and opens a session of its own, so while it is playing this
+   * device must say nothing at all — a progress report from here is a second
+   * voice on one Title, and it moves the resume point the television is
+   * watching from.
+   *
+   * What is **not** suppressed is the picture. The bar is still the bar: it
+   * moves the playhead, and a press of Play afterwards negotiates from there,
+   * because `resumeHere` reads the element's own position.
+   */
+  it('says nothing to the Server when the User scrubs while the receiver has the Title', async () => {
+    const sender = await play({ castSender: fakeCastSender({ receiverName: 'Living Room' }) });
+    await openOptions();
+    fireEvent.click(screen.getByRole('button', { name: 'Cast' }));
+    await waitFor(() => expect(sender.messages.length).toBe(1));
+    await waitFor(async () => expect((await stopReports()).length).toBe(1));
+    await savesHaveSettled();
+    // Handing over pauses the picture, and a pause is news, so progress has
+    // legitimately been reported by now. This count is what must not move.
+    const before = (await progressReports()).length;
+
+    scrubTo(0.25);
+
+    // A quarter of the way along 116 minutes is 1740 seconds.
+    expect(video().currentTime).toBe(ARRIVAL_SECONDS * 0.25);
+    await savesHaveSettled();
+    expect((await progressReports()).length).toBe(before);
+    // And the closed session was not revived: still exactly one stop, which is
+    // #33's own acceptance criterion.
+    expect((await stopReports()).length).toBe(1);
   });
 
   /**
