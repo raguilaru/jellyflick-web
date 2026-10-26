@@ -3014,9 +3014,36 @@ once-only **by design** and `moved` is not. So a scrub on a handed-away player
 through `seekTo` — sent a `POST /Sessions/Playing/Progress` for a
 `PlaySessionId` the Server had already been told stopped.
 
-- **The guard is in `seekTo`, beside `toggle`'s, and reports nothing.** The
-  picture still moves: `currentTime` is set, the position is pushed to the
-  screen, and only the report is dropped.
+- **The guard is in `report`, not in `seekTo`, and that correction is the
+  lesson.** The first fix put one line in `seekTo`, the caller the ticket named,
+  and it closed nothing a User would notice: `seekTo` writes `element.currentTime`,
+  which **fires `seeked` in a browser**, `seeked` is registered on the same
+  handler as `timeupdate`, and that handler reported `moved` with no check at
+  all. The scrub went out anyway, one line further on. Two more callers were
+  unguarded beside it — `play`/`pause` reaching the element after a hand-over,
+  which the picture-in-picture window's own play button does without going
+  through `toggle`, and the `PING_INTERVAL_MS` interval, which went on pinging a
+  stopped session for as long as the User left the page open.
+  **A caller-side guard was the wrong shape**, because the callers are not a
+  list anybody can hold in their head: they are the media element's own events
+  plus an interval. `report` is the one way a report leaves the app, so the
+  invariant belongs there — *a handed-over reporter says nothing, ever* — and it
+  closes all three in one place instead of one of three.
+- **`report` takes what to say rather than what has been said**, and that is
+  load-bearing rather than tidiness. `report(sending.moved(…))` evaluates
+  `moved` to build the argument *before* `report` is entered, so the `POST` is
+  already on the wire and an early return can only drop the answer to it. It
+  takes a callback, so nothing is asked of the reporter until it is known to be
+  allowed to speak. A guard added to the old signature would have looked right
+  and done nothing.
+- **Two stops deliberately bypass it**, and both are safe to: `handOver`'s own
+  report, which sets `handedOver` and so would suppress the very report that
+  makes the hand-over true on the Server — #33's one-stop acceptance — and the
+  effect cleanup's. `stopped` is once-only in `reporting.ts`, so it is
+  self-guarding in the way `moved` and `ping` are not. That asymmetry is the
+  whole mechanism, and it is why `moved` must **not** be made once-only too:
+  that would be the same mistake as making `stopped` repeatable, and the
+  asymmetry is correct for a live session.
 - **It is `handedOver` alone, where `toggle`'s is `handedOver && !handedAway`**,
   and the difference is not an oversight. Both states want the same silence.
   While the other device still owns the Title it is the one reporting, and the
@@ -3025,6 +3052,8 @@ through `seekTo` — sent a `POST /Sessions/Playing/Progress` for a
   is the very thing the hand-over exists to prevent. Once the Title has come
   back, the session is merely closed, and a closed session that is still moving
   is a lie whatever a real Server chooses to do with it.
+- **The picture still moves.** `currentTime` is set, the position is pushed to
+  the screen, and only the report is dropped. The bar belongs to the User.
 - **Scrubbing deliberately does not re-negotiate.** The other reading is that a
   scrub means "I am watching this here now", the same as a press of Play, in
   which case the bar would open a new session from the position scrubbed to.
@@ -3038,7 +3067,32 @@ through `seekTo` — sent a `POST /Sessions/Playing/Progress` for a
 
 Where it is tested: the same two journey files — a progress-report count that
 does not move across a scrub, in both states, while the playhead does move, and
-the press of Play afterwards still opening its one new session.
+the press of Play afterwards still opening its one new session — **and in a
+browser in `test/e2e/play-on.spec.ts`**, where a real pointer scrubs a real bar
+on a handed-away player and the fake Server records no progress for the session
+it was told stopped.
+
+**"No unit test could have seen it" is the second lesson this project has had to
+learn, and this is the shape to recognise it by.** The three journeys the first
+fix shipped with were green, they were green for the right reasons, and they
+could not have been otherwise: **happy-dom does not fire `seeked` for a
+`currentTime` write** — the note on `seekTo` has said so all along — so in
+happy-dom the *only* path from a scrub to the reporter is `seekTo`'s own call,
+the one path the first fix guarded. The unguarded path did not exist in the
+runner, so no test in it could fail. Taking the guard out made all three go red
+with `expected 2 to be 1`, which read as proof and was proof of the wrong claim:
+that the guarded line reports when it is allowed to, not that it is the only
+line that reports.
+
+The rule this is the fourth instance of — #29, #30, #32 and #33 are the others,
+listed at the top of `play-on.spec.ts` — is worth stating in its strong form:
+**a reverted-fix check in happy-dom is not evidence when the defect is a path a
+real browser takes and happy-dom does not.** When a comment in the code under
+test says "a browser does this and happy-dom does not", that sentence *is* the
+e2e ticket. Here the browser test fails without the fix with `Expected: 1,
+Received: 2` — the one progress report `seeked` sent past the caller-side guard
+— and the unit tests are kept beside it, because they still pin the synchronous
+path and cost nothing.
 
 ## The fake Jellyfin serves real video
 

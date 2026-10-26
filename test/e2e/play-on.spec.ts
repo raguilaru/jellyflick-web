@@ -77,6 +77,40 @@ async function reportsAt(request: APIRequestContext, path: string): Promise<Writ
   return (await writesUnder(request, path)).filter((write) => write.path === path);
 }
 
+/**
+ * Whether any progress report puts the session at roughly this position (#63).
+ *
+ * A count that has not moved is most of the claim; this is the rest of it, and
+ * it is the half a User would feel — the resume point landing where somebody
+ * scrubbed on a device that had given the Title away. Half a second of slack,
+ * because the position reported is the element's own and the element has been
+ * seeking.
+ */
+async function progressNear(request: APIRequestContext, seconds: number): Promise<boolean> {
+  return (await reportsAt(request, '/Sessions/Playing/Progress')).some(
+    (write) => Math.abs(Number(write.body.PositionTicks ?? 0) / 10_000_000 - seconds) < 0.5,
+  );
+}
+
+/**
+ * Scrubs the bar with a real pointer, that fraction of the way along it.
+ *
+ * `page.mouse` rather than `locator.click()` on purpose: the bar seeks to where
+ * it was *pressed*, so the press needs a real `clientX` and a real `detail` —
+ * `player-controls.tsx` drops a click with no pointer behind it, because such a
+ * click reports (0, 0) and would throw the User back to the beginning.
+ */
+async function scrubTo(page: Page, fraction: number): Promise<void> {
+  const bar = page.getByRole('slider', { name: 'Seek through Arrival' });
+  await expect(bar).toBeVisible();
+  const box = await bar.boundingBox();
+  expect(box).not.toBeNull();
+  await page.mouse.click(
+    (box?.x ?? 0) + (box?.width ?? 0) * fraction,
+    (box?.y ?? 0) + (box?.height ?? 0) / 2,
+  );
+}
+
 async function seedTheLivingRoom(page: Page): Promise<void> {
   await page.request.delete(`${FAKE_JELLYFIN_URL}/__fake/state`);
   await page.request.delete(`${FAKE_JELLYFIN_URL}/__fake/writes`);
@@ -484,4 +518,111 @@ test('playing here again after the hand-over is a new session the Server hears',
       { timeout: 20_000 },
     )
     .toBe(true);
+});
+
+/**
+ * **Scrubbing a handed-away Title says nothing to the Server** (#63), and this
+ * is the assertion that ticket was owed from the start.
+ *
+ * #63's first fix was a `handedOver` guard on the one line in `seekTo` that
+ * reports, and it closed nothing: writing `currentTime` fires `seeked` in a
+ * browser, `seeked` is wired to the same handler as `timeupdate`, and that
+ * handler reported `moved` with no guard at all. So the scrub went out anyway,
+ * one line further on — a `POST /Sessions/Playing/Progress` for a
+ * `PlaySessionId` the Server had already been told stopped.
+ *
+ * **Three unit tests passed over it**, and the reason is structural rather than
+ * careless: happy-dom does not fire `seeked` for a `currentTime` write — the
+ * note on `seekTo` says so in as many words — so in happy-dom the only path to
+ * the reporter is the guarded one, and a test there cannot see that the
+ * unguarded one exists. It is this file's standing rule, now met for the fourth
+ * time: a path that depends on something a real browser does has to be proved
+ * in a real browser.
+ *
+ * Both states the player can be handed over in are walked, because the fix
+ * claims both and they are wrong in different ways: the other app still holding
+ * the Title, where a report moves a resume point out from under the next room,
+ * and the Title back here on a closed session, where a report is simply a lie.
+ * The playhead is asserted to have really moved each time, by more than
+ * `reporting.ts`'s three-second seek threshold — that is what makes a scrub
+ * *news* rather than something the throttle would have dropped regardless, and
+ * without it a silent Server would prove nothing.
+ */
+test('a scrub after the hand-over moves the picture and tells the Server nothing', async ({
+  page,
+  request,
+}) => {
+  await seedTheLivingRoom(page);
+  await signIn(page);
+  await playAndPauseArrival(page);
+
+  await openPlayOn(page);
+  await pressInDialog(page, 'Play on another app', /Living Room TV/);
+  await expect(page.getByText('Playing on Living Room TV.')).toBeVisible();
+  await expect.poll(() => pausedIn(page), { timeout: 20_000 }).toBe(true);
+  await expect
+    .poll(async () => (await reportsAt(request, '/Sessions/Playing/Stopped')).length, {
+      timeout: 20_000,
+    })
+    .toBe(1);
+
+  // Out of the panel and back to the controls, with the other room still
+  // holding the Title — the state the ticket calls the one where this device
+  // must say nothing at all.
+  await pressInDialog(page, 'Play on another app', 'Done');
+  await expect(page.getByRole('dialog', { name: 'Play on another app' })).toBeHidden();
+
+  /*
+   * The baseline is read after the hand-over has settled rather than assumed to
+   * be zero: the hand-over pauses the picture, and a change of play state is
+   * news the reporter sends at once, so progress may legitimately have been
+   * reported by now. What is asserted below is that the scrub adds nothing to
+   * this, which is the claim whatever the number turns out to be.
+   */
+  await page.waitForTimeout(500);
+  const before = (await reportsAt(request, '/Sessions/Playing/Progress')).length;
+
+  const wasAt = await positionIn(page);
+  await scrubTo(page, 0.85);
+
+  // The picture moved, and by enough that a report would have been sent.
+  const scrubbedTo = await positionIn(page);
+  expect(scrubbedTo - wasAt).toBeGreaterThan(3);
+
+  // And the Server heard nothing about it — not in the count, and not at the
+  // position the User scrubbed to, which is the resume point the hand-over
+  // exists to keep out of this device's hands.
+  await page.waitForTimeout(1_000);
+  expect((await reportsAt(request, '/Sessions/Playing/Progress')).length).toBe(before);
+  expect(await progressNear(request, scrubbedTo)).toBe(false);
+
+  /*
+   * The other state: Stop on the other app brings the Title back here, paused,
+   * on a session that is now merely closed. `handedOver` is still true — the
+   * press of Play is the only way back (#59) and has not happened — so a scrub
+   * is owed the same silence, for the other of the two reasons.
+   */
+  await openPlaybackOptions(page);
+  await pressInDialog(page, 'Playback options', 'Play on');
+  await expect(page.getByRole('dialog', { name: 'Play on another app' })).toBeVisible();
+  await pressInDialog(page, 'Play on another app', 'Stop');
+  await expect(page.getByText('Playing on Living Room TV.')).toBeHidden();
+  await pressInDialog(page, 'Play on another app', 'Done');
+  await expect(page.getByRole('dialog', { name: 'Play on another app' })).toBeHidden();
+
+  // Backwards this time: the bar is already at its clamped end, and a scrub that
+  // cannot move cannot be news.
+  const wasAtAgain = await positionIn(page);
+  await scrubTo(page, 0.05);
+  const scrubbedBackTo = await positionIn(page);
+  expect(wasAtAgain - scrubbedBackTo).toBeGreaterThan(3);
+
+  await page.waitForTimeout(1_000);
+  expect((await reportsAt(request, '/Sessions/Playing/Progress')).length).toBe(before);
+  expect(await progressNear(request, scrubbedBackTo)).toBe(false);
+
+  // Still exactly one stop for the playback that was given away, and still no
+  // second session: being quiet is not the same as having started something.
+  expect((await reportsAt(request, '/Sessions/Playing/Stopped')).length).toBe(1);
+  expect((await reportsAt(request, '/Sessions/Playing')).length).toBe(1);
 });
