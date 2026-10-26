@@ -1587,6 +1587,47 @@ function usePlayback(options: {
    */
   const handedOver = useRef(false);
 
+  /**
+   * **The one way a report leaves this app, and a handed-over reporter says
+   * nothing through it — ever** (#63).
+   *
+   * The guard is here rather than at the callers because the callers are not a
+   * list anybody can hold in their head. `seekTo` is one of them, and it was
+   * the only one #63 guarded; the rest are the media element's own events and
+   * an interval, and between them they are every way a browser reports
+   * something nobody pressed: `timeupdate` and `seeked`, `play` and `pause`,
+   * and the ping that keeps a transcode alive. Guarding one caller left the
+   * others saying `moved` and `ping` for a `PlaySessionId` the Server had been
+   * told stopped, which is the whole of the defect #63 set out to fix. Here it
+   * is one claim with no exceptions, and a new way to report cannot reopen it.
+   *
+   * **It takes what to say rather than what has been said**, and that is the
+   * difference between a guard and the look of one. `report(sending.moved(…))`
+   * would call `moved` to build its argument *before* this function is entered,
+   * so the `POST` would already be on the wire and all an early return could
+   * drop is the answer to it. Nothing is asked of the reporter until it is
+   * known that it is allowed to speak.
+   *
+   * `reporter.current` is the live reporter rather than a captured one, which is
+   * safe because the effect below sets it synchronously on the way in and clears
+   * it only after the listeners are off and the interval is cleared — so nothing
+   * can report through a reporter that is not its own.
+   *
+   * **Two reports deliberately do not come through here**, and both are stops:
+   * `handOver`'s own, which sets `handedOver` and would otherwise suppress the
+   * very report that makes the hand-over true, and the effect cleanup's. Neither
+   * needs the protection: `stopped` is once-only in `reporting.ts`, so it is
+   * self-guarding in a way `moved` and `ping` are not.
+   */
+  const report = (say: (sending: PlaybackReporter) => Promise<void>): void => {
+    if (handedOver.current) return;
+    const sending = reporter.current;
+    if (sending === undefined) return;
+    void say(sending).then(() => {
+      if (sending.unreported()) latest.current.onUnreported();
+    });
+  };
+
   useEffect(() => {
     const element = latest.current.video.current;
     if (plan === undefined || element === null) return;
@@ -1611,21 +1652,21 @@ function usePlayback(options: {
     // A new plan is a new play session, so nothing has been given away yet.
     handedOver.current = false;
 
-    /** Reports, then says so if the Server would not take it. */
-    const report = (sent: Promise<void>): void => {
-      void sent.then(() => {
-        if (sending.unreported()) latest.current.onUnreported();
-      });
-    };
-
+    /*
+     * The position is pushed to the screen whatever the reporter is allowed to
+     * say: the picture and the bar belong to the User, and only the report is
+     * ever dropped. `seeked` is here as well as `timeupdate` because a seek
+     * should be on the screen from the event rather than from the next frame —
+     * and because that is how a scrub reaches the reporter in a browser at all.
+     */
     const onTimeUpdate = (): void => {
       position.current = element.currentTime;
       latest.current.onPositionChange(element.currentTime);
-      report(sending.moved(element.currentTime, element.paused));
+      report((say) => say.moved(element.currentTime, element.paused));
     };
     const onPlaybackState = (): void => {
       latest.current.onPausedChange(element.paused);
-      report(sending.moved(element.currentTime, element.paused));
+      report((say) => say.moved(element.currentTime, element.paused));
     };
     // The element's own length wins once it has one: it is the file in front of
     // the User, where the Server's `RunTimeTicks` is what its library says.
@@ -1634,11 +1675,11 @@ function usePlayback(options: {
       if (Number.isFinite(length) && length > 0) latest.current.onDurationChange(length);
     };
     const onEnded = (): void => {
-      report(sending.stopped(element.currentTime));
+      report((say) => say.stopped(element.currentTime));
       latest.current.onEnded();
     };
     const onError = (): void => {
-      report(sending.stopped(position.current, true));
+      report((say) => say.stopped(position.current, true));
       latest.current.onFailure();
     };
 
@@ -1651,9 +1692,12 @@ function usePlayback(options: {
     element.addEventListener('ended', onEnded);
     element.addEventListener('error', onError);
 
-    // Keeps a transcode alive while a paused player sends no progress at all.
+    // Keeps a transcode alive while a paused player sends no progress at all —
+    // and stops dead at a hand-over, where there is no transcode of ours left
+    // to keep alive and the interval would otherwise go on pinging a stopped
+    // session for as long as the User left the page open.
     const ping = window.setInterval(() => {
-      report(sending.ping());
+      report((say) => say.ping());
     }, PING_INTERVAL_MS);
 
     void attachPlaybackSource(element, plan, {
@@ -1670,7 +1714,10 @@ function usePlayback(options: {
       if (plan.delivery === 'file' && plan.startTicks > 0) {
         element.currentTime = secondsOfTicks(plan.startTicks);
       }
-      report(sending.started(element.currentTime));
+      // Through the guard like everything else: a hand-over that happened while
+      // the source was still attaching has already closed this session, and a
+      // `started` after it would open one the Server would never hear stop.
+      report((say) => say.started(element.currentTime));
       // A browser may refuse to start without a gesture; the User pressed Play,
       // so this is a refusal worth showing rather than swallowing.
       const started: unknown = element.play();
@@ -1725,20 +1772,19 @@ function usePlayback(options: {
     /*
      * **A handed-away playback is scrubbed silently** (#63). The picture moves,
      * because the bar is the bar; the Server hears nothing, because there is
-     * nothing truthful left to tell it with this reporter.
+     * nothing truthful left to tell it with this reporter — while another
+     * device still owns the Title that device is the one reporting, and once it
+     * has come back the session is merely closed, so a report would either move
+     * a resume point out from under the other room or lie about a session that
+     * ended.
      *
-     * `stopped` is once-only by design and `moved` is not — that asymmetry is
-     * the whole of the defect — so a seek here would otherwise send a `POST
-     * /Sessions/Playing/Progress` for a `PlaySessionId` the Server has already
-     * been told stopped. Both states it can be in want the same silence, which
-     * is why this is `handedOver` alone and not `toggle`'s pair of conditions:
-     *
-     * - while another device still owns it, that device is the one reporting,
-     *   and the position this app sent in its `PlayNow` is where the other
-     *   room is watching from — so a report from here moves a resume point out
-     *   from under them, which is what the hand-over exists to prevent;
-     * - once it has come back, the session is simply closed, and a closed
-     *   session that is still moving is a lie whatever a Server does with it.
+     * **There is no `handedOver` check here, and its absence is the fix.** #63
+     * put one on this line, which read as the whole answer and was not: writing
+     * `currentTime` above fires `seeked` in a browser, `seeked` is wired to
+     * `onTimeUpdate`, and that reports `moved` — so the scrub this was meant to
+     * silence went out anyway, by a path one line further on. The guard lives in
+     * `report` now, where every report passes through it and this call is
+     * covered by the same claim as the element's own events.
      *
      * **Scrubbing is deliberately not a way back.** Pressing Play is (see
      * `toggle`), and it stays the only one: a seek that re-negotiated would
@@ -1748,12 +1794,7 @@ function usePlayback(options: {
      * the line above has just moved it — so a press of Play after a scrub
      * opens its new session from where they scrubbed to.
      */
-    if (handedOver.current) return;
-    const sending = reporter.current;
-    if (sending === undefined) return;
-    void sending.moved(to, element.paused).then(() => {
-      if (sending.unreported()) options.onUnreported();
-    });
+    report((say) => say.moved(to, element.paused));
   };
 
   return {
@@ -1822,6 +1863,13 @@ function usePlayback(options: {
       handedOver.current = true;
       const sending = reporter.current;
       if (sending === undefined) return;
+      /*
+       * **Not through `report`, and it must not be.** `handedOver` is true by
+       * the line above, so `report` would swallow the one report that makes the
+       * hand-over true on the Server — the stop that #33's acceptance counts.
+       * This is the last thing this reporter ever says, which is exactly why it
+       * is the one call that says it directly.
+       */
       void sending.stopped(at).then(() => {
         if (sending.unreported()) options.onUnreported();
       });
