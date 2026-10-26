@@ -548,81 +548,101 @@ test('playing here again after the hand-over is a new session the Server hears',
  * *news* rather than something the throttle would have dropped regardless, and
  * without it a silent Server would prove nothing.
  */
-test('a scrub after the hand-over moves the picture and tells the Server nothing', async ({
+test.describe('scrubbing a handed-away Title', () => {
+  /*
+   * **The pointer projects only**, which is this file's established shape for a
+   * pointer's assertion (`trickplay-speed-and-quality.spec.ts` skips its hover
+   * test the same way). The `keyboard-only` project puts
+   * `pointer-events: none !important` on everything on purpose, so a click on
+   * the bar moves nothing there and the test would fail on a playhead that
+   * never went anywhere rather than on anything about reporting.
+   *
+   * The keyboard route to `seekTo` — Left/Right on the bar, and a remote's
+   * Rewind and Fast Forward — is **not** left unguarded by this skip: every one
+   * of them reports through the single `report` in `usePlayback`, which is the
+   * whole point of where the fix was put. And it could not be asserted here
+   * anyway: `SEEK_STEP_SECONDS` is 10 against a six-second test file, so one
+   * press clamps to the end and risks `ended` closing the player mid-test.
+   * What needed a real browser is the `seeked` event, and that is proved below.
+   */
+  test.skip(({ keyboardOnly }) => keyboardOnly, 'dragging the bar is a pointer’s to do');
+
+  test('a scrub after the hand-over moves the picture and tells the Server nothing', async ({
   page,
   request,
 }) => {
-  await seedTheLivingRoom(page);
-  await signIn(page);
-  await playAndPauseArrival(page);
+    await seedTheLivingRoom(page);
+    await signIn(page);
+    await playAndPauseArrival(page);
 
-  await openPlayOn(page);
-  await pressInDialog(page, 'Play on another app', /Living Room TV/);
-  await expect(page.getByText('Playing on Living Room TV.')).toBeVisible();
-  await expect.poll(() => pausedIn(page), { timeout: 20_000 }).toBe(true);
-  await expect
-    .poll(async () => (await reportsAt(request, '/Sessions/Playing/Stopped')).length, {
-      timeout: 20_000,
-    })
-    .toBe(1);
+    await openPlayOn(page);
+    await pressInDialog(page, 'Play on another app', /Living Room TV/);
+    await expect(page.getByText('Playing on Living Room TV.')).toBeVisible();
+    await expect.poll(() => pausedIn(page), { timeout: 20_000 }).toBe(true);
+    await expect
+      .poll(async () => (await reportsAt(request, '/Sessions/Playing/Stopped')).length, {
+        timeout: 20_000,
+      })
+      .toBe(1);
 
-  // Out of the panel and back to the controls, with the other room still
-  // holding the Title — the state the ticket calls the one where this device
-  // must say nothing at all.
-  await pressInDialog(page, 'Play on another app', 'Done');
-  await expect(page.getByRole('dialog', { name: 'Play on another app' })).toBeHidden();
+    // Out of the panel and back to the controls, with the other room still
+    // holding the Title — the state the ticket calls the one where this device
+    // must say nothing at all.
+    await pressInDialog(page, 'Play on another app', 'Done');
+    await expect(page.getByRole('dialog', { name: 'Play on another app' })).toBeHidden();
 
-  /*
-   * The baseline is read after the hand-over has settled rather than assumed to
-   * be zero: the hand-over pauses the picture, and a change of play state is
-   * news the reporter sends at once, so progress may legitimately have been
-   * reported by now. What is asserted below is that the scrub adds nothing to
-   * this, which is the claim whatever the number turns out to be.
-   */
-  await page.waitForTimeout(500);
-  const before = (await reportsAt(request, '/Sessions/Playing/Progress')).length;
+    /*
+     * The baseline is read after the hand-over has settled rather than assumed to
+     * be zero: the hand-over pauses the picture, and a change of play state is
+     * news the reporter sends at once, so progress may legitimately have been
+     * reported by now. What is asserted below is that the scrub adds nothing to
+     * this, which is the claim whatever the number turns out to be.
+     */
+    await page.waitForTimeout(500);
+    const before = (await reportsAt(request, '/Sessions/Playing/Progress')).length;
 
-  const wasAt = await positionIn(page);
-  await scrubTo(page, 0.85);
+    const wasAt = await positionIn(page);
+    await scrubTo(page, 0.85);
 
-  // The picture moved, and by enough that a report would have been sent.
-  const scrubbedTo = await positionIn(page);
-  expect(scrubbedTo - wasAt).toBeGreaterThan(3);
+    // The picture moved, and by enough that a report would have been sent.
+    const scrubbedTo = await positionIn(page);
+    expect(scrubbedTo - wasAt).toBeGreaterThan(3);
 
-  // And the Server heard nothing about it — not in the count, and not at the
-  // position the User scrubbed to, which is the resume point the hand-over
-  // exists to keep out of this device's hands.
-  await page.waitForTimeout(1_000);
-  expect((await reportsAt(request, '/Sessions/Playing/Progress')).length).toBe(before);
-  expect(await progressNear(request, scrubbedTo)).toBe(false);
+    // And the Server heard nothing about it — not in the count, and not at the
+    // position the User scrubbed to, which is the resume point the hand-over
+    // exists to keep out of this device's hands.
+    await page.waitForTimeout(1_000);
+    expect((await reportsAt(request, '/Sessions/Playing/Progress')).length).toBe(before);
+    expect(await progressNear(request, scrubbedTo)).toBe(false);
 
-  /*
-   * The other state: Stop on the other app brings the Title back here, paused,
-   * on a session that is now merely closed. `handedOver` is still true — the
-   * press of Play is the only way back (#59) and has not happened — so a scrub
-   * is owed the same silence, for the other of the two reasons.
-   */
-  await openPlaybackOptions(page);
-  await pressInDialog(page, 'Playback options', 'Play on');
-  await expect(page.getByRole('dialog', { name: 'Play on another app' })).toBeVisible();
-  await pressInDialog(page, 'Play on another app', 'Stop');
-  await expect(page.getByText('Playing on Living Room TV.')).toBeHidden();
-  await pressInDialog(page, 'Play on another app', 'Done');
-  await expect(page.getByRole('dialog', { name: 'Play on another app' })).toBeHidden();
+    /*
+     * The other state: Stop on the other app brings the Title back here, paused,
+     * on a session that is now merely closed. `handedOver` is still true — the
+     * press of Play is the only way back (#59) and has not happened — so a scrub
+     * is owed the same silence, for the other of the two reasons.
+     */
+    await openPlaybackOptions(page);
+    await pressInDialog(page, 'Playback options', 'Play on');
+    await expect(page.getByRole('dialog', { name: 'Play on another app' })).toBeVisible();
+    await pressInDialog(page, 'Play on another app', 'Stop');
+    await expect(page.getByText('Playing on Living Room TV.')).toBeHidden();
+    await pressInDialog(page, 'Play on another app', 'Done');
+    await expect(page.getByRole('dialog', { name: 'Play on another app' })).toBeHidden();
 
-  // Backwards this time: the bar is already at its clamped end, and a scrub that
-  // cannot move cannot be news.
-  const wasAtAgain = await positionIn(page);
-  await scrubTo(page, 0.05);
-  const scrubbedBackTo = await positionIn(page);
-  expect(wasAtAgain - scrubbedBackTo).toBeGreaterThan(3);
+    // Backwards this time: the bar is already at its clamped end, and a scrub that
+    // cannot move cannot be news.
+    const wasAtAgain = await positionIn(page);
+    await scrubTo(page, 0.05);
+    const scrubbedBackTo = await positionIn(page);
+    expect(wasAtAgain - scrubbedBackTo).toBeGreaterThan(3);
 
-  await page.waitForTimeout(1_000);
-  expect((await reportsAt(request, '/Sessions/Playing/Progress')).length).toBe(before);
-  expect(await progressNear(request, scrubbedBackTo)).toBe(false);
+    await page.waitForTimeout(1_000);
+    expect((await reportsAt(request, '/Sessions/Playing/Progress')).length).toBe(before);
+    expect(await progressNear(request, scrubbedBackTo)).toBe(false);
 
-  // Still exactly one stop for the playback that was given away, and still no
-  // second session: being quiet is not the same as having started something.
-  expect((await reportsAt(request, '/Sessions/Playing/Stopped')).length).toBe(1);
-  expect((await reportsAt(request, '/Sessions/Playing')).length).toBe(1);
+    // Still exactly one stop for the playback that was given away, and still no
+    // second session: being quiet is not the same as having started something.
+    expect((await reportsAt(request, '/Sessions/Playing/Stopped')).length).toBe(1);
+    expect((await reportsAt(request, '/Sessions/Playing')).length).toBe(1);
+  });
 });
