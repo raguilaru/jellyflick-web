@@ -13,7 +13,7 @@ import {
   savesHaveSettled,
   setFakeState,
 } from '../fake-jellyfin/control';
-import { SAMPLE_PASSWORD } from '../fake-jellyfin/data';
+import { BLUEY_SEASON_1_SUBTITLE_PACK, SAMPLE_PASSWORD } from '../fake-jellyfin/data';
 import { fakeJellyfinUrl } from '../fake-jellyfin/url';
 
 /**
@@ -432,6 +432,137 @@ describe('remembering an offset', () => {
     });
 
     await openTiming();
+
+    expect(readout()).toBe(en['player.subtitlesInSync']);
+  });
+});
+
+/**
+ * **Story 102's cross-Episode half, delivered** (#47).
+ *
+ * The story reads literally: an offset "applies to every Episode that uses the
+ * same file". Until #47 that was only half-reachable — `subtitleFileOf`
+ * preferred `MediaStream.Path` on the strength of an *assumption* about what a
+ * real Server sends, and the fake gave no subtitle stream a path at all, so
+ * the whole `path:` branch was unexercised against a Server and this half of
+ * the story was never shown working.
+ *
+ * #47 measured it against the host's Jellyfin 12.2.0: an external sidecar
+ * carries a real absolute server-side path, a stream inside the container
+ * carries `null`. The fake now serves that split, and both Episodes of Bluey
+ * Season 1 point at one pack — `BLUEY_SEASON_1_SUBTITLE_PACK` — which is what
+ * these two tests are about.
+ *
+ * They are a pair on purpose. The first proves the app really writes the
+ * **shared** key when a User adjusts an Episode; the second proves another
+ * Episode reads it back. Either alone would pass with a key that was merely
+ * stable per Episode.
+ */
+describe('an offset on a subtitle file two Episodes share', () => {
+  /** What `subtitleFileOf` answers for that sidecar: the path, not the stream. */
+  const PACK_FILE = `path:${BLUEY_SEASON_1_SUBTITLE_PACK}`;
+
+  /**
+   * Plays Bluey and turns the shared pack on. Which Episode `Play` starts is
+   * #18's rule — the first unwatched one — so the caller seeds `played` to
+   * choose.
+   */
+  async function playBlueyWithThePack(episodeName: string): Promise<void> {
+    await signIn();
+    await screen.findByRole('list', { name: 'New on Jellyflick' });
+    pressCard('New on Jellyflick', 'Bluey');
+    await screen.findByRole('heading', { name: 'Bluey', level: 1 });
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    await screen.findByRole('region', { name: `Playing Bluey: ${episodeName}` });
+    const open = await screen.findByRole('button', {
+      name: `Audio and subtitles for Bluey: ${episodeName}`,
+    });
+    fireEvent.click(open);
+    const picker = await screen.findByRole('dialog', { name: en['player.tracksLabel'] });
+    const group = within(picker).getByRole('group', { name: en['player.subtitleTracks'] });
+    fireEvent.click(within(group).getByRole('button', { name: 'English (pack)' }));
+  }
+
+  /** The timing panel for an Episode, whose button carries the Episode's name. */
+  async function openTimingFor(episodeName: string): Promise<void> {
+    fireEvent.click(
+      screen.getByRole('button', { name: `Audio and subtitles for Bluey: ${episodeName}` }),
+    );
+    const picker = await screen.findByRole('dialog', { name: en['player.tracksLabel'] });
+    fireEvent.click(within(picker).getByRole('button', { name: en['player.subtitleTiming'] }));
+    await screen.findByRole('dialog', { name: en['player.subtitleTiming'] });
+  }
+
+  /**
+   * The write, and the **key** is the assertion: a User adjusting the pack on
+   * one Episode must store it against the file, not against this Episode's
+   * media source — or the Episode after it would start in sync again.
+   */
+  it('is stored against the shared file rather than the Episode', async () => {
+    await playBlueyWithThePack('The Magic Xylophone');
+    await openTimingFor('The Magic Xylophone');
+    shiftLater(3);
+    fireEvent.click(screen.getByRole('button', { name: en['player.subtitleTimingDone'] }));
+
+    await waitFor(async () => {
+      expect(await savedOffsets()).toEqual([{ file: PACK_FILE, seconds: 0.3 }]);
+    });
+  });
+
+  /**
+   * And the other Episode reads it back. `played` puts `s1e1` behind the User
+   * so #18's rule starts `s1e2` — a different Episode, a different media
+   * source, the same `.srt`.
+   */
+  it('is already in force on the next Episode, which shares the file', async () => {
+    await setFakeState({
+      played: { [RAFAEL]: ['episode-bluey-s1e1'] },
+      displayPreferences: {
+        [`jellyflick|jellyflick|${RAFAEL}`]: {
+          [SUBTITLE_OFFSETS_KEY]: JSON.stringify([{ file: PACK_FILE, seconds: 0.3 }]),
+        },
+      },
+    });
+
+    await playBlueyWithThePack('Hotel');
+    await openTimingFor('Hotel');
+
+    expect(readout()).toBe('Subtitles 0.3 s later');
+  });
+
+  /**
+   * The control, and the reason the pair above is not enough on its own: the
+   * **embedded** track of the very same Episode has no file of its own, so it
+   * keys per media source and the pack's offset must not touch it. Without
+   * this, a key that ignored `Path` entirely — one offset for "the subtitles
+   * of this Episode" — would pass both tests above.
+   */
+  it('does not shift the Episode’s own embedded track', async () => {
+    await setFakeState({
+      played: { [RAFAEL]: ['episode-bluey-s1e1'] },
+      displayPreferences: {
+        [`jellyflick|jellyflick|${RAFAEL}`]: {
+          [SUBTITLE_OFFSETS_KEY]: JSON.stringify([{ file: PACK_FILE, seconds: 0.3 }]),
+        },
+      },
+    });
+
+    await signIn();
+    await screen.findByRole('list', { name: 'New on Jellyflick' });
+    pressCard('New on Jellyflick', 'Bluey');
+    await screen.findByRole('heading', { name: 'Bluey', level: 1 });
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    await screen.findByRole('region', { name: 'Playing Bluey: Hotel' });
+    const open = await screen.findByRole('button', {
+      name: 'Audio and subtitles for Bluey: Hotel',
+    });
+    fireEvent.click(open);
+    const picker = await screen.findByRole('dialog', { name: en['player.tracksLabel'] });
+    const group = within(picker).getByRole('group', { name: en['player.subtitleTracks'] });
+    // The muxed-in track, which the Server sends with `Path: null`.
+    fireEvent.click(within(group).getByRole('button', { name: 'English', exact: true }));
+
+    await openTimingFor('Hotel');
 
     expect(readout()).toBe(en['player.subtitlesInSync']);
   });
