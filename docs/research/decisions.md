@@ -481,18 +481,79 @@ muxed into the video, which has no file of its own: there the file **is** the
 video, and the media source names it. `Path` is read through
 `src/jellyfin/gateway.ts` and `media-tracks.ts` for this and nothing else.
 
-**To check against a real Server**: `Path` for an external subtitle is a path on
-the Server's own disk, which is what makes it stable and shared. A Server that
-leaves it null for external streams — or one behind a path-hiding proxy — falls
-back to the per-stream key and loses only story 102's second half; the offset
-still follows the User to every device.
+**Measured against a real Server** (#47, 2026-10-20), which replaces the
+assumption this section used to carry. The host's own Jellyfin reports
+**12.2.0**, and two reads were made with a server API key — `GET /Items` with
+`fields=MediaSources`, and `POST /Items/{itemId}/PlaybackInfo`, which is the
+endpoint this app actually calls and therefore the one that settles it. Both
+200; in 40 sampled Episodes, 20 external subtitle streams and 369 embedded.
 
-Two figures are Jellyflick's own, because neither Jellyfin nor the spec has one:
-the offset is clamped to **±30 seconds**, so a held button on a remote cannot
-leave a User with subtitles they will never see, and at most **100** files'
-offsets are kept, newest write last. They share one `CustomPrefs` string on a
-Server that is somebody's Raspberry Pi, and a household cannot be allowed to
-collect a line per subtitle file it has ever watched.
+| | `IsExternal` | `MediaStream.Path` |
+| --- | --- | --- |
+| A sidecar `.srt` | `true` | **a real absolute server-side path** |
+| A stream inside the container | `false` | **`null`** |
+
+So the design above is correct and story 102's cross-Episode half is reachable:
+the key for an external subtitle really is the file, and two Episodes sharing
+one `.srt` really do share one offset. `Codec` was `subrip` throughout.
+
+Two things the measurement added that the assumption had not predicted:
+
+- **Paths carry language suffixes** — `.eng.srt`, `.spa.sdh.srt` — so one
+  Episode commonly has *several* external subtitle files, and each correctly
+  gets its own key. The per-file key was right for a reason beyond the one it
+  was chosen for.
+- **It was taken with an admin credential**, and 7 of the 10 users on that
+  Server are not administrators. Jellyfin redacts some path fields for
+  non-elevated users, so a non-admin token may receive `Path: null` for
+  external subtitles too, which would lose story 102's cross-Episode half for
+  most of a household — quietly. It cannot be settled with an API key, because
+  Jellyfin's keys are server-wide rather than user-scoped. **Open as #66.**
+
+A Server that leaves `Path` null for external streams — a non-admin caller, or
+one behind a path-hiding proxy — falls back to the per-stream key and loses
+only story 102's cross-Episode half; the offset still follows the User to every
+device. That degradation is by design and needs no code of its own.
+
+The fake serves this split rather than approximating it
+(`test/fake-jellyfin/data.ts`): external streams carry a path, embedded ones
+carry an explicit `null`. Giving every subtitle a path, or none, would leave
+half of `subtitleFileOf` unexercised against a Server — which is how this half
+of story 102 went unproven for as long as it did. The paths there are
+illustrative; the host's real library paths are deliberately not in this repo.
+
+### The two figures that are Jellyflick's own
+
+Neither Jellyfin nor the spec has either, so #47 asked for a second opinion on
+both. **Both stand, and here is the reason rather than the assertion.**
+
+- **±30 seconds.** The clamp exists for a held button on a remote, not for
+  typical mistiming, and the two have very different scales. Real desync is
+  sub-second to a few seconds; the large *constant* offset that does occur is a
+  file timed against a different release — one carrying a distributor's intro
+  card — and that is tens of seconds, inside this bound. Past about half a
+  minute the honest diagnosis is **the wrong subtitle file**, not a mistimed
+  one, and no offset is the fix. So 30 s covers every case worth covering and
+  still leaves a User able to walk back by hand from the far end.
+- **100 files.** The binding constraint is the length of one `CustomPrefs`
+  value, and `jellyfin-api.md` §7 records no documented limit, so this is
+  bounded by judgement rather than by a measured ceiling — stated plainly
+  because that is the honest status. With the real path shape above, an entry
+  runs about 90–120 bytes, so 100 of them is roughly 9–12 KB in one string.
+  The language-suffix finding looked at first like a reason to raise it, since
+  one Episode can hold several sidecars — but only a file a User **adjusted**
+  is ever stored (`withSubtitleOffset` drops a zero), and adjusting is rare and
+  deliberate. What a household *could* key is not what it stores. 100 stays.
+
+**One thing the second opinion did turn up, recorded rather than changed.**
+Eviction is by **write** recency, not use: the newest write goes last and the
+oldest falls off. So a file a household relies on nightly, adjusted once a year
+ago, is evicted before a file adjusted once and never watched again. Refreshing
+recency on *read* would fix the ordering and cost a Client Settings write on
+every playback, which is plainly the worse trade on a Server that is somebody's
+Raspberry Pi. Story 102 asks for neither, the limit is high enough that no
+household is expected to reach it, and so this is left as it is — written down
+so the next person meets a decision and not a surprise.
 
 ## 17. The offset is saved when an adjustment finishes, not when it changes
 

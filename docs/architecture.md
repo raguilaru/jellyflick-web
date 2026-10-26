@@ -334,6 +334,17 @@ Note that `routing.ts` matches **whole segments**, so a pattern like
 An unknown path returns 404 with a message naming what to add, so a missing route
 never looks like a product bug.
 
+**Where the fake must not round a Server's answer off.** Sample data is allowed
+to be small, but not to be uniform where the real Server varies — a fake that
+answers the same way down a branch the app chooses on leaves that choice
+unexercised. The standing example is `MediaStream.Path`: #47 measured a real
+Jellyfin 12.2.0 and external subtitles carry a real path while embedded ones
+carry `null`, so the fake carries both, the embedded `null` written out
+explicitly rather than left off. Before #47 it gave every subtitle stream no
+path at all, and `subtitleFileOf`'s `path:` branch — half of story 102 — had
+never run against a Server in any suite. Paths in the fake are illustrative;
+a host's real library paths do not belong in this repo.
+
 Control endpoints, outside Jellyfin's own namespace and shared by both runners:
 
 | Endpoint | Use |
@@ -2166,8 +2177,16 @@ offset in force and is the only thing that saves it.
   it cannot be pressed, and not dimmed at all when it can.
 - **An offset belongs to a subtitle file**, which is `subtitleFileOf`:
   `MediaStream.Path` where the Server gave one, and the media source plus the
-  stream index otherwise. `decisions.md` §16 is why, and what to check against a
-  real Server.
+  stream index otherwise. `decisions.md` §16 is why — and it is now a
+  **measurement** rather than the assumption it began as (#47): against the
+  host's Jellyfin 12.2.0, an external sidecar carries a real absolute
+  server-side path and a stream inside the container carries `null`, so story
+  102's cross-Episode half is reachable and the fake serves that same split.
+  The one thing still open is whether a **non-admin** token sees the path at
+  all, since Jellyfin redacts some path fields for unelevated users and the
+  measurement used an admin credential — #66, and if it goes the wrong way most
+  of a household silently falls back to the per-stream key and keeps only the
+  per-device half of the story.
 - **It is saved when an adjustment finishes**, not when it changes
   (`decisions.md` §17). The panel reports a button or key let go, or one press
   of Reset or Sync; the player counts those and an **effect** does the save. The
@@ -2225,6 +2244,17 @@ Server — in `test/unit/shifting-the-subtitles.test.tsx`. What only a browser c
 say is `test/e2e/the-subtitle-offset.spec.ts`: the panel's box measured against
 the cue's and the seek bar's at both widths, a remote reaching and adjusting it,
 and a button really held down.
+
+**Story 102's cross-Episode half is delivered in that journey file** (#47), as
+three tests that only mean something together: an offset a User makes on one
+Bluey Episode is stored against the **shared** `.srt` rather than against the
+Episode; the next Episode, which points at the same pack, opens with it already
+in force; and that same Episode's own **embedded** track is not shifted by it.
+The third is what makes the first two worth having — a key that ignored `Path`
+and simply kept one offset per Episode would pass both of the others. Dropping
+the `path:` branch fails the first two, which is how they were checked. None of
+it was statable before #47, because the fake gave no subtitle stream a path at
+all and the `path:` branch never ran against a Server.
 
 One hazard that journey met first, and the reason the rule in "Running the
 tests" exists: **a Client Settings save is written behind the User**, so one a

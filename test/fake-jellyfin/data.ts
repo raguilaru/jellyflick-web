@@ -154,6 +154,28 @@ export type FakeMediaStream = {
   /** What the *file* was marked with, not what a User prefers. */
   IsDefault?: boolean;
   IsForced?: boolean;
+  /**
+   * Whether this subtitle is a **file beside the video** rather than a stream
+   * muxed into it. Measured against the host's own Jellyfin 12.2.0 in #47.
+   */
+  IsExternal?: boolean;
+  /**
+   * `MediaStream.Path`: the subtitle file on the Server's own disk, which is
+   * what the Subtitle Offset is remembered per (#28, story 102).
+   *
+   * **The split is the point, and #47 is why it is written down.** The real
+   * Server was measured: an external sidecar gets a real absolute path, and a
+   * stream inside the container gets `null`. A fake that gave *every* subtitle
+   * a path, or none, would be lying in a way that hides a regression — half of
+   * `subtitleFileOf` would never run against it. So external streams here
+   * carry a path and embedded ones carry `null`, explicitly rather than by
+   * omission, because "the Server said null" is the measured answer and not an
+   * absence of data.
+   *
+   * The paths are **illustrative**. The host's real library paths are
+   * deliberately not copied into this repo.
+   */
+  Path?: string | null;
 };
 
 /**
@@ -657,6 +679,21 @@ export function createSampleData(): FakeJellyfinState {
 export const SAMPLE_PASSWORD = 'correct horse';
 
 /**
+ * The one external subtitle file **two** Episodes of Bluey Season 1 both point
+ * at: a subtitle pack dropped beside the season rather than one `.srt` per
+ * Episode.
+ *
+ * Exported so a test can assert the shared key without writing the path out a
+ * second time — a copy would keep passing if the fake's own value changed, and
+ * the thing under test is precisely that the two Episodes agree.
+ *
+ * It is **illustrative**. #47 measured the real shape against the host's
+ * Jellyfin 12.2.0 — an absolute server-side path carrying a language suffix —
+ * and the host's own library paths are deliberately not in this repo.
+ */
+export const BLUEY_SEASON_1_SUBTITLE_PACK = '/media/tv/Bluey/Season 1/Bluey.S01.eng.srt';
+
+/**
  * Four libraries, so a client has to merge several and skip the ones that hold
  * no Titles: two of Movies, one of Series, and one of music.
  */
@@ -815,13 +852,13 @@ const SAMPLE_ITEMS: readonly FakeItem[] = [
       { Index: 0, Type: 'Video', Codec: 'vp9', Language: 'und' },
       { Index: 1, Type: 'Audio', Codec: 'opus', Language: 'eng', DisplayTitle: 'English', IsDefault: true },
       { Index: 2, Type: 'Audio', Codec: 'opus', Language: 'fra', DisplayTitle: 'French' },
-      { Index: 3, Type: 'Subtitle', Codec: 'subrip', Language: 'eng', DisplayTitle: 'English' },
-      { Index: 4, Type: 'Subtitle', Codec: 'subrip', Language: 'spa', DisplayTitle: 'Spanish' },
+      { Index: 3, Type: 'Subtitle', Codec: 'subrip', Language: 'eng', DisplayTitle: 'English', IsExternal: false, Path: null },
+      { Index: 4, Type: 'Subtitle', Codec: 'subrip', Language: 'spa', DisplayTitle: 'Spanish', IsExternal: false, Path: null },
       // A **styled** track (#29): ASS, which a capable device draws with its
       // own fonts and positions and every other device reads as plain text.
       // Arrival is the right Title for it — the film's whole subject is a
       // written language, and its subtitled signs are typeset.
-      { Index: 5, Type: 'Subtitle', Codec: 'ass', Language: 'jpn', DisplayTitle: 'Japanese (Styled)' },
+      { Index: 5, Type: 'Subtitle', Codec: 'ass', Language: 'jpn', DisplayTitle: 'Japanese (Styled)', IsExternal: false, Path: null },
       /*
        * **Both graphical families** (#30), and the pair is the point: they
        * take opposite paths on the very same device.
@@ -851,8 +888,8 @@ const SAMPLE_ITEMS: readonly FakeItem[] = [
        * adding them cannot change which track the Server picks by default for
        * a User whose account asks for English or Spanish.
        */
-      { Index: 6, Type: 'Subtitle', Codec: 'pgssub', Language: 'por', DisplayTitle: 'Portuguese (PGS)' },
-      { Index: 7, Type: 'Subtitle', Codec: 'dvdsub', Language: 'deu', DisplayTitle: 'German (VobSub)' },
+      { Index: 6, Type: 'Subtitle', Codec: 'pgssub', Language: 'por', DisplayTitle: 'Portuguese (PGS)', IsExternal: false, Path: null },
+      { Index: 7, Type: 'Subtitle', Codec: 'dvdsub', Language: 'deu', DisplayTitle: 'German (VobSub)', IsExternal: false, Path: null },
     ],
     // The fonts that styled track names, muxed in beside the video. The second
     // one carries no `MimeType`, which is what a real Server often sends and
@@ -945,7 +982,7 @@ const SAMPLE_ITEMS: readonly FakeItem[] = [
     MediaStreams: [
       { Index: 0, Type: 'Video', Codec: 'hevc', Language: 'und' },
       { Index: 1, Type: 'Audio', Codec: 'eac3', Language: 'eng', DisplayTitle: 'English', IsDefault: true },
-      { Index: 2, Type: 'Subtitle', Codec: 'pgssub', Language: 'eng', DisplayTitle: 'English (PGS)' },
+      { Index: 2, Type: 'Subtitle', Codec: 'pgssub', Language: 'eng', DisplayTitle: 'English (PGS)', IsExternal: false, Path: null },
     ],
     // 4K HEVC in Matroska with Dolby audio: the file nothing modest plays, so
     // the Server has to be asked to transcode it.
@@ -995,7 +1032,7 @@ const SAMPLE_ITEMS: readonly FakeItem[] = [
     People: [{ Name: 'Adam Scott', Type: 'Actor', Role: 'Mark Scout' }],
     MediaStreams: [
       { Index: 1, Type: 'Audio', Codec: 'aac', Language: 'eng', DisplayTitle: 'English', IsDefault: true },
-      { Index: 2, Type: 'Subtitle', Codec: 'subrip', Language: 'eng', DisplayTitle: 'English' },
+      { Index: 2, Type: 'Subtitle', Codec: 'subrip', Language: 'eng', DisplayTitle: 'English', IsExternal: false, Path: null },
     ],
     ProviderIds: { Imdb: 'tt11280740' },
     libraryId: 'lib-series',
@@ -1086,6 +1123,39 @@ const SAMPLE_ITEMS: readonly FakeItem[] = [
     ImageTags: { Primary: 'tag-bluey-s1e1' },
     Overview: 'Bandit is frozen by a magic xylophone.',
     RunTimeTicks: 7 * 60 * 10_000_000,
+    /*
+     * **Story 102's cross-Episode half, and the only place it is reachable.**
+     *
+     * Two subtitles per Episode, and the pair is the whole point:
+     *
+     * - index 2 is **muxed into the video**, so it has no file of its own and
+     *   the Server sends `Path: null`. Its key is
+     *   `stream:<mediaSourceId>:2`, which differs per Episode because the
+     *   media source does — correct, since those really are two files.
+     * - index 3 is **a sidecar beside the season**, and `episode-bluey-s1e2`
+     *   carries the **same `Path`**: one subtitle pack a household dropped
+     *   next to Season 1. That is what makes "the offset applies to every
+     *   Episode that uses the same file" true rather than aspirational, and it
+     *   cannot be shown with one Episode or with an embedded track.
+     *
+     * The path is illustrative. #47 measured the real shape against the host's
+     * Jellyfin 12.2.0 — an absolute server-side path with a language suffix —
+     * and deliberately did not copy the host's own library paths here.
+     */
+    MediaStreams: [
+      { Index: 0, Type: 'Video', Codec: 'vp9', Language: 'und' },
+      { Index: 1, Type: 'Audio', Codec: 'opus', Language: 'eng', DisplayTitle: 'English', IsDefault: true },
+      { Index: 2, Type: 'Subtitle', Codec: 'subrip', Language: 'eng', DisplayTitle: 'English', IsExternal: false, Path: null },
+      {
+        Index: 3,
+        Type: 'Subtitle',
+        Codec: 'subrip',
+        Language: 'eng',
+        DisplayTitle: 'English (pack)',
+        IsExternal: true,
+        Path: BLUEY_SEASON_1_SUBTITLE_PACK,
+      },
+    ],
     media: { Container: 'webm', VideoCodec: 'vp9', Height: 1080 },
     libraryId: 'lib-kids',
   },
@@ -1102,6 +1172,42 @@ const SAMPLE_ITEMS: readonly FakeItem[] = [
     SeriesPrimaryImageTag: 'tag-bluey',
     ParentIndexNumber: 1,
     IndexNumber: 2,
+    // The **same** sidecar as `episode-bluey-s1e1` at index 3, which is what
+    // story 102's cross-Episode half is about; the embedded track at index 2
+    // is this Episode's own and keys per media source.
+    /*
+     * **Story 102's cross-Episode half, and the only place it is reachable.**
+     *
+     * Two subtitles per Episode, and the pair is the whole point:
+     *
+     * - index 2 is **muxed into the video**, so it has no file of its own and
+     *   the Server sends `Path: null`. Its key is
+     *   `stream:<mediaSourceId>:2`, which differs per Episode because the
+     *   media source does — correct, since those really are two files.
+     * - index 3 is **a sidecar beside the season**, and `episode-bluey-s1e2`
+     *   carries the **same `Path`**: one subtitle pack a household dropped
+     *   next to Season 1. That is what makes "the offset applies to every
+     *   Episode that uses the same file" true rather than aspirational, and it
+     *   cannot be shown with one Episode or with an embedded track.
+     *
+     * The path is illustrative. #47 measured the real shape against the host's
+     * Jellyfin 12.2.0 — an absolute server-side path with a language suffix —
+     * and deliberately did not copy the host's own library paths here.
+     */
+    MediaStreams: [
+      { Index: 0, Type: 'Video', Codec: 'vp9', Language: 'und' },
+      { Index: 1, Type: 'Audio', Codec: 'opus', Language: 'eng', DisplayTitle: 'English', IsDefault: true },
+      { Index: 2, Type: 'Subtitle', Codec: 'subrip', Language: 'eng', DisplayTitle: 'English', IsExternal: false, Path: null },
+      {
+        Index: 3,
+        Type: 'Subtitle',
+        Codec: 'subrip',
+        Language: 'eng',
+        DisplayTitle: 'English (pack)',
+        IsExternal: true,
+        Path: BLUEY_SEASON_1_SUBTITLE_PACK,
+      },
+    ],
     media: { Container: 'webm', VideoCodec: 'vp9', Height: 1080 },
     libraryId: 'lib-kids',
   },
