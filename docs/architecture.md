@@ -106,7 +106,9 @@ src/
                         tick — which Episode that is lives in
                         `src/title/play-target.ts`.
   navigation/           Arrow keys and focus: `nearest.ts` the geometry,
-                        `reveal.ts` how far a scroller must move, `focusable.ts`
+                        `reveal.ts` how far a scroller must move,
+                        `settled-scroll.ts` seeing that scroll through to the
+                        offset it asked for (#64), `focusable.ts`
                         what the arrows reach, `spatial-navigation.ts` the
                         wiring, `input-modality.ts` the focus highlight.
   ratings/              The extra ratings an MDBList key buys (#20):
@@ -300,7 +302,7 @@ browser's main thread through CDP (`test/e2e/fixtures.ts`) and is the standing
 way to ask the question before CI does; `--repeat-each` is the other half, for
 anything intermittent. Both are off by default.
 
-Two traps that throttle has already caught, worth knowing before writing a test
+Three traps a full run has already caught, worth knowing before writing a test
 that waits for something:
 
 - **A readout drawn from a moving number is a window, not a state.** The seek
@@ -311,6 +313,15 @@ that waits for something:
   reveals a card's My List control, and adding a Title puts a new Row above the
   card, so a pointer that has not moved is no longer on it. The Billboard's
   artwork can shift the page again later. Re-establish the state, and retry.
+- **A smooth scroll whose end nothing observes can stop short.** The browser
+  runs the animation and `scrollend` is Chrome 114, far past the floor, so
+  nothing says when it finished — and an animation started by an event that
+  will not come again has nothing left to finish it. What was asked for can be
+  exact while what the browser realises is a few pixels off, and no amount of
+  polling saves that: the scroller is at rest, simply not where it was sent.
+  Watch it to a standstill and take the last few pixels by hand
+  (`src/navigation/settled-scroll.ts`), and read a scroller's position in a test
+  as a tolerance rather than as an exact number.
 
 ## Adding an endpoint to the fake Jellyfin
 
@@ -3179,6 +3190,22 @@ it is a key.
   to its focused card, and `spatial-navigation.ts` scrolls the page to the
   focused Row with a margin that clears both bars. `scrollTo({ behavior })` is
   Chrome 61, and a device without it falls back to a jump.
+- **A Row's own scroll is then watched to a standstill** (#64), by
+  `settled-scroll.ts`, because `reveal.ts` being exact is not the same as the
+  browser landing where it was sent: a smooth scroll is an animation nothing
+  started, and a Row is scrolled by focus *moving*, so once focus is already on
+  the card the Row wants there is no further event to finish the job — a Row a
+  few pixels short stays there. The watch is a `requestAnimationFrame` loop
+  (`scrollend` is Chrome 114), it takes the last few pixels by hand once the
+  offset has stopped changing, and it is written to lose every argument: a
+  scroller moving *away* is the User's and is let go of at once, a rest more
+  than 8px out is somebody else's business and is left alone, focus moving to
+  another card and the Row unmounting both abandon it, and it gives up after
+  120 frames regardless. Preact takes an unmount's cleanup a flush late, so a
+  correction can outlive its Row by one frame — on a detached element, where it
+  writes nothing a User can see. The same residual in principle applies to the
+  page scroll in `spatial-navigation.ts`, which is deliberately left alone:
+  nothing has reported it, and the page is scrolled afresh on every focus move.
 - **A Row also scrolls by touch and by wheel.** Touch and a sideways wheel are
   `overflow-x: auto` doing its job. A plain downward wheel is turned sideways in
   `row.tsx`, because a mouse has no sideways wheel — but only while the Row has
@@ -3208,7 +3235,14 @@ it is a key.
   `test/unit/revealing-the-focused-item.test.ts`, the Row's memory in
   `test/unit/rows-remember-where-focus-was.test.tsx`, and everything about a laid
   out screen in `test/e2e/arrow-key-navigation.spec.ts`, which runs in the
-  keyboard-only project too.
+  keyboard-only project too. #64's watch is the same bargain and is honest about
+  it: `test/unit/a-scroll-that-stops-short.test.ts` drives it against a stub
+  that is told to come to rest short, and
+  `test/unit/a-row-finishes-its-scroll.test.tsx` stands the strip's geometry up
+  by hand to reach the Row's wiring at all. Neither reproduces the browser's
+  imprecision, and **nothing does** — #64 has never been captured on demand, so
+  the fix is held to measurement of what it asks for rather than to a red test
+  that went green.
 
 
 ## Search
@@ -3325,7 +3359,9 @@ ADR 0002 sets the floor. These are the traps inside it.
   `object-fit`, `:focus-within`, `font-display`, `overscroll-behavior`.
 - **JS APIs that are absent and must not be used:** `Object.hasOwn` (93),
   `Promise.any` (85), `structuredClone` (98), `WeakRef` (84), `.at()` (92),
-  `findLast` (97), `crypto.randomUUID` (92), `Error.cause` (93). The first three
+  `findLast` (97), `crypto.randomUUID` (92), `Error.cause` (93), and the
+  `scrollend` event (114 — watch a scroll with `requestAnimationFrame`
+  instead, as `src/navigation/settled-scroll.ts` does). The first three
   are banned by ESLint. `lib` stays at ES2020 so the compiler refuses the rest.
 - **Already native, so do not polyfill:** `AbortController` (66),
   `ResizeObserver` (64), `IntersectionObserver` (51), `requestIdleCallback` (47).

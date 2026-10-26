@@ -22,6 +22,10 @@
  * sideways here, because a mouse has no sideways wheel; and by focus moving to
  * a card, which `reveal.ts` works out. Nothing here uses `scroll-snap-*`: ADR
  * 0002 puts it at Chrome 69, one above the floor, and it ships raw.
+ *
+ * The scroll focus starts is seen through by `settled-scroll.ts` (#64), and
+ * the Row holds the way to abandon it: focus moving to another card, or the
+ * Row going away, must end a correction that is still in flight.
  */
 import type { ComponentChildren } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
@@ -29,6 +33,7 @@ import type { Title } from '../catalogue/catalogue';
 import type { JellyfinGateway } from '../jellyfin/gateway';
 import { FOCUS_GROUP_ATTRIBUTE } from '../navigation/focusable';
 import { scrollToReveal } from '../navigation/reveal';
+import { scrollSidewaysTo } from '../navigation/settled-scroll';
 import { CardLabel } from '../title-labels/card-label';
 
 /** One Title as a card: what it is called, and the artwork to show it by. */
@@ -112,8 +117,16 @@ export function Row({ heading, cards, onCardPress, cardControl }: RowProps) {
   // comes back from the Server shorter than it was still has a tab stop.
   const [remembered, setRemembered] = useState(0);
   const tabStop = Math.min(remembered, Math.max(0, cards.length - 1));
+  // How to abandon the scroll the last reveal is still seeing through.
+  const settling = useRef<(() => void) | undefined>(undefined);
 
   useWheelScrollsSideways(strip);
+  useEffect(
+    () => () => {
+      settling.current?.();
+    },
+    [],
+  );
 
   return (
     <section class="row" aria-labelledby={headingId}>
@@ -134,7 +147,7 @@ export function Row({ heading, cards, onCardPress, cardControl }: RowProps) {
             tabIndex={index === tabStop ? 0 : -1}
             onFocus={() => {
               setRemembered(index);
-              revealCard(strip.current, index);
+              revealCard(strip.current, index, settling);
             }}
             onClick={() => onCardPress?.(card)}
           >
@@ -153,8 +166,18 @@ export function Row({ heading, cards, onCardPress, cardControl }: RowProps) {
  * side. The card's own offset inside the strip is measured from the two
  * rectangles rather than read from `offsetLeft`, which answers against whatever
  * the nearest positioned ancestor happens to be.
+ *
+ * Whatever the card before it was still scrolling towards is abandoned first,
+ * and on every path out of here: a correction aimed at the card focus has left
+ * would scroll the Row away from the card focus is on.
  */
-function revealCard(strip: HTMLUListElement | null, index: number): void {
+function revealCard(
+  strip: HTMLUListElement | null,
+  index: number,
+  settling: { current: (() => void) | undefined },
+): void {
+  settling.current?.();
+  settling.current = undefined;
   if (strip === null) return;
   const card = strip.children[index];
   if (!(card instanceof HTMLElement)) return;
@@ -173,7 +196,7 @@ function revealCard(strip: HTMLUListElement | null, index: number): void {
     CARD_MARGIN,
   );
   if (left === undefined) return;
-  scrollSmoothly(strip, left);
+  settling.current = scrollSidewaysTo(strip, left);
 }
 
 /**
@@ -205,19 +228,6 @@ function useWheelScrollsSideways(strip: { current: HTMLUListElement | null }): v
       element.removeEventListener('wheel', onWheel);
     };
   }, [strip]);
-}
-
-/**
- * Scrolls smoothly where the device can, and jumps where it cannot.
- * `scroll-behavior` is Chrome 61, below the floor, but `scrollTo` with options
- * throws on an older engine rather than ignoring them.
- */
-function scrollSmoothly(element: Element, left: number): void {
-  try {
-    element.scrollTo({ left, behavior: 'smooth' });
-  } catch {
-    element.scrollLeft = left;
-  }
 }
 
 /**
