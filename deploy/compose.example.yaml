@@ -1,4 +1,12 @@
-# Example compose file for OpenMediaVault 8's Compose plugin.
+# Example compose file for **Jellyflick on its own**.
+#
+# Use this one when your Jellyfin lives somewhere else — another machine, or not
+# in Docker at all. If Jellyfin is (or is about to be) a container on this same
+# host, use `compose.with-jellyfin.example.yaml` instead: it is both services
+# together, behind a reverse proxy on a shared Docker network.
+#
+# Written for OpenMediaVault 8's Compose plugin, but the file is ordinary and
+# works on any Docker host.
 #
 # Copy it into Services ▸ Compose ▸ Files ▸ Add, and put JELLYFIN_URL and
 # MDBLIST_API_KEY in that stack's Environment field (the plugin saves it as an

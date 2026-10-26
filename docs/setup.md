@@ -72,6 +72,17 @@ You only do this once per machine. `docker logout ghcr.io`, or the plugin's
 
 ## 3. Add the compose file and its settings
 
+**Two compose files, and the choice is about where your Jellyfin lives.**
+
+| Your Jellyfin | Use | What it assumes |
+| --- | --- | --- |
+| On another machine, or not in Docker | [`deploy/compose.example.yaml`](../deploy/compose.example.yaml) | Jellyflick alone, publishing a port the host's proxy forwards to |
+| A container on this same host | [`deploy/compose.with-jellyfin.example.yaml`](../deploy/compose.with-jellyfin.example.yaml) | Both services on one shared Docker network, reached by container name |
+
+The walkthrough below is the first file. [Both services in one
+stack](#both-services-in-one-stack) covers the second, and the differences are
+only in this step and the next.
+
 Copy [`deploy/compose.example.yaml`](../deploy/compose.example.yaml) into
 **Services ▸ Compose ▸ Files ▸ Add**.
 
@@ -152,6 +163,79 @@ Your Jellyfin server should be reachable over HTTPS too. A browser on an HTTPS
 page will refuse to call a plain-HTTP Jellyfin, so an `http://` address in
 `JELLYFIN_URL` will fail once Jellyflick itself is on HTTPS.
 
+## Both services in one stack
+
+If your Jellyfin is a container on this host, run the two together with
+[`deploy/compose.with-jellyfin.example.yaml`](../deploy/compose.with-jellyfin.example.yaml).
+It is the common arrangement where a reverse proxy — a SWAG, Nginx Proxy
+Manager or Traefik stack — is already running on a Docker network of its own.
+
+Three things differ from the walkthrough above.
+
+### `JELLYFIN_URL` is resolved by the browser, not by the container
+
+**This is the one that catches everyone**, and it looks correct while it is
+wrong. `deploy/entrypoint.sh` renders the address into a *browser-visible*
+config file, so it is your Users' browsers that have to resolve it:
+
+```yaml
+JELLYFIN_URL: "http://jellyfin:8096"      # WRONG — no laptop can resolve `jellyfin`
+JELLYFIN_URL: "https://jellyfin.example.com"   # the address a browser reaches
+```
+
+A Docker service name works beautifully inside the network and not at all
+outside it, so the symptom is that Jellyflick loads and then cannot reach the
+Server for anyone — with an address that reads perfectly in the compose file.
+
+`docker exec jellyflick cat /srv/config/config.js` shows exactly what the
+browser was handed, which settles it in one command.
+
+It also has to be **HTTPS** once Jellyflick itself is, because a browser on an
+HTTPS page refuses to call a plain-HTTP server.
+
+### Nothing needs `depends_on`
+
+Jellyflick never calls Jellyfin from inside the container: it hands the address
+to the browser and the browser does the talking. So the two services are
+independent at start-up, in either order, and ordering between them buys
+nothing.
+
+### The proxy reaches the containers by name, not through a published port
+
+On a shared network neither service needs to publish a port at all. Point the
+proxy at the container and Jellyflick's internal port, **8080**:
+
+```nginx
+location / {
+    proxy_pass http://jellyflick:8080;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+Caddy:
+
+```caddyfile
+jellyflick.example.com {
+	reverse_proxy jellyflick:8080
+}
+```
+
+With SWAG, that is a file in its `proxy-confs` directory; the container name and
+`8080` are the only two values it needs. Everything in step 4 above about
+forwarding the whole path from the root, adding no caching of your own, and
+HTTPS being worth it on your own network applies here unchanged.
+
+The network is `external: true` in the example, meaning compose expects to find
+it rather than create it. If you have not got one yet:
+
+```sh
+docker network create proxy-net
+```
+
+and put your reverse proxy on it as well.
+
 ## If something is wrong
 
 | What you see | Usually |
@@ -159,6 +243,8 @@ page will refuse to call a plain-HTTP Jellyfin, so an `http://` address in
 | `denied` or `unauthorized` on pull | Not signed in to `ghcr.io`, or the token is fine-grained rather than classic, or it has expired. |
 | The container starts and stops at once, logging that it cannot write `/srv/config` | The `tmpfs` entry is missing from the compose file while `read_only: true` is set. |
 | Jellyflick asks for a Server address although you set one | `JELLYFIN_URL` did not reach the container. Check the stack's environment file, then `docker exec jellyflick cat /srv/config/config.js`. |
+| Jellyflick loads, but **nobody** can reach the Server, and the address looks right | `JELLYFIN_URL` is a Docker-internal name such as `http://jellyfin:8096`. The **browser** resolves it, not the container. Use the address your Users reach Jellyfin on, and check what was rendered with `docker exec jellyflick cat /srv/config/config.js`. |
+| Sign-in fails only once Jellyflick is on HTTPS | `JELLYFIN_URL` is `http://`. A browser on an HTTPS page will not call a plain-HTTP Server. |
 | Extra ratings never appear | No `MDBLIST_API_KEY`. `curl http://127.0.0.1:8096/api/ratings/imdb/movie/tt0133093` answers `mdblist-not-configured` when it is unset. |
 | A deep link 404s | Something between the browser and the container is serving the path itself. Jellyflick answers an unknown path with the app and a 200. |
 
