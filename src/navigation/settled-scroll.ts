@@ -46,8 +46,11 @@ const CLOSE_ENOUGH = 8;
 
 /**
  * How many frames of an unchanged offset count as the animation having
- * finished. One is not enough: a smooth scroll can sit still for the frame
- * before it starts.
+ * finished, counting the frame the offset last moved on as the first of them.
+ * One is not enough: a smooth scroll can sit still for the frame before it
+ * starts — and on slow hardware it can sit still for several, which is why no
+ * number here is safe on its own and stillness is only counted once the offset
+ * has moved at all.
  */
 const STILL_FRAMES = 3;
 
@@ -93,6 +96,10 @@ function watchItSettle(scroller: SidewaysScroller, left: number, frames: Frames)
   let handle: number | undefined;
   let previous: number | undefined;
   let still = 1;
+  // Whether the offset has moved since the scroll was asked for. Until it has,
+  // an unchanged offset is a scroll that has not begun rather than one that has
+  // finished, and the two are indistinguishable from stillness alone.
+  let moved = false;
   let framesLeft = FRAME_BUDGET;
   // Cancelling a frame does not unqueue one the browser is already running,
   // and Preact runs an unmount's cleanup a flush late, so being abandoned has
@@ -105,6 +112,11 @@ function watchItSettle(scroller: SidewaysScroller, left: number, frames: Frames)
     handle = undefined;
   };
 
+  /** Takes the last few pixels by hand, where that is all they are. */
+  const takeTheRest = (at: number): void => {
+    if (Math.abs(at - left) <= CLOSE_ENOUGH) scroller.scrollLeft = left;
+  };
+
   const look = (): void => {
     handle = undefined;
     if (abandoned) return;
@@ -114,17 +126,33 @@ function watchItSettle(scroller: SidewaysScroller, left: number, frames: Frames)
     if (previous !== undefined) {
       // Further away than it was: the User, or something else, has the Row.
       if (Math.abs(at - left) > Math.abs(previous - left)) return;
-      still = at === previous ? still + 1 : 1;
+      if (at === previous) {
+        // Only an animation that has moved can have come to a standstill. A
+        // still frame before the first movement is the scroll waiting to start,
+        // and three of those in a row are ordinary on a television — counting
+        // them would end the watch before the animation it is watching began.
+        if (moved) still++;
+      } else {
+        moved = true;
+        still = 1;
+      }
     }
     previous = at;
 
     if (still >= STILL_FRAMES) {
-      if (Math.abs(at - left) <= CLOSE_ENOUGH) scroller.scrollLeft = left;
+      takeTheRest(at);
       return;
     }
 
     framesLeft--;
-    if (framesLeft <= 0) return;
+    if (framesLeft <= 0) {
+      // Out of budget having never moved at all: an engine that took
+      // `behavior: 'smooth'` and did nothing with it. There is no animation and
+      // so nobody else in charge of the Row, and the offset is still exactly
+      // where it was left — which is #64's defect, so correct it.
+      if (!moved) takeTheRest(at);
+      return;
+    }
     handle = frames.request(look);
   };
 

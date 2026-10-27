@@ -119,11 +119,48 @@ describe('a sideways scroll that stops short', () => {
     const frames = frameQueue();
 
     scrollSidewaysTo(row, 208, frames);
+    row.scrollLeft = 60;
+    frames.tick();
     // Far short is not the defect this corrects: something else is in charge.
     row.scrollLeft = 100;
-    frames.tick(4);
+    frames.tick(3);
 
     expect(row.scrollLeft).toBe(100);
+    expect(frames.waiting()).toBe(0);
+  });
+
+  it('does not take a scroll that has not begun for one that has finished', () => {
+    const row = strip();
+    const frames = frameQueue();
+
+    scrollSidewaysTo(row, 208, frames);
+    // Three frames in which the browser has not moved the offset at all —
+    // ordinary on a webOS 5 television, and reachable here with
+    // `E2E_CPU_THROTTLE=4`. Reading those as a standstill would end the watch
+    // before the animation began, which is #64's defect left in place on
+    // exactly the hardware it was filed about.
+    frames.tick(3);
+    // Then the animation runs, and comes to rest three pixels short.
+    row.scrollLeft = 205;
+    frames.tick(3);
+
+    expect(row.scrollLeft).toBe(208);
+    expect(frames.waiting()).toBe(0);
+  });
+
+  it('takes the last pixels by hand where the engine never animated at all', () => {
+    const row = strip();
+    const frames = frameQueue();
+    row.scrollLeft = 203;
+
+    scrollSidewaysTo(row, 208, frames);
+    // An engine that accepted `behavior: 'smooth'` and then did nothing with
+    // it: the offset never moves, so there is no standstill to watch for and
+    // the frame budget is what ends the watch. Nobody else is in charge of a
+    // Row that never moved, so the residual is still this module's to take.
+    frames.tick(500);
+
+    expect(row.scrollLeft).toBe(208);
     expect(frames.waiting()).toBe(0);
   });
 
