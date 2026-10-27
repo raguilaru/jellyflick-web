@@ -159,6 +159,15 @@ jellyflick.example.com {
 }
 ```
 
+**SWAG**, which is nginx with its own conventions, has a ready-made file in this
+repository: [`deploy/jellyflick.subdomain.conf.example`](../deploy/jellyflick.subdomain.conf.example).
+Copy it into SWAG's `proxy-confs` directory as
+`jellyflick.subdomain.conf`, drop the `.example`, and reload. It is written for
+the shared-network arrangement below, and its last section covers changing it
+for a published port instead. Check it with `nginx -t` before reloading, every
+time — a conf that does not parse takes every other site on that SWAG down with
+it.
+
 Your Jellyfin server should be reachable over HTTPS too. A browser on an HTTPS
 page will refuse to call a plain-HTTP Jellyfin, so an `http://` address in
 `JELLYFIN_URL` will fail once Jellyflick itself is on HTTPS.
@@ -222,13 +231,24 @@ jellyflick.example.com {
 }
 ```
 
-With SWAG, that is a file in its `proxy-confs` directory; the container name and
-`8080` are the only two values it needs. Everything in step 4 above about
-forwarding the whole path from the root, adding no caching of your own, and
-HTTPS being worth it on your own network applies here unchanged.
+With SWAG, copy [`deploy/jellyflick.subdomain.conf.example`](../deploy/jellyflick.subdomain.conf.example)
+into its `proxy-confs` directory as `jellyflick.subdomain.conf` and reload. The
+container name and `8080` are the only two values it needs, and both are already
+in it, so on this arrangement it usually needs no editing at all — **the Docker
+network's name does not appear in it**, because nginx finds the container
+through Docker's embedded DNS rather than by network. It carries the reasoning
+for each line, including the two things that must *not* be added: no caching of
+your own, and no `add_header` inside the `location` block.
+
+Everything in step 4 above about forwarding the whole path from the root, adding
+no caching of your own, and HTTPS being worth it on your own network applies
+here unchanged.
 
 The network is `external: true` in the example, meaning compose expects to find
-it rather than create it. If you have not got one yet:
+it rather than create it. **If your reverse proxy already has a network, use
+that name instead** — a SWAG stack is often on one called `swag-net`, and Nginx
+Proxy Manager and Traefik each have their own habit. `proxy-net` is only what
+these examples happen to call it. If you have not got one yet:
 
 ```sh
 docker network create proxy-net
@@ -247,6 +267,8 @@ and put your reverse proxy on it as well.
 | Sign-in fails only once Jellyflick is on HTTPS | `JELLYFIN_URL` is `http://`. A browser on an HTTPS page will not call a plain-HTTP Server. |
 | Extra ratings never appear | No `MDBLIST_API_KEY`. `curl http://127.0.0.1:8096/api/ratings/imdb/movie/tt0133093` answers `mdblist-not-configured` when it is unset. |
 | A deep link 404s | Something between the browser and the container is serving the path itself. Jellyflick answers an unknown path with the app and a 200. |
+| The stack will not start: a port is already allocated | The **host** side of a published port is taken. `compose.example.yaml` publishes 8096, which is also Jellyfin's own default — move one of them. The container side (8080) is private to the container and cannot collide; on a shared network nothing is published at all. |
+| A new image, or a changed setting, does not appear even after a reload | Something between the browser and the container is caching. The container sends `no-cache` for the app shell and the runtime config precisely so a reload is enough, and a cache in your proxy overrides that. Remove it rather than shortening it. |
 
 The container's logs say, on every start, whether a Server address was preset
 and whether the MDBList key is set — never the key itself.

@@ -23,7 +23,9 @@ scripts/make-test-video.mjs
                         way: run by hand, output committed. See "The fake
                         Jellyfin serves real video" below.
 Dockerfile              The multi-stage image. See "The container" below.
-deploy/                 entrypoint.sh and the example OMV8 compose file.
+deploy/                 entrypoint.sh, the two example compose files and the
+                        example SWAG proxy conf. Host-facing, not built or
+                        shipped in the image; docs/setup.md is their guide.
 server/                 The server inside the container. Not browser code:
                         `jellyflick-server.ts` is all the behaviour,
                         `main.ts` is the process. No dependencies.
