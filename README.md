@@ -48,7 +48,8 @@ docker compose up -d
 ```
 
 Finally point your reverse proxy at it. The container serves plain HTTP on
-**8080**.
+**8080**. SWAG users have a ready-made conf:
+[`deploy/jellyflick.subdomain.conf.example`](deploy/jellyflick.subdomain.conf.example).
 
 > **The one thing that catches everyone.** `JELLYFIN_URL` is resolved by the
 > **browser**, not by the container — so in a composed stack
@@ -57,7 +58,7 @@ Finally point your reverse proxy at it. The container serves plain HTTP on
 > reach Jellyfin on.
 
 [docs/setup.md](docs/setup.md) is the full guide: the registry token, both
-compose arrangements, proxy configuration for nginx and Caddy, and a
+compose arrangements, proxy configuration for nginx, Caddy and SWAG, and a
 troubleshooting table.
 
 ## What it is not

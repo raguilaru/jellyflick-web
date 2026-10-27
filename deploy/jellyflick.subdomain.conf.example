@@ -1,0 +1,135 @@
+## Jellyflick behind SWAG — an example `proxy-confs` file.
+##
+## Copy it to your SWAG container as
+## `/config/nginx/proxy-confs/jellyflick.subdomain.conf` (drop the `.example`)
+## and reload nginx:
+##
+##   docker exec swag nginx -t && docker exec swag nginx -s reload
+##
+## Check it with `nginx -t` before reloading, every time. A conf that does not
+## parse takes every other site on that SWAG down with it until it is fixed.
+##
+## It assumes the arrangement in `compose.with-jellyfin.example.yaml`:
+##
+##   1. The `jellyflick` container is on a Docker network SWAG is also on. It
+##      does not need to publish a port. **The network's name does not appear in
+##      this file** — nginx finds the container through Docker's embedded DNS —
+##      so whatever yours is called (`proxy-net` in our compose examples,
+##      `swag-net` in LinuxServer's own), nothing here changes.
+##   2. Your SWAG cert covers `jellyflick.<your domain>`. A wildcard cert
+##      already does; otherwise add the subdomain to SWAG's `SUBDOMAINS` and let
+##      it re-issue before enabling this file.
+##
+## If you proxy from the **host** instead — `compose.example.yaml`, which
+## publishes a port — see "Proxying from the host" at the bottom.
+##
+## Jellyflick speaks plain HTTP on 8080 inside the container, expects to be
+## served from `/`, and sets its own cache headers and its own fallback for
+## unknown paths. So this file forwards and does nothing else, which is the point
+## rather than an omission: see the end of the location block for the two things
+## that must stay out of it.
+##
+## Derived from SWAG's own `_template.subdomain.conf.sample`. If your SWAG's
+## template differs in its `listen` lines, match theirs rather than these:
+## nginx 1.25.1 changed how HTTP/2 is switched on and SWAG moved `http2 on;`
+## into its own config, so a hand-written `listen ... http2;` here can either
+## duplicate it or fight it depending on the version you run.
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+
+    server_name jellyflick.*;
+
+    include /config/nginx/ssl.conf;
+
+    # Jellyflick accepts no uploads. The only writes a User makes — My List, the
+    # Home layout, Playback Preferences, a Subtitle Offset — go to Jellyfin, and
+    # the browser sends those to Jellyfin directly rather than through here. So
+    # the generous `client_max_body_size 0` in SWAG's template has nothing to be
+    # generous for; this is small with room to spare.
+    client_max_body_size 1m;
+
+    # enable for ldap auth (requires ldap-location.conf in the location block)
+    #include /config/nginx/ldap-server.conf;
+
+    # enable for Authelia (requires authelia-location.conf in the location block)
+    #include /config/nginx/authelia-server.conf;
+
+    # enable for Authentik (requires authentik-location.conf in the location block)
+    #include /config/nginx/authentik-server.conf;
+
+    location / {
+        # A gate here is very probably the wrong call. Jellyflick signs Users in
+        # against Jellyfin with their own Jellyfin accounts, and the User Picker
+        # is how a household switches between them — so a forward-auth portal in
+        # front adds a second password without a second security boundary, and
+        # one shared portal login would flatten the household back to a single
+        # identity.
+        #
+        # If you add one anyway, the container's healthcheck is unaffected: it
+        # runs against 127.0.0.1:8080 inside the container and never passes
+        # through SWAG, so it needs no bypass rule.
+        #
+        #include /config/nginx/authelia-location.conf;
+        #include /config/nginx/authentik-location.conf;
+        #include /config/nginx/ldap-location.conf;
+
+        include /config/nginx/proxy.conf;
+
+        # The resolver, plus an upstream held in variables rather than written
+        # into `proxy_pass`, is what lets nginx start when the jellyflick
+        # container is not running. With a literal name, nginx resolves it once
+        # at startup and refuses to start at all if it cannot — taking every
+        # other site on this SWAG with it.
+        include /config/nginx/resolver.conf;
+        set $upstream_app jellyflick;
+        set $upstream_port 8080;
+        set $upstream_proto http;
+        proxy_pass $upstream_proto://$upstream_app:$upstream_port;
+
+        # ------------------------------------------------------------------
+        # Two things that must not be added here.
+        #
+        # **No caching of your own.** The container already sends exactly the
+        # right headers and they are load-bearing: `/assets/` is hashed and
+        # `immutable`, while the app shell, `/config.js`, the web manifest and
+        # the icons are all `no-cache` so the browser revalidates them on every
+        # load. That is the whole of Jellyflick's update story — a new image
+        # takes effect on the next reload with nothing to clear. A `proxy_cache`
+        # in front of it is how you get a stale shell no User can get rid of.
+        #
+        # **No `add_header`.** nginx does not merge `add_header` across levels:
+        # a single one here discards every header inherited from the server
+        # block, `ssl.conf`'s HSTS included. If you need one, add it in
+        # `ssl.conf` or repeat the inherited headers alongside it. Note that
+        # Jellyflick's own server already sends `X-Content-Type-Options:
+        # nosniff` on everything it serves.
+        #
+        # Not needed, but harmless if your `proxy.conf` sets them: the WebSocket
+        # `Upgrade`/`Connection` headers. Jellyflick holds no WebSocket today.
+        # ------------------------------------------------------------------
+    }
+}
+
+## ---------------------------------------------------------------------------
+## Proxying from the host
+##
+## With `compose.example.yaml`, Jellyflick publishes a port on the host instead
+## of sharing a network with SWAG. Two changes:
+##
+##   - SWAG has to be able to reach the host. On a bridge network that is not
+##     `127.0.0.1` from inside the SWAG container — use the host's LAN address,
+##     or `host.docker.internal` where your Docker provides it.
+##   - Replace the three `set` lines and keep everything else:
+##
+##         set $upstream_app 192.0.2.10;   # the host's address
+##         set $upstream_port 8096;        # the HOST side of the mapping
+##         set $upstream_proto http;
+##
+## Mind which port you publish. `compose.example.yaml` maps `"8096:8080"`, and
+## **8096 is also Jellyfin's own default** — so on a host where Jellyfin
+## publishes 8096 too, that collides and one of the two must move. The container
+## side (8080) is private to the container and never collides with anything;
+## only the host side can.
+## ---------------------------------------------------------------------------
