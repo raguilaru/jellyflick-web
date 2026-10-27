@@ -14,21 +14,49 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
+          cache: npm
 
-      # Steps skip until the app is scaffolded, then run whichever of
-      # these scripts package.json defines.
       - name: Install
-        if: hashFiles('package.json') != ''
         run: npm ci
 
       - name: Lint
-        if: hashFiles('package.json') != ''
-        run: npm run lint --if-present
+        run: npm run lint
 
       - name: Typecheck
-        if: hashFiles('package.json') != ''
-        run: npm run typecheck --if-present
+        run: npm run typecheck
 
       - name: Test
-        if: hashFiles('package.json') != ''
-        run: npm test --if-present
+        run: npm test
+
+      # Fails if the bundler reports TOLERATED_TRANSFORM, which would mean the
+      # output contains syntax Chromium 68 cannot parse.
+      - name: Build
+        run: npm run build
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Install browsers
+        run: npx playwright install --with-deps chromium
+
+      # Builds the app and starts the fake Jellyfin itself: see
+      # playwright.config.ts.
+      - name: End-to-end tests
+        run: npm run test:e2e
+
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

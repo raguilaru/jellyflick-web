@@ -1,0 +1,2451 @@
+/*
+ * Design tokens and the few primitives this ticket needs.
+ *
+ * ADR 0002: modern CSS with plain fallbacks, for Chromium 68. Safe here because
+ * the CSS minifier downlevels them at `cssTarget: chrome68`: `clamp()`,
+ * `min()`/`max()`, logical properties, nesting, and the space/slash colour
+ * syntax. Native and safe: custom properties, grid, flex, grid `gap`,
+ * `object-fit`, `:focus-within`, `font-display`.
+ *
+ * NOT safe, so not used without a hand-written fallback: flex `gap` (84 —
+ * silently does nothing), `aspect-ratio` (88), `:focus-visible` (86),
+ * `scroll-snap-*` (69), `:has()` (105), the `inset` shorthand (87),
+ * `backdrop-filter` (76). Container queries and `dvh` are banned outright.
+ *
+ * `:where()` is NOT downleveled — it ships raw and is Chrome 88, so a rule
+ * using it is dropped whole on the target. Write selector lists out instead.
+ */
+
+/*
+ * The wordmark's face: Bebas Neue, SIL OFL 1.1, self-hosted so the app works on
+ * a LAN with no internet and asks nothing of a third party. One weight is all
+ * this family has (`public/fonts/bebas-neue-OFL.txt` travels with it), so the
+ * type scale differentiates by size and letter-spacing, never by weight —
+ * a synthesised bold on a condensed face looks wrong.
+ *
+ * `font-display: swap` is Chrome 60, so the fallback shows for the moment the
+ * font takes and is then replaced. Latin only: it is the wordmark's face, and
+ * every other glyph falls through to the stack below.
+ */
+@font-face {
+  font-family: 'Bebas Neue';
+  src: url('/fonts/bebas-neue-latin-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  color-scheme: dark;
+
+  /* Surfaces, darkest first. Dark only: there is no light theme. */
+  --surface-base: #0b0b0d;
+  --surface-raised: #17171b;
+  --surface-line: #2c2c33;
+
+  /* Text, strongest first. */
+  --text-strong: #f5f5f7;
+  --text-muted: #a8a8b3;
+
+  /* The accent is a User preset, red by default, and arrives as a token. */
+  --accent: #d1121b;
+  --accent-text: #ffffff;
+  --warning: #ffb02e;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 16px;
+  --space-4: 24px;
+  --space-5: 40px;
+
+  --radius: 4px;
+
+  /*
+   * A card's poster box. A fixed 2:3 box rather than `aspect-ratio`, which is
+   * Chrome 88 and ships raw — and a token rather than two literals, because
+   * what is drawn *over* the artwork (the Title Label, the progress bar) has
+   * to know where its bottom edge is: the card itself is a grid of artwork
+   * then name, so there is nothing else to measure from.
+   */
+  --card-artwork-width: 150px;
+  --card-artwork-height: 225px;
+
+  /* Condensed fallbacks, so the layout barely moves while the face loads. */
+  --font-display: 'Bebas Neue', 'Haettenschweiler', 'Arial Narrow', Impact, sans-serif;
+  --font-ui: system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+}
+
+body {
+  background: var(--surface-base);
+  color: var(--text-strong);
+  font-family: var(--font-ui);
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+/* A screen fills the viewport. `vh` rather than `dvh`, which ADR 0002 bans. */
+.screen {
+  display: grid;
+  min-height: 100vh;
+  padding: var(--space-4);
+}
+
+.screen--centred {
+  align-content: center;
+  justify-items: center;
+  gap: var(--space-5);
+}
+
+.screen__heading {
+  margin: 0;
+  font-size: clamp(22px, 3vw, 30px);
+  font-weight: 600;
+}
+
+.screen__lead {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+/*
+ * The wordmark is deliberately flat: upright, condensed capitals with no curved
+ * letter shapes.
+ */
+.wordmark {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(36px, 8vw, 72px);
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.panel {
+  width: 100%;
+  max-width: 420px;
+  padding: var(--space-4);
+  background: var(--surface-raised);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius);
+}
+
+/* Grid, so `gap` is the Chrome 66 one rather than the Chrome 84 flex one. */
+.stack {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.panel--wide {
+  max-width: 640px;
+}
+
+/*
+ * The Server's public Users. Grid, so `gap` is the Chrome 66 one, and
+ * `auto-fill` rather than a media query: the list is as wide as it needs to be
+ * on a phone, a laptop and a TV alike.
+ */
+.user-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.user-list__user {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: center;
+  width: 100%;
+  padding: var(--space-2);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.user-list__user:hover {
+  border-color: var(--surface-line);
+}
+
+/*
+ * A fixed square rather than `aspect-ratio`, which is Chrome 88 and ships raw.
+ * Jellyfin's `/UserImage` takes no sizing parameters, so `object-fit` (Chrome
+ * 32) does the cropping here.
+ */
+.user-list__picture,
+.user-list__initial {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: var(--surface-raised);
+}
+
+.user-list__picture {
+  object-fit: cover;
+}
+
+.user-list__initial {
+  display: grid;
+  align-content: center;
+  justify-content: center;
+  border: 1px solid var(--surface-line);
+  font-family: var(--font-display);
+  font-size: 44px;
+  line-height: 1;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/*
+ * One User in the picker: the tile that picks them, with the sign-out under it.
+ * A grid, so `gap` is the Chrome 66 one.
+ */
+.user-list__entry {
+  display: grid;
+  gap: var(--space-1);
+  align-content: start;
+}
+
+/* Doubled with .button on purpose: .button is written below this and would
+   otherwise win on source order at equal specificity, taking the font-size
+   with it through its `font` shorthand (#49). */
+.button.user-list__sign-out {
+  font-size: 12px;
+  padding: var(--space-1);
+}
+
+.user-list__name {
+  font-weight: 600;
+  text-align: center;
+  /* Long names wrap rather than widening the cell. */
+  overflow-wrap: break-word;
+  word-break: break-word;
+  min-width: 0;
+}
+
+/*
+ * The Billboard: one Title at the top of Home, large (#16, stories 22 to 27).
+ *
+ * It is a stack — the backdrop, then the trailer over it, then a scrim, then
+ * the words — built with `position: absolute` and an explicit `top`/`right`/
+ * `bottom`/`left` rather than the `inset` shorthand, which is Chrome 87 and
+ * ships raw past the minifier. Its height is a `clamp()`, which is downleveled,
+ * rather than `aspect-ratio`, which is Chrome 88; `vh` rather than `dvh`, which
+ * ADR 0002 bans. `object-fit` is Chrome 32 and safe.
+ *
+ * The negative margin is exactly `.screen`'s padding, so the backdrop bleeds to
+ * the edges of the window while everything inside stays lined up with the Rows
+ * below. It is the one thing on Home that is not inset.
+ */
+.billboard {
+  position: relative;
+  display: grid;
+  align-content: end;
+  min-height: clamp(320px, 52vw, 620px);
+  margin: calc(var(--space-4) * -1);
+  margin-bottom: var(--space-4);
+  padding: var(--space-5) var(--space-4) var(--space-4);
+  overflow: hidden;
+}
+
+.billboard__backdrop,
+.billboard__trailer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  /* Fills the box however the Server's artwork is shaped. */
+  object-fit: cover;
+  /* Nothing of the page behind shows through a gap while artwork loads. */
+  background: var(--surface-raised);
+}
+
+/* Over the backdrop, which stays underneath so there is never an empty box. */
+.billboard__trailer {
+  z-index: 1;
+}
+
+/*
+ * The scrim that keeps the words readable over any artwork. A gradient rather
+ * than `backdrop-filter`, which is Chrome 76 and above the floor.
+ */
+.billboard::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 2;
+  /* Decoration: it must never swallow a press meant for what is under it. */
+  pointer-events: none;
+  background:
+    linear-gradient(
+      to top,
+      rgb(11 11 13 / 95%) 0%,
+      rgb(11 11 13 / 70%) 35%,
+      rgb(11 11 13 / 10%) 75%,
+      rgb(11 11 13 / 0%) 100%
+    );
+}
+
+.billboard__words {
+  position: relative;
+  /* Above the scrim, which is above the artwork. */
+  z-index: 3;
+  display: grid;
+  justify-items: start;
+  gap: var(--space-3);
+  /* A readable measure: a description the width of a television is unreadable. */
+  max-width: min(100%, 46rem);
+}
+
+.billboard__title {
+  margin: 0;
+}
+
+/*
+ * The Title's own logo, as artwork. A height in `em` so a wide logo and a tall
+ * one both sit on the same line as the words below them.
+ */
+.billboard__logo {
+  display: block;
+  max-width: min(100%, 420px);
+  max-height: 160px;
+  width: auto;
+  height: auto;
+}
+
+/*
+ * The Title's name when the Server has no logo for it: the logo font, so the
+ * heading reads as artwork rather than as a heading whose image failed. Bebas
+ * Neue has one weight, so size and spacing are what make it loud.
+ */
+.billboard__name {
+  display: block;
+  font-family: var(--font-display);
+  font-size: clamp(40px, 7vw, 86px);
+  line-height: 1;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.billboard__rating {
+  margin: 0;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.billboard__overview {
+  margin: 0;
+  color: var(--text-strong);
+}
+
+/*
+ * Play and More info, and the trailer's sound and pause controls below them.
+ * **Both rows wrap** (#56), and both wrap the way the title page's facts and
+ * actions were made to in #44 — wrapped flex with margins on the children,
+ * never flex `gap`, which is Chrome 84 and silently does nothing on the floor
+ * (`decisions.md` §6). The negative side margin on the row cancels the
+ * children's own at both ends of the line, so the first button still lines up
+ * with the words above it however many lines the row takes.
+ *
+ * What was here before was a single grid row of `max-content` columns, which is
+ * as wide as its contents whatever the screen is. That is the same mistake #44
+ * shipped as a 635px sheet on a 375px screen, and #35 as nine languages running
+ * off the side of one, and it put "Pause the trailer" 3px past the right edge of
+ * a 390px screen in English and **62px past it in Spanish** — "Pausar el
+ * tráiler" after "Activar el sonido del tráiler".
+ *
+ * **No assertion in this project could see that**, which is the half of #56
+ * worth more than the pixels. A clipped control does not lengthen the document,
+ * so `scrollWidth` was exactly `clientWidth` in all four of the measured cases
+ * and the scroll-width check this project adopted after #44 was blind to every
+ * one of them; and Playwright scrolls a control into view before touching it,
+ * so every press passed regardless. `test/e2e/the-billboard.spec.ts` now
+ * measures each control's **own right edge** against the viewport, in English
+ * and in Spanish, which is the only shape that sees it.
+ */
+.billboard__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  /* Cancels the children's own side margins at both edges of the line. */
+  margin: 0 calc(var(--space-1) * -1);
+  min-width: 0;
+}
+
+/*
+ * The trailer's sound and pause controls, in the corner away from the words.
+ * Above the scrim with the words, because they are things to press.
+ *
+ * `left` is deliberately left `auto`: a shrink-to-fit absolute box is already
+ * laid out against the containing block's width less its own `right` offset, so
+ * the line wraps rather than being clipped — while setting `left` as well would
+ * stretch an invisible full-width box across the foot of the Billboard, on top
+ * of Play and More info.
+ */
+.billboard__trailer-controls {
+  position: absolute;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  /* A wrapped line stays in the corner the row lives in. */
+  justify-content: flex-end;
+  margin: 0 calc(var(--space-1) * -1);
+  min-width: 0;
+}
+
+/*
+ * Doubled with `.button` on purpose, both of them: `.button` is written further
+ * down this file and sets `margin-top`, so at equal specificity it would win on
+ * source order and the row's own spacing would do nothing — #49's trap, which
+ * `.user-list__sign-out` and `.genres__genre` above were both caught by.
+ */
+.billboard__actions > .button,
+.billboard__trailer-controls > .button {
+  margin: var(--space-1);
+}
+
+/* A phone has no room for a Billboard this tall, nor for a wide logo. */
+@media (max-width: 599px) {
+  .billboard {
+    min-height: 420px;
+  }
+
+  .billboard__logo {
+    max-height: 96px;
+  }
+
+  /*
+   * The controls move under the words rather than over them: at this width
+   * they would otherwise sit on top of the buttons. `order` puts them after
+   * the words whatever the document order is, so the trailer's element can go
+   * on being drawn before them.
+   */
+  .billboard__trailer-controls {
+    position: static;
+    order: 1;
+    /*
+     * `flex-start`, not `start`: the row is flex since #56, and the bare
+     * `start` keyword only reached flexbox in Chrome 93 — on ADR 0002's floor
+     * of 68 it is an invalid value, the declaration is dropped, and the row
+     * would keep the `flex-end` it has in the corner on a wide screen and sit
+     * right-aligned under the words on a phone. It ships raw past the
+     * minifier, so nothing would warn.
+     */
+    justify-content: flex-start;
+  }
+}
+
+/*
+ * A Row and its cards.
+ *
+ * Grid throughout, so `gap` is the Chrome 66 one and not the Chrome 84 flex
+ * one. `grid-auto-flow: column` with a fixed column width gives the horizontal
+ * strip; `overflow-x` scrolls it. No `scroll-snap-*`, which is Chrome 69, and
+ * no `aspect-ratio`, which is Chrome 88 — the poster is a fixed 2:3 box.
+ *
+ * A card is a focus stop, so the strip has to have room for the focus ring:
+ * `padding` makes it, and the matching negative `margin` keeps the first card
+ * lined up with the Row's heading all the same.
+ */
+.row {
+  display: grid;
+  gap: var(--space-2);
+  /* The strip is as wide as the screen, so the Row must not stretch the grid. */
+  min-width: 0;
+}
+
+.row__heading {
+  margin: 0;
+  font-size: clamp(18px, 2vw, 24px);
+  font-weight: 600;
+}
+
+.row__strip {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 150px;
+  gap: var(--space-3);
+  margin: 0 calc(var(--space-2) * -1);
+  /*
+   * Room above and below for the focus ring, and for a card grown by the hover
+   * card (#21): `overflow-x: auto` clips vertically as well, so a card scaled
+   * past this padding would have its top and bottom shaved off. The horizontal
+   * padding stays what the negative margin above cancels.
+   */
+  padding: var(--space-3) var(--space-2);
+  list-style: none;
+  overflow-x: auto;
+  /* A Row at its end does not drag the page with it. */
+  overscroll-behavior-x: contain;
+}
+
+.card {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+  /* The card's own controls sit over its artwork. */
+  position: relative;
+}
+
+/*
+ * A grid of the same cards, for a page that shows a whole list rather than as
+ * much of one as fits on a line. `auto-fill` with a minimum column is how it
+ * reflows from a phone to a TV without a breakpoint; grid `gap` is Chrome 66,
+ * so no fallback is needed, and ADR 0002 bans container queries anyway.
+ */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--space-4) var(--space-3);
+  margin: 0;
+  padding: var(--space-2) 0;
+  list-style: none;
+  justify-items: start;
+}
+
+/*
+ * A control drawn over a card's artwork: the My List toggle.
+ *
+ * On a card in a Row it is there only while the pointer is over the card. That
+ * is not only a look: `src/navigation/spatial-navigation.ts` ignores anything
+ * with a zero-sized box, so a hidden control is not a stop the arrow keys have
+ * to step through, and Right still takes the next card along the Row. The
+ * keyboard and the remote reach My List from the title page (#17). On Home the
+ * button is now inside the hover card (#21), beside Play and More info, and the
+ * rule below that reveals it does not reach it there — `.card__hover
+ * .card__control` is what draws it in its new home.
+ *
+ * `.card--managed` is a card on a page for managing the list, where the control
+ * is always drawn and is a focus stop the arrow keys reach on purpose.
+ */
+.card__control {
+  display: none;
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--surface-line);
+  border-radius: 50%;
+  background: var(--surface-base);
+  color: var(--text-strong);
+  font: inherit;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.card:hover > .card__control,
+.card--managed > .card__control {
+  display: block;
+}
+
+/*
+ * A card can carry two controls: My List, and Continue Watching's own "take
+ * this off the Row" (#12). The second sits at the other top corner rather than
+ * under the first, so neither covers the artwork's middle and both are a
+ * thumb's width apart on a phone.
+ */
+.card__control--remove {
+  right: auto;
+  left: var(--space-2);
+}
+
+.card__control[aria-pressed='true'] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+/*
+ * The enlarged hover card (#21, stories 52 and 53).
+ *
+ * **It is `data-resting` that draws it, not `:hover`.** The attribute is
+ * written on the card by `src/home/hover-card-panel.tsx` once the pointer has
+ * stayed for `HOVER_CARD_DELAY_MS`, and nothing here keys off `:hover` at all.
+ * That is not a flourish:
+ *
+ * - A panel drawn on bare `:hover` puts three buttons across the foot of the
+ *   artwork **the instant the pointer crosses the card**, which is the middle
+ *   of the card — so a press meant for the card lands on Play instead.
+ *   `arrow-key-navigation.spec.ts` caught exactly that, with the keyboard's
+ *   highlight test reporting focus on "Play Severance" where it expected the
+ *   card. A card is a focus stop that opens the title page, and a quick pass
+ *   of the pointer must not change what pressing it does.
+ * - It also makes the delay mean something. Story 53 asks for a card that does
+ *   not trigger while scrolling quickly, and a panel appearing instantly under
+ *   a card that has not grown yet would be the trigger it asks us to avoid.
+ *
+ * The attribute is on the *card* and not on the panel because CSS cannot style
+ * an ancestor: `:has()` is Chrome 105 and ADR 0002's floor is 68. A panel that
+ * knew its own state could never grow the card around it.
+ *
+ * **The plain fallback** story 52's last box asks for is the growing, and only
+ * the growing: the panel's own visibility is the attribute's, so a browser that
+ * draws no `transform` still shows a User the three buttons and the facts on an
+ * un-grown card. Nothing here needs a fallback written out — `transform`,
+ * `transition`, `linear-gradient` and `z-index` are all far below the floor,
+ * and the one modern thing in it is grid `gap`, which is Chrome 66. No flex
+ * `gap` (84, silently nothing), no `inset` (87), no `:is()`/`:where()` (88,
+ * dropped whole), no `backdrop-filter` (76).
+ */
+.card__hover {
+  display: none;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  /* The artwork's box, not the card's: the card's own bottom edge is below the
+     name, which `--card-artwork-height` is what both this and the progress bar
+     measure from. */
+  height: var(--card-artwork-height);
+  box-sizing: border-box;
+  padding: var(--space-2);
+  border-radius: var(--radius);
+  /* A genre list long enough to fill a poster is cut off rather than allowed
+     to grow out of the card and be clipped by the strip's own overflow. */
+  overflow: hidden;
+}
+
+.card[data-resting] > .card__hover {
+  display: grid;
+  gap: var(--space-1);
+  align-content: start;
+  /* Words over the whole poster rather than a line at the foot of it. */
+  background: rgba(11, 11, 13, 0.92);
+}
+
+/*
+ * Rested on: the card grows, and the panel becomes the card's face.
+ *
+ * `transform` rather than width and height, so nothing around it reflows — a
+ * Row that re-laid itself out under the pointer would move the card out from
+ * under it. `z-index` lifts the grown card over its neighbours; `.row__strip`
+ * carries the vertical padding that keeps it from being clipped by its own
+ * `overflow-x`.
+ */
+.card {
+  transition: transform 150ms ease-out;
+}
+
+.card[data-resting] {
+  transform: scale(1.08);
+  z-index: 2;
+}
+
+/*
+ * The three the ticket asks for: Play, My List and More info. Play takes the
+ * line it is on, because it is the one a User came for; the other two share
+ * the line under it. Grid, so the `gap` is the Chrome 66 one.
+ *
+ * The second line is `auto 1fr` and not `auto auto`: My List is a 28px square
+ * and More info is a word and a half, and two `auto` tracks sized to content
+ * left More info narrow enough to break "More info" across two lines on a
+ * 150px card — the one thing rendering it and looking at it caught that no
+ * assertion here would have. The `1fr` gives it everything My List does not
+ * want, and `nowrap` below says it would rather be clipped by the panel's own
+ * `overflow: hidden` than be two lines tall.
+ */
+.card__hover-actions {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-1);
+  margin: 0;
+  justify-content: start;
+  align-items: center;
+}
+
+/*
+ * Both of these are **scoped to the panel on purpose**, and that is not
+ * tidiness: `.button` is written further down this file and sets `font:
+ * inherit` and a page-sized `padding`, so a bare `.card__hover-play` has the
+ * same specificity and *loses* on source order. The symptom was More info
+ * arriving at the page's own font size and breaking across two lines on a
+ * 150px card — caught by rendering a rested card and looking at it, which no
+ * assertion in `desktop-hover-cards.spec.ts` would have.
+ */
+.card__hover .card__hover-play {
+  grid-column: 1 / -1;
+  /* The card is 150px wide, so the page's own button padding is too generous. */
+  margin-top: 0;
+  padding: var(--space-1) var(--space-3);
+  width: 100%;
+  font-size: 13px;
+}
+
+.card__hover .card__hover-more {
+  margin-top: 0;
+  padding: var(--space-1) var(--space-2);
+  font-size: 13px;
+  /* It would rather be clipped by the panel's own `overflow: hidden` than be
+     two lines tall; with the font size above it is neither. */
+  white-space: nowrap;
+}
+
+/*
+ * My List, here, is the same control the card has carried since #13 — which is
+ * where it was always going to end up (`my-list-toggle.tsx`). Inside the panel
+ * it is one of three buttons in a row rather than a thing floating in a
+ * corner, so it gives up being positioned: the rule above that reveals it is
+ * `.card:hover > .card__control`, and in here it is no longer a child of the
+ * card at all.
+ */
+.card__hover .card__control {
+  display: block;
+  position: static;
+  top: auto;
+  right: auto;
+  width: 28px;
+  height: 28px;
+  font-size: 16px;
+}
+
+/*
+ * The age rating, the length and the genres (story 52). A wrapping run with
+ * margins on the children, never flex `gap`: that is Chrome 84 and does
+ * nothing at all on the floor, which is the trap #20's badges were caught by.
+ */
+.card__hover-facts {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0 calc(var(--space-1) * -1);
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.card__hover-fact {
+  margin: 0 var(--space-1);
+  min-width: 0;
+  /* A two-word genre may break; "1h 56m" and "PG-13" are read as one thing. */
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+/* A fixed 2:3 poster box rather than `aspect-ratio`, which ships raw at 88. */
+.card__artwork {
+  width: var(--card-artwork-width);
+  height: var(--card-artwork-height);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  object-fit: cover;
+}
+
+.card__artwork--none {
+  border: 1px solid var(--surface-line);
+}
+
+/*
+ * The progress bar across the bottom of a card's artwork (#12, story 36).
+ *
+ * Positioned the same way the Title Label is, and for the same reason — the
+ * card's own bottom edge is below the name, so `--card-artwork-height` is what
+ * both measure from. It sits flush on the artwork's bottom edge and the label
+ * sits above it, which is why the label's offset subtracts its height.
+ *
+ * The watched part is the Accent Colour over a muted track, so "how much is
+ * left" reads at a glance from across a room.
+ */
+.card__progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: var(--card-artwork-height);
+  transform: translateY(-100%);
+  height: 4px;
+  border-bottom-left-radius: var(--radius);
+  border-bottom-right-radius: var(--radius);
+  background: var(--surface-line);
+  overflow: hidden;
+}
+
+.card__progress-watched {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+/*
+ * The Title Label (#14): what is new about this Title, across the bottom of its
+ * artwork in the User's Accent Colour.
+ *
+ * Positioned from the *top* plus a translate rather than with `bottom`: the
+ * card is a grid of artwork and then the name, so the card's own bottom edge is
+ * below the name and `bottom` would put the label there. `--card-artwork-height`
+ * is the artwork's bottom edge, and the translate lifts the label onto it.
+ *
+ * In the accent, with `--accent-text` on it: the presets carry that pair
+ * precisely so text on a filled block stays readable (#11).
+ */
+.card__label {
+  position: absolute;
+  left: 0;
+  max-width: 100%;
+  /* Clear of the progress bar, which is 4px on the artwork's bottom edge. */
+  top: calc(var(--card-artwork-height) - 4px);
+  transform: translateY(-100%);
+  padding: 2px var(--space-1);
+  /* Physical, not the logical `border-start-end-radius`, which is Chrome 89. */
+  border-top-right-radius: var(--radius);
+  background: var(--accent);
+  color: var(--accent-text);
+  font-family: var(--font-display);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  /* The face has one weight; a synthesised bold on it looks wrong. */
+  font-weight: 400;
+  /* Long enough in Spanish that it has to be allowed to sit on one line. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card__name {
+  font-size: 14px;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  min-width: 0;
+}
+
+/*
+ * Search's field. Narrow, because a field the width of a TV reads badly — and
+ * because `src/navigation/nearest.ts` scores a candidate partly by how far its
+ * centre is across the direction pressed, so a full-width field would lose Up
+ * from a result to whichever link in the bar above happens to sit over it.
+ */
+/*
+ * The Quick Connect code (#9). It has to be readable from across a room, and
+ * that is a question about type: Bebas Neue has **one weight**, so a browser
+ * asked for a bold synthesises one and the digits come out smeared. The
+ * emphasis is size and letter spacing, and the weight is pinned to 400 so
+ * nothing further up the document can ask for a bold by accident.
+ *
+ * `clamp()` is downleveled by the CSS minifier, so it is safe on the target;
+ * `font-variant-numeric` is Chrome 52, and it keeps the digits the same width
+ * so a code does not shift as it is read out.
+ */
+.quick-connect__code {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(56px, 16vw, 140px);
+  font-weight: 400;
+  line-height: 1.1;
+  letter-spacing: 0.14em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-strong);
+  /*
+   * The letter spacing is added after the last digit as well, so without this
+   * the code sits visibly left of centre in its panel.
+   */
+  text-indent: 0.14em;
+  text-align: center;
+}
+
+.search__field {
+  width: 100%;
+  max-width: 420px;
+}
+
+/*
+ * Browsing by genre: the genres as a wrapping set of chips.
+ *
+ * Flex, because the set has to wrap and grid would force a column count — so
+ * `gap` is the Chrome 84 one and silently does nothing on the target. The
+ * margins below are the fallback: a negative margin on the list cancels the
+ * outer edge, which is what `gap` would have done.
+ */
+.genres {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.genres__list {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0 calc(var(--space-2) * -1);
+  padding: 0;
+  list-style: none;
+}
+
+.genres__list > li {
+  margin: var(--space-1) var(--space-2);
+}
+
+/* The chip is a quiet button without the primary action's top margin.
+   Doubled with .button for the same reason as above: .button sets margin-top
+   and is written below this, so at equal specificity it won and this rule did
+   nothing (#49). */
+.button.genres__genre,
+.button.genres__leave {
+  margin-top: 0;
+}
+
+.genres__leave {
+  justify-self: start;
+}
+
+.field__label {
+  font-weight: 600;
+}
+
+.field__input {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-base);
+  color: var(--text-strong);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius);
+  font: inherit;
+}
+
+.field__hint {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.button {
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  /* Two lines that only an anchor needs, and that no `<button>` notices:
+     Download File (#19) is an `<a download>`, because saving a file is the
+     browser's own job. A `<button>` is already inline-block, and a flex item
+     is blockified whatever this says. */
+  display: inline-block;
+  text-decoration: none;
+}
+
+.button--primary {
+  background: var(--accent);
+  color: var(--accent-text);
+}
+
+/* A secondary action: the same shape, without competing with the primary one. */
+.button--quiet {
+  background: none;
+  border-color: var(--surface-line);
+  color: var(--text-strong);
+}
+
+.button[disabled] {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.notice {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.notice--problem {
+  color: var(--warning);
+}
+
+/*
+ * The focus highlight. Every focus on a TV is keyboard focus, so `:focus`
+ * carries the ring, and it is taken away again only while the User is driving
+ * with a pointer (stories 54 and 65).
+ *
+ * `:focus-visible` would be the browser's own answer and is Chrome 86, well
+ * above the floor, so `src/navigation/input-modality.ts` writes the latest kind
+ * of input on the root element instead and these rules read it. Nothing written
+ * means a keyboard, so the ring is there from the first keypress rather than
+ * after it. Selector lists are written out: `:is()` and `:where()` are Chrome
+ * 88 and ship raw, which would drop the whole rule on the target.
+ */
+a:focus,
+button:focus,
+input:focus,
+select:focus,
+textarea:focus,
+[tabindex]:focus {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/*
+ * A field keeps its ring whatever the User is driving with, because something
+ * has to say where the typing is going. This is what `:focus-visible` itself
+ * does, and it is the one place a pointer still gets a highlight.
+ */
+html[data-input='pointer'] a:focus,
+html[data-input='pointer'] button:focus,
+html[data-input='pointer'] select:focus,
+html[data-input='pointer'] [tabindex]:focus {
+  outline: none;
+}
+
+/*
+ * The app shell: one navigation bar at a time, chosen in JavaScript from a
+ * media query (`src/shell/layout.ts`), so only the bar in use is in the
+ * document. ADR 0002 bans container queries, and this is a page-level
+ * breakpoint anyway.
+ */
+.shell {
+  min-height: 100vh;
+}
+
+/*
+ * A screen inside the shell runs from the top rather than being stretched down
+ * the viewport, which is what Home and every section wants. It is the shell's
+ * doing rather than each screen's, so no screen has to remember to ask.
+ */
+.shell .screen {
+  align-content: start;
+  gap: var(--space-4);
+}
+
+/* Room for the phone's bottom bar, which is fixed and would cover content. */
+.shell--with-bottom-bar {
+  padding-bottom: 72px;
+}
+
+/*
+ * The top bar sits over the Billboard and is transparent until the page moves,
+ * with a gradient so the links stay readable over artwork from the first pixel
+ * (story 62). A gradient rather than `backdrop-filter`, which is Chrome 76.
+ */
+.top-bar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: grid;
+  /* The wordmark, the sections, then who is watching at the end. */
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-2) var(--space-4);
+  background-image: linear-gradient(to bottom, rgb(0 0 0 / 70%), rgb(0 0 0 / 0%));
+  transition: background-color 150ms ease-out;
+}
+
+.top-bar--solid {
+  background-color: var(--surface-base);
+  background-image: none;
+  border-bottom: 1px solid var(--surface-line);
+}
+
+.top-bar__wordmark {
+  /* Smaller than the wordmark on the sign-in screens, and never wrapped. */
+  font-size: 30px;
+  line-height: 1.2;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+/* Grid, so `gap` is the Chrome 66 one rather than the Chrome 84 flex one. */
+.top-bar__sections {
+  display: grid;
+  grid-auto-flow: column;
+  justify-content: start;
+  gap: var(--space-4);
+  /* Narrow laptops scroll the sections rather than squashing the wordmark. */
+  overflow-x: auto;
+}
+
+.top-bar__link {
+  padding: var(--space-1) 0;
+  color: var(--text-muted);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.top-bar__link:hover {
+  color: var(--text-strong);
+}
+
+.top-bar__link--current {
+  color: var(--text-strong);
+  font-weight: 600;
+  box-shadow: inset 0 -2px 0 0 var(--accent);
+}
+
+/*
+ * The phone's bottom bar: Home, Search, My List and who is watching, the shape
+ * phone Users already know (story 61). Fixed, because it is the one thing that
+ * must stay reachable however far a Row has been scrolled.
+ */
+.bottom-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  align-items: start;
+  padding: var(--space-2) var(--space-1);
+  background: var(--surface-base);
+  border-top: 1px solid var(--surface-line);
+}
+
+.bottom-bar__link,
+.bottom-bar__user {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: center;
+  text-decoration: none;
+}
+
+/*
+ * Who is watching, in either bar. It is a real `<button>` in both — it opens
+ * the User Picker (#8) — so the browser's own button look comes off and the
+ * focus ring from `base.css` is the only thing marking it.
+ */
+.bottom-bar__user,
+.top-bar__user {
+  background: none;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+/* On the top bar it is the picture and the name side by side, not stacked. */
+.top-bar__user {
+  display: grid;
+  grid-auto-flow: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1);
+  color: var(--text-muted);
+}
+
+.top-bar__user:hover {
+  color: var(--text-strong);
+}
+
+/* A fixed square rather than `aspect-ratio`, which is Chrome 88. */
+.top-bar__picture,
+.top-bar__initial {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--surface-raised);
+}
+
+.top-bar__picture {
+  object-fit: cover;
+}
+
+.top-bar__initial {
+  display: grid;
+  align-content: center;
+  justify-content: center;
+  border: 1px solid var(--surface-line);
+  font-family: var(--font-display);
+  font-size: 18px;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.top-bar__name {
+  /* A long name must not push the sections off the bar. */
+  max-width: 12ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bottom-bar__link--current {
+  color: var(--text-strong);
+  font-weight: 600;
+}
+
+/* A fixed square rather than `aspect-ratio`, which is Chrome 88. */
+.bottom-bar__picture,
+.bottom-bar__initial {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--surface-raised);
+}
+
+.bottom-bar__picture {
+  object-fit: cover;
+}
+
+.bottom-bar__initial {
+  display: grid;
+  align-content: center;
+  justify-content: center;
+  border: 1px solid var(--surface-line);
+  font-family: var(--font-display);
+  font-size: 14px;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.bottom-bar__name {
+  /* A long name must not widen its column and squeeze the links. */
+  max-width: 10ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/*
+ * The Home Layout editor (#10).
+ *
+ * Grid throughout, and `gap` only inside a grid: flex `gap` is Chrome 84 and
+ * silently does nothing on the floor, so the buttons beside a Row are a grid
+ * with `grid-auto-flow: column` rather than a flex row. They wrap to their own
+ * line on a phone by dropping back to one column.
+ */
+.home__edit {
+  margin: 0;
+}
+
+/*
+ * The way to Movies and Series at phone width (#51), and only there: the
+ * bottom bar carries four items and neither is among them.
+ *
+ * It wraps, because this is a row of choices on the narrowest screen the app
+ * supports and nine languages name these two sections at nine lengths — #35
+ * shipped a row that ran off the side of a 375px screen with every test
+ * passing, because Playwright scrolls an element into view before looking at
+ * it. The links share the quiet button look with Edit Home below them, which
+ * is the nearest precedent for a non-Row element on Home.
+ *
+ * **The space between the links is margins on the children, never flex `gap`**
+ * (#61). `gap` is Chrome 84 and this row had it: on ADR 0002's floor of webOS
+ * 5 / Chromium 68 the declaration is simply dropped and **the two links touch
+ * each other**. It is #49's class of defect — a rule that is inert on the
+ * target and invisible to every test, because the suite runs a desktop
+ * Chromium where `gap` works — and the shape here is #44's, as #56 applied it
+ * to both of the Billboard's rows: wrapped flex, `var(--space-1)` margins on
+ * the children, and a matching negative side margin on the row so the first
+ * link still lines up with the words above it however many lines the row takes.
+ *
+ * `test/e2e/movies-and-series.spec.ts` measures the distance between the two
+ * links **twice**: as this browser draws it, and again with flex `gap` forced
+ * to zero, which is exactly what the floor does to it. Only the second
+ * measurement can fail while the defect is present, and neither the
+ * scroll-width check nor #56's own-right-edge loop can see it at all — the row
+ * wraps and nothing is clipped, so nothing overflows and no link leaves the
+ * screen. A spacing defect is only visible as a space.
+ */
+.home__sections {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  /* Cancels the children's own side margins at both edges of the line. */
+  margin: 0 calc(var(--space-1) * -1);
+  min-width: 0;
+}
+
+/*
+ * Written `.home__sections > .button` rather than on a class alone, which is
+ * #49's trap and the reason `.user-list__sign-out`, `.genres__genre` and both
+ * of the Billboard's rows are doubled with `.button` too: `.button` sets
+ * `margin-top`, so a selector that only tied with it on specificity would be
+ * decided by source order. This rule does not tie — it wins outright — and
+ * that is the point, because it is then true wherever in this file it sits.
+ */
+.home__sections > .button {
+  margin: var(--space-1);
+}
+
+.layout-rows {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.layout-row {
+  display: grid;
+  gap: var(--space-1) var(--space-3);
+  align-items: center;
+  padding: var(--space-3);
+  background: var(--surface-raised);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius);
+}
+
+.layout-row__name {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.layout-row__note {
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.layout-row__buttons {
+  display: grid;
+  gap: var(--space-2);
+  justify-content: start;
+}
+
+.layout-add__heading {
+  margin: var(--space-5) 0 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.layout-add {
+  display: grid;
+  gap: var(--space-2);
+  justify-content: start;
+  margin: 0;
+}
+
+/*
+ * Picking the genre or the Collection for a Row that needs one (#15).
+ *
+ * Laid out like the genre chips in Search, and for the same reason: `gap` on a
+ * flex container is Chrome 84 and silently does nothing on the target (ADR
+ * 0002), so the space between the choices is margins on the items and a
+ * negative margin on the list to pull the outer ones back into line.
+ */
+.layout-choices {
+  margin: var(--space-3) 0 0;
+}
+
+.layout-choices__heading {
+  margin: 0 0 var(--space-2);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.layout-choices__list {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0 calc(var(--space-2) * -1);
+  padding: 0;
+  list-style: none;
+}
+
+.layout-choices__list > li {
+  margin: var(--space-1) var(--space-2);
+}
+
+.layout-choices__list .button {
+  margin-top: 0;
+}
+
+.layout-done {
+  margin: var(--space-5) 0 0;
+}
+
+/*
+ * The title page (#17).
+ *
+ * Two shapes, one document: a full page on a phone and on a TV, and a pop-up
+ * where there is a wide precise pointer. Which one is chosen in JavaScript, in
+ * `src/shell/layout.ts`, as the navigation bars are — not with a CSS-only
+ * breakpoint — because `position: fixed` is what makes the arrow keys treat the
+ * pop-up as the flow (`spatial-navigation.ts`), and that has to be a fact about
+ * the document rather than about the viewport at paint time.
+ */
+.title {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.title--popup {
+  position: fixed;
+  /* Not the `inset` shorthand, which is Chrome 87 and ships raw (ADR 0002). */
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 20;
+  overflow-y: auto;
+  padding: var(--space-5);
+  background: var(--surface-base);
+}
+
+/* The sheet the page's own content sits on, so the pop-up has a width. */
+.title__sheet {
+  display: grid;
+  gap: var(--space-3);
+  max-width: 900px;
+  margin: 0 auto;
+  min-width: 0;
+}
+
+/*
+ * The backdrop. It is an `<img>` rather than a background image so the browser
+ * can lazily decode it and so it is the one request the page makes for artwork;
+ * `object-fit` is Chrome 32 and needs nothing.
+ */
+.title__backdrop {
+  width: 100%;
+  max-height: 42vh;
+  object-fit: cover;
+  border-radius: var(--radius);
+}
+
+.title__heading {
+  margin: 0;
+  font-family: var(--font-display);
+  /* Bebas Neue has one weight: distinguish type by size and spacing, never by
+     weight, or the browser synthesises a bold that looks wrong on it. */
+  font-weight: 400;
+  font-size: 2.5rem;
+  letter-spacing: 0.02em;
+  line-height: 1.1;
+  color: var(--text-strong);
+}
+
+.title__logo {
+  display: block;
+  max-width: min(100%, 360px);
+  height: auto;
+}
+
+/*
+ * The facts line and the actions under it. **Both wrap**, and that is not a
+ * nicety: a single grid row of `max-content` columns is as wide as its content,
+ * so a Movie with a year, an age rating, a runtime, two genres and two ratings
+ * made the whole sheet 635px wide and ran off the side of a 375px screen —
+ * taking the extra ratings (#20) and the Mark watched button with it. No
+ * end-to-end test saw it, because Playwright scrolls an element into view
+ * before touching it, so everything was "visible" the whole time.
+ *
+ * Wrapped flex with margins on the children rather than grid `gap`: flex `gap`
+ * is Chrome 84 and silently does nothing on the floor (`decisions.md` §6), and
+ * `grid-auto-flow: row` with `auto-fill` tracks would make even columns of
+ * things whose widths have nothing to do with each other. This is the same
+ * shape `.genres__list` and `.ratings` use.
+ */
+.title__facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  /* Cancels the children's own side margins at both edges of the line. */
+  margin: 0 calc(var(--space-3) * -0.5);
+  color: var(--text-muted);
+  min-width: 0;
+}
+
+.title__fact {
+  margin: 0 calc(var(--space-3) * 0.5);
+}
+
+.title__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 0 calc(var(--space-1) * -1);
+  min-width: 0;
+}
+
+.title__actions > * {
+  margin: var(--space-1);
+}
+
+/*
+ * My List, here, is the same control a card carries — and on a card it is drawn
+ * only under the pointer, which is exactly what a remote cannot do. On the
+ * title page it is always drawn and always a focus stop, which is what makes
+ * story 70 reachable without a mouse.
+ */
+.title__actions > .card__control {
+  display: inline-block;
+  position: static;
+  top: auto;
+  right: auto;
+  /* The line's own spacing, so the three controls sit on one baseline however
+     the line wraps. */
+  margin: var(--space-1);
+}
+
+/*
+ * The YouTube trailer (#19, story 75), which is in the page's own flow rather
+ * than over it: #40 is what happens when something focusable is put over a
+ * screen that is already `position: fixed`, and an iframe holding another
+ * site's page is as focusable as anything gets.
+ *
+ * `aspect-ratio` is Chrome 88 and the floor is 68 (ADR 0002), so the shape is
+ * the padding-ratio box the ADR names: 56.25% is 9/16, and the frame is
+ * stretched over it. `height: 0` is what makes the padding the whole height.
+ */
+.title__trailer {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.title__trailer-frame {
+  position: relative;
+  width: 100%;
+  height: 0;
+  padding-bottom: 56.25%;
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+}
+
+.title__trailer-frame > iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.title__overview {
+  margin: 0;
+  max-width: 60ch;
+  color: var(--text-strong);
+}
+
+.title__details {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+}
+
+.title__label {
+  color: var(--text-muted);
+}
+
+.title__value {
+  margin: 0;
+  color: var(--text-strong);
+  min-width: 0;
+}
+
+/*
+ * A Series' Seasons and Episodes (#18).
+ *
+ * Grid throughout, and grid `gap`, because flex `gap` is Chrome 84 and
+ * silently does nothing on the floor while grid `gap` is 66 (ADR 0002). The
+ * Episodes are a vertical list on every width: a row per Episode is what makes
+ * two focus stops in one — the Episode and its watched toggle — something the
+ * arrow keys can read, where a horizontal strip of cards could not.
+ */
+.series {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.series__seasons {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
+  justify-content: start;
+  gap: var(--space-2);
+  /* Many Seasons scroll sideways rather than wrapping into a block that pushes
+     the Episodes off the screen. */
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  padding-bottom: var(--space-1);
+}
+
+/* The chosen Season, which is `aria-pressed` and so needs no class of its own.
+   Written out rather than with `:is()`, which ships raw to the target. */
+.series__season[aria-pressed='true'] {
+  background: var(--surface-raised);
+  color: var(--text-strong);
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.series__episodes {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.episode {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--surface-raised);
+}
+
+/*
+ * The Episode itself: the still beside its name and length where there is room,
+ * and stacked on a phone. A button rather than a link — an Episode has no
+ * address of its own, pressing it plays it.
+ */
+.episode__press {
+  display: grid;
+  gap: var(--space-1) var(--space-3);
+  align-items: center;
+  justify-items: start;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-strong);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.episode__still {
+  display: block;
+  width: 100%;
+  max-width: 200px;
+  height: auto;
+  border-radius: var(--radius);
+}
+
+.episode__name {
+  min-width: 0;
+}
+
+.episode__length,
+.episode__overview {
+  margin: 0;
+  color: var(--text-muted);
+  min-width: 0;
+}
+
+.episode__overview {
+  max-width: 60ch;
+}
+
+/* The same bar a card carries, which is positioned over artwork there and sits
+   in the row's own flow here. */
+.episode > .card__progress {
+  position: static;
+  display: block;
+  top: auto;
+  transform: none;
+  width: 100%;
+  max-width: 200px;
+  border-radius: var(--radius);
+}
+
+.episode__watched {
+  justify-self: start;
+  margin-top: 0;
+}
+
+/* Wide enough for an Episode's still beside its name. */
+@media (min-width: 640px) {
+  .episode__press {
+    grid-template-columns: 200px 1fr max-content;
+  }
+}
+
+/* Wide enough for the name and its buttons side by side. */
+@media (min-width: 640px) {
+  .layout-row {
+    grid-template-columns: 1fr auto auto;
+  }
+
+  .layout-row__buttons {
+    grid-auto-flow: column;
+  }
+
+  .layout-add {
+    grid-auto-flow: column;
+  }
+}
+
+/*
+ * The User Picker (#8): who of the household is watching.
+ *
+ * Fixed and over everything, because it is asked from anywhere in the app and
+ * has to cover whatever was behind it. `src/navigation/` treats a fixed overlay
+ * as the flow in its own right, so the arrow keys walk the Users inside it and
+ * never reach the bars underneath (#7).
+ *
+ * `inset` is Chrome 87 and ships raw, so the four sides are written out. It
+ * sits above both bars, which are `z-index: 2`.
+ */
+.user-picker {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 3;
+  display: grid;
+  align-content: center;
+  justify-content: center;
+  padding: var(--space-4);
+  /* Opaque rather than `backdrop-filter`, which is Chrome 76. */
+  background-color: var(--surface-base);
+  /* A long list of Users scrolls rather than running off the screen. */
+  overflow-y: auto;
+}
+
+.user-picker__panel {
+  width: 100%;
+  max-width: 720px;
+}
+
+/*
+ * The settings screen (#11): one group per thing a User can change.
+ *
+ * Grid `gap` throughout, which is native on the target — flex `gap` is not,
+ * and silently does nothing there (decisions.md §6).
+ */
+.settings-group {
+  margin: var(--space-5) 0 0;
+}
+
+/*
+ * A heading over a run of settings groups, for the settings that belong
+ * together because they are kept in the same place: "What plays" gathers the
+ * four the User's Jellyfin account carries (#35), and its own groups drop to
+ * `h3` under it. A rule above it, because the point of the heading is that what
+ * follows is a different kind of thing from what came before.
+ */
+.screen__subheading {
+  margin: var(--space-5) 0 var(--space-2);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--surface-line);
+  font-size: clamp(19px, 2.4vw, 23px);
+  font-weight: 600;
+}
+
+.settings-group__heading {
+  margin: 0 0 var(--space-2);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.settings-choices {
+  display: grid;
+  gap: var(--space-2);
+  justify-content: start;
+  margin: var(--space-2) 0 0;
+}
+
+/*
+ * The Accent Colour presets. Each swatch is filled with the colour it sets and
+ * carries its own text colour, so a User can see the pair they are choosing
+ * before they choose it. They wrap at any width rather than scrolling.
+ */
+.accents {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 48px);
+  gap: var(--space-2);
+  justify-content: start;
+  margin: var(--space-3) 0 0;
+}
+
+.accent {
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: 2px solid var(--surface-line);
+  border-radius: 50%;
+  font: inherit;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.accent[aria-pressed='true'] {
+  border-color: var(--text-strong);
+}
+
+/* A pressed choice among several: the quiet button, filled in. */
+.button--quiet[aria-pressed='true'] {
+  background: var(--surface-raised);
+  border-color: var(--text-strong);
+  font-weight: 600;
+}
+
+@media (min-width: 640px) {
+  .settings-choices {
+    grid-auto-flow: column;
+  }
+}
+
+/*
+ * The player (#25).
+ *
+ * `position: fixed` over everything, and that is load-bearing rather than a
+ * look: `src/navigation/spatial-navigation.ts` tries the page's own flow before
+ * anything fixed, and from inside something fixed the fixed thing *is* the flow,
+ * so the arrow keys stay among the player's own controls with no focus trapping
+ * (#7 wrote that rule, #17's pop-up already leans on it).
+ *
+ * `inset` is Chrome 87 and ships raw, so the four sides are written out. It sits
+ * above the title page's pop-up, which is `z-index: 20`.
+ *
+ * Black rather than `--surface-base`: a film's own letterboxing should not have
+ * a different black beside it. Grid `gap`, which is native on the target — flex
+ * `gap` is Chrome 84 and silently does nothing there (decisions.md §6).
+ */
+.player {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 30;
+  display: grid;
+  /* The picture takes what is left; the controls take what they need. */
+  grid-template-rows: 1fr auto;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: #000;
+}
+
+/*
+ * `object-fit: contain` is Chrome 32 and needs nothing, and it is what keeps a
+ * film's own shape instead of stretching it to the screen's.
+ */
+.player__video {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  background: #000;
+  object-fit: contain;
+}
+
+/*
+ * The controls (#26): the seek bar and its two times above the buttons.
+ *
+ * They are the player's second grid row rather than something floated over the
+ * picture, so a bar of chrome never sits on top of a face. The row is simply
+ * not rendered while the controls are idle — see the note in `player.tsx` on
+ * hiding rather than fading — so nothing here has a hidden state to style.
+ */
+.player__controls {
+  display: grid;
+  gap: var(--space-2);
+}
+
+/*
+ * `auto 1fr auto`: the times take what they need and the bar takes the rest.
+ * The times are tabular so the bar does not shuffle sideways every second as
+ * the digits change width.
+ */
+.player__scrubber {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.player__time {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * The bar is a `role="slider"`, which is a `div`, so its track is drawn here.
+ * It is three times taller than the track it shows: a line four pixels high is
+ * nothing to aim a mouse at, and a focus ring around a four-pixel box is not a
+ * focus ring anyone sees across a room.
+ */
+.player__seek {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: var(--space-3);
+  cursor: pointer;
+}
+
+.player__seek::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: var(--space-1);
+  border-radius: var(--radius);
+  background: var(--surface-line);
+}
+
+/*
+ * How far along, in the User's own Accent Colour, which is what every Row's
+ * progress bar uses. Its width is the one thing the player sets inline: it is a
+ * number that changes four times a second, and a custom property set on every
+ * frame is the same write with more indirection.
+ */
+.player__seek-played {
+  position: relative;
+  height: var(--space-1);
+  border-radius: var(--radius);
+  background: var(--accent);
+}
+
+/* The handle, so where the bar has got to is readable at a glance on a TV. */
+.player__seek-played::after {
+  content: '';
+  position: absolute;
+  right: calc(var(--space-2) * -1);
+  top: calc(var(--space-1) * -1.5);
+  width: var(--space-3);
+  height: var(--space-3);
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+/*
+ * The scrubbing thumbnail (#32, story 90).
+ *
+ * Absolutely positioned **inside the bar**, which is already
+ * `position: relative`, and lifted clear of it by its own height plus a gap —
+ * so it sits above the bar rather than under the pointer, and never over the
+ * buttons below. Its `left`, `width`, `height` and the three background
+ * properties are all set inline, because every one of them is a number that
+ * changes as a pointer moves and a custom property set on each frame is the
+ * same write with more indirection — the argument `.player__seek-played`
+ * already makes about its width.
+ *
+ * `bottom` rather than `top`, so a preview of any height grows upwards from
+ * the bar instead of pushing down over the controls.
+ *
+ * `pointer-events: none` is what keeps the bar pressable underneath it: the
+ * preview follows the pointer, so without this the pointer would be over the
+ * preview rather than over the bar the moment it appeared, and the next move
+ * would be read as leaving the bar.
+ */
+.player__preview {
+  position: absolute;
+  bottom: calc(100% + var(--space-2));
+  z-index: 1;
+  pointer-events: none;
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius);
+  background-color: #000;
+  background-repeat: no-repeat;
+}
+
+/*
+ * Stacked by default and in a line once there is room. There are three buttons
+ * here since #27 — play/pause, the tracks and Close — and three on one line is
+ * wider than a phone, so the narrow case is the default and the wide one is the
+ * override, which is the way round that cannot overflow.
+ */
+.player__buttons {
+  display: grid;
+  grid-auto-flow: row;
+  justify-content: center;
+  justify-items: center;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+@media (min-width: 640px) {
+  .player__buttons {
+    grid-auto-flow: column;
+  }
+}
+
+/* What went wrong, and the way out of it, as one block over the picture. */
+.player__problem {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: center;
+}
+
+/*
+ * A notice over the picture rather than beside it, so saying something went
+ * wrong does not move the video. It is the last row's own space that it sits
+ * above, which is why nothing here changes the grid.
+ */
+.player .notice {
+  margin: 0;
+  text-align: center;
+}
+
+/*
+ * The subtitles the app draws itself (#27).
+ *
+ * It is a DOM overlay rather than a canvas, which `player-subtitles.md` §6c
+ * recommends: text layout, wrapping and font fallback come free, it scales with
+ * CSS, and a screen reader can read it. The canvas is for PGS bitmaps (#30) and
+ * for libass (#29), which need one.
+ *
+ * **It shares the picture's grid cell rather than being positioned over it.**
+ * The player is `grid-template-rows: 1fr auto`, so pinning both the video and
+ * this to row 1 puts the cues inside the picture's own area and never over the
+ * controls in row 2 — which an absolutely positioned overlay anchored to the
+ * player's bottom edge would be the moment the controls appeared. It also
+ * needs no `z-index`: an unpositioned grid item paints in document order, and
+ * this is rendered after the `<video>`.
+ *
+ * `pointer-events: none` so a cue is never something a User can press, and
+ * never swallows a press meant for the picture under it.
+ *
+ * The subset drawn is the one §6c says to decide rather than discover:
+ * centred, bottom-anchored, one line per line of the cue. WebVTT positioning
+ * (`line`, `position`, `align`, regions) is #29's.
+ */
+.player__subtitles {
+  grid-row: 1;
+  grid-column: 1;
+  /* The bottom of the picture, which is where a subtitle belongs. */
+  align-self: end;
+  display: grid;
+  justify-items: center;
+  gap: var(--space-1);
+  padding: 0 var(--space-4) var(--space-2);
+  pointer-events: none;
+  text-align: center;
+}
+
+/*
+ * Where libass draws styled subtitles (#29, story 104).
+ *
+ * The one canvas in the player, and the exception `player-subtitles.md` §6c
+ * names when it argues for a DOM overlay: libass rasterises its own glyphs and
+ * needs somewhere to put the pixels. Everything else about where it sits is
+ * the text overlay's reasoning exactly — the picture's own grid cell, so it is
+ * never over the controls in row 2 and is inside the element that goes
+ * full-screen — except that this one fills the cell rather than sitting at the
+ * bottom of it: an ASS file positions its own lines, including signs at the
+ * top of the frame, so the whole picture is its canvas.
+ *
+ * `pointer-events: none` so it never swallows a press meant for the picture.
+ * The element's own width and height attributes are the renderer's to set,
+ * which is why only the box is described here.
+ */
+/*
+ * Where libpgs draws image subtitles (#30, story 105), which wants the same
+ * box for the same reasons and so shares the rule rather than restating it.
+ *
+ * A PGS display set carries absolute coordinates inside the video's own frame,
+ * so like an ASS file it positions its own lines and needs the whole picture
+ * rather than a strip at the bottom. The renderer is told `contain`, matching
+ * `.player__video`'s `object-fit` above, so the two letterbox alike and a line
+ * meant for the bottom of a 2.39:1 frame lands on the frame and not in the bar
+ * below it.
+ *
+ * Only ever one of the two is in the tree at a time — the player renders one
+ * overlay, never two — so this is a shared box, not a stack.
+ */
+.player__styled-subtitles,
+.player__image-subtitles {
+  grid-row: 1;
+  grid-column: 1;
+  width: 100%;
+  height: 100%;
+  /*
+   * **The canvas must not be allowed to size the row.** A grid item's
+   * `min-height` is `auto`, which for a replaced element means its *intrinsic*
+   * height — and libpgs sets this canvas's `height` attribute to the stream's
+   * own 1080, so the picture's row grew to fit a 1080-pixel canvas and pushed
+   * the controls off the bottom of the window. `width: 100%` and
+   * `height: 100%` do not prevent that; only clearing the minimum does.
+   *
+   * `.player__video` has carried `min-height: 0` since #26 for exactly this
+   * reason, which is the clue this followed. It never showed on #29's canvas
+   * because libass sizes that one to the element's own pixel box rather than
+   * to anything the file says, so its intrinsic size is already the right one.
+   *
+   * Found by **looking at a screenshot**: every box assertion in
+   * `image-subtitles.spec.ts` compares the canvas with the picture, and the
+   * two grew together.
+   */
+  min-width: 0;
+  min-height: 0;
+  pointer-events: none;
+}
+
+/* Pinned to the same cell, so the two really do overlap. */
+.player__video {
+  grid-row: 1;
+  grid-column: 1;
+}
+
+/*
+ * One line of a cue. The box behind it is what makes white text readable over
+ * a bright frame, and it is per line rather than around the block so a short
+ * second line does not get a full-width backdrop.
+ *
+ * Sized in `vw` with `clamp()` — which is downleveled for the target — because
+ * a subtitle has to be readable across a room on a TV and in a hand on a
+ * phone, and both are the same CSS.
+ */
+.player__subtitle-line {
+  max-width: 100%;
+  padding: 0.1em 0.4em;
+  border-radius: var(--radius);
+  background: rgb(0 0 0 / 0.65);
+  color: #fff;
+  font-size: clamp(16px, 2.6vw, 32px);
+  line-height: 1.3;
+  /* A cue's own line breaks are elements; a long line still has to wrap. */
+  white-space: pre-wrap;
+}
+
+/*
+ * The track picker (#27), over the controls rather than beside them.
+ *
+ * `position: fixed` inside the player, which is itself fixed: from inside
+ * something fixed that fixed thing is the arrow keys' flow (`fixedRootOf` in
+ * `src/navigation/`), so focus stays in this menu with no focus trapping — the
+ * same rule #17's pop-up and the player itself rely on.
+ *
+ * It is scrollable rather than tall: a file can carry a dozen audio tracks, and
+ * a menu taller than the screen with no way down is unusable with a remote.
+ */
+.player__tracks {
+  position: fixed;
+  z-index: 40;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(560px, calc(100% - var(--space-5)));
+  max-height: calc(100% - var(--space-5));
+  overflow-y: auto;
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius);
+  background: var(--surface-base);
+}
+
+/*
+ * The speed, the quality and picture-in-picture (#32). The same box as the
+ * track picker above, and deliberately the same class names inside it —
+ * `.player__track-group`, `.player__track-heading`, `.player__track-choices`
+ * — because the two menus are one shape: a heading, a wrapped row of choices
+ * a remote reaches by direction, and a Done button. A second set of rules
+ * saying the same things is a second set to drift.
+ */
+.player__options {
+  position: fixed;
+  z-index: 40;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(560px, calc(100% - var(--space-5)));
+  max-height: calc(100% - var(--space-5));
+  overflow-y: auto;
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius);
+  background: var(--surface-base);
+}
+
+.player__track-group {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.player__track-heading {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+/*
+ * The tracks themselves, wrapping into columns like the Accent Colour swatches
+ * and the languages on the settings screen, so the arrow keys reach every one
+ * of them by direction alone. Grid rather than wrapped flex: `gap` needs a
+ * hand-written fallback in flex on the Chromium 68 floor and does not in grid.
+ */
+.player__track-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--space-2);
+}
+
+/*
+ * **Any** control in the player that is offered but cannot be pressed. There
+ * are two of them: Subtitle timing on a track the Server burned into the
+ * picture (#30), and "Sync to this line" with no line on the screen (#28).
+ *
+ * Each is a focus stop and each is named — `aria-disabled`, not `disabled` —
+ * so a remote can reach it and read the reason in words, where `disabled`
+ * would remove it from the arrow keys with nothing to explain the gap. Which
+ * is exactly why it has to *look* unavailable too: without this, the only
+ * difference between the control and a working one is discovered by pressing
+ * it and watching nothing happen.
+ *
+ * **Scoped to the player rather than to a group inside it** (#50). It was
+ * `.player__track-choices` for #27's undrawable tracks, then
+ * `.player__track-group` when #30 removed those — and the timing *panel* is
+ * neither, so the one control left outside the selector was the one a User was
+ * most likely to press. A rule about the player says what is actually meant,
+ * and the next panel inherits it instead of repeating the bug. There is no
+ * control in here that is deliberately undimmed: a feature a device does not
+ * have is not drawn at all (see `playback-options.tsx`).
+ *
+ * It sits well below `.button`, so it wins on source order at equal
+ * specificity (#49) rather than by accident.
+ */
+.player .button[aria-disabled='true'] {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/*
+ * A row of choices with too many to sit on one line: the nine languages for
+ * the sound and for the subtitles (#35). They wrap into even columns at any
+ * width rather than scrolling sideways, as the Accent Colour swatches do, so
+ * the arrow keys reach every one of them by direction alone. Both of these sit
+ * after the rule above, which they override.
+ *
+ * Grid rather than wrapped flex on purpose: `gap` needs a fallback in flex on
+ * the Chromium 68 floor and does not in grid (`decisions.md` §6).
+ */
+.settings-choices--wrap {
+  /* `grid-auto-flow: row` as well, or the rule above lays all nine out in one
+     row and the last of them runs off the side of the screen. */
+  grid-auto-flow: row;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 180px));
+}
+
+/*
+ * A row of choices whose labels are sentences — when to show subtitles — so one
+ * per line at every width.
+ */
+.settings-choices--stacked {
+  grid-auto-flow: row;
+}
+
+/*
+ * The Subtitle timing panel (#28).
+ *
+ * **Anchored to the top**, which is the whole of story 101: a User adjusting
+ * the subtitles has to be able to see them, and the cues sit at the bottom of
+ * the picture with the controls in the row below that. Top is the one place
+ * nothing of either is. This is the acceptance criterion that is checked by
+ * looking at a laid-out screen, so `test/e2e/the-subtitle-offset.spec.ts`
+ * measures this box against the cue's rather than trusting this comment.
+ *
+ * `position: fixed` inside the player, which is itself fixed, for the reason
+ * the track picker is: from inside something fixed that fixed thing is the
+ * arrow keys' flow (`fixedRootOf` in `src/navigation/`), so focus stays in the
+ * panel with no focus trapping — which is also what makes Left and Right the
+ * panel's while it is open.
+ *
+ * Narrow and centred rather than full width: it is a number and five buttons,
+ * and a panel as wide as a television would put Reset a long way from the step
+ * it undoes.
+ */
+.player__timing {
+  position: fixed;
+  z-index: 40;
+  top: var(--space-4);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(420px, calc(100% - var(--space-5)));
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius);
+  /* Opaque enough to read over a bright frame, as the next-Episode panel is. */
+  background: rgb(0 0 0 / 0.85);
+  text-align: center;
+}
+
+/*
+ * `−`, the readout, `+`, on one line at every width.
+ *
+ * `auto 1fr auto`, which is what the seek bar's own row uses and for the same
+ * reason: the two buttons take what they need and are pinned to the panel's
+ * edges, so a readout that goes from "Subtitles in sync" to "Subtitles 0.1 s
+ * later" never moves what is under a held thumb. `−` and `+` are two
+ * characters, so the wrapping the rest of the player's buttons need does not
+ * apply to these.
+ *
+ * Grid rather than flex, because `gap` in flex is Chrome 84 and silently does
+ * nothing on the floor (decisions.md §6).
+ */
+.player__timing-adjust {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/*
+ * The readout. Tabular, so stepping from 0.9 to 1.0 under a held thumb does
+ * not shuffle the digits — the same reason the clock beside the seek bar is
+ * tabular.
+ */
+.player__timing-readout {
+  margin: 0;
+  font-size: 1.125rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * Big enough to aim a thumb at and to hold. `touch-action: manipulation`
+ * (Chrome 36) takes away the double-tap-to-zoom delay a held button would
+ * otherwise wait out, and `user-select: none` stops a hold selecting the glyph
+ * instead of repeating.
+ */
+.player__timing-step {
+  min-width: 64px;
+  font-size: 1.25rem;
+  line-height: 1.2;
+  touch-action: manipulation;
+  user-select: none;
+}
+
+/*
+ * Skip Intro and Skip Credits (#31).
+ *
+ * **It shares the picture's grid cell**, the way the subtitles above do and for
+ * the same reason: the player is `grid-template-rows: 1fr auto`, so pinning
+ * this to row 1 keeps it inside the picture's own area and never over the
+ * controls in row 2, which an overlay anchored to the player's bottom edge
+ * would be the moment they appeared.
+ *
+ * Bottom-right, which is where every streaming app puts it and so where a
+ * household looks for it. It is deliberately **not** inside `.player__buttons`:
+ * that row hides with the controls, and an offer good only for the length of an
+ * intro cannot be one a User has to summon the controls to find.
+ *
+ * `justify-self: end` rather than a width, so the button is as wide as its own
+ * words in any language — `es` says "Saltar créditos" — and nothing here can
+ * run off the side of a phone.
+ */
+.player__skip {
+  grid-row: 1;
+  grid-column: 1;
+  align-self: end;
+  justify-self: end;
+  padding: 0 var(--space-3) var(--space-3);
+}
+
+/*
+ * The next Episode (#31), over the bottom of the picture.
+ *
+ * Same cell as the picture, same reason again. It is centred rather than in a
+ * corner because it is the one thing on the screen worth reading at that
+ * moment, and it carries the two buttons in `.player__buttons`, which stacks
+ * on a narrow screen and goes into a line at 640px — the way round that cannot
+ * overflow.
+ *
+ * `max-width` with `calc` rather than a fixed width: an Episode's name is as
+ * long as the Server says it is, and "Next: Severance: Woe's Hollow" has to
+ * wrap on a phone rather than widen the panel past the screen.
+ */
+.player__next {
+  grid-row: 1;
+  grid-column: 1;
+  align-self: end;
+  justify-self: center;
+  max-width: calc(100% - var(--space-4));
+  display: grid;
+  justify-items: center;
+  gap: var(--space-2);
+  margin: 0 var(--space-3) var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius);
+  /* Opaque enough to read white text over a bright frame behind it. */
+  background: rgb(0 0 0 / 0.85);
+  text-align: center;
+}
+
+.player__next-name {
+  margin: 0;
+  font-size: 1.125rem;
+}
+
+/* Tabular, so the panel does not shuffle sideways as the digits change width. */
+.player__next-countdown {
+  margin: 0;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * The extra ratings an MDBList key buys (#20, story 82): a wrapping row of
+ * badges on the title page, and the same row tighter on a card (#21).
+ *
+ * **It wraps**, as the facts line and the actions above it now do: four source
+ * names and four scores on one unbreakable line run off the side of a 375px
+ * screen, and no end-to-end test would see it, because Playwright scrolls an
+ * element into view before touching it. Wrapped flex with margins on the
+ * children rather than grid `gap`, the way `.genres__list` does it: flex `gap`
+ * is Chrome 84 and silently does nothing on the floor (`decisions.md` §6), and
+ * a wrapping run of items whose widths differ is what flex wrap is for.
+ */
+.ratings {
+  display: flex;
+  flex-wrap: wrap;
+  /* Cancels the children's own side margins at both edges of the row. */
+  margin: 0 calc(var(--space-2) * -1);
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+
+.ratings__rating {
+  margin: var(--space-1) var(--space-2);
+  padding: 2px var(--space-2);
+  border: 1px solid var(--surface-line);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  /* A source and its score are read as one thing, so they never break apart. */
+  white-space: nowrap;
+}
+
+.ratings__source {
+  color: var(--text-muted);
+}
+
+.ratings__score {
+  color: var(--text-strong);
+}
+
+/*
+ * On a card: the same words, smaller and closer together. A card is narrower
+ * than the page, so the row wraps sooner — which the rule above already does.
+ */
+.ratings--compact {
+  margin: 0 calc(var(--space-1) * -1);
+  font-size: 12px;
+}
+
+.ratings--compact > .ratings__rating {
+  margin: 2px var(--space-1);
+  padding: 1px var(--space-1);
+}

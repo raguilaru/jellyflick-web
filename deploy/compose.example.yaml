@@ -1,0 +1,60 @@
+# Example compose file for **Jellyflick on its own**.
+#
+# Use this one when your Jellyfin lives somewhere else — another machine, or not
+# in Docker at all. If Jellyfin is (or is about to be) a container on this same
+# host, use `compose.with-jellyfin.example.yaml` instead: it is both services
+# together, behind a reverse proxy on a shared Docker network.
+#
+# Written for OpenMediaVault 8's Compose plugin, but the file is ordinary and
+# works on any Docker host.
+#
+# Copy it into Services ▸ Compose ▸ Files ▸ Add, and put JELLYFIN_URL and
+# MDBLIST_API_KEY in that stack's Environment field (the plugin saves it as an
+# .env beside the .yaml) or in the plugin's global environment file.
+#
+# docs/setup.md walks through the whole thing, including the one-time sign-in to
+# the private registry and the HTTPS reverse proxy.
+
+services:
+  jellyflick:
+    image: ghcr.io/raguilaru/jellyflick-web:latest
+    container_name: jellyflick
+    restart: unless-stopped
+
+    # The container speaks plain HTTP on 8080. Terminate HTTPS at the host's
+    # reverse proxy and point it here; do not expose this port to the internet.
+    ports:
+      - "8096:8080"
+
+    environment:
+      # The Server address Users go straight to sign-in with. Leave it empty and
+      # the app asks for an address on first launch instead.
+      JELLYFIN_URL: "${JELLYFIN_URL:-}"
+      # Optional. When it is set, this container proxies MDBList and caches each
+      # Title's ratings, so the key is never sent to a browser and the whole
+      # household shares one daily quota. Leave it empty to switch extra ratings
+      # off (ADR 0004).
+      MDBLIST_API_KEY: "${MDBLIST_API_KEY:-}"
+      # APP_VERSION is deliberately not set here: the published image already
+      # stamps the commit it was built from, and setting it empty would replace
+      # that with "dev". Add it only to override the stamp.
+
+    # Nothing in the image is ever written to, with one exception: the
+    # entrypoint renders /srv/config/config.js from the environment at start-up.
+    # That directory is therefore a tmpfs, which keeps the rest of the
+    # filesystem read-only. Docker mounts a tmpfs world-writable, so the
+    # unprivileged `node` user the image runs as can write there; if it ever
+    # cannot, the container stops immediately and says so.
+    read_only: true
+    tmpfs:
+      - /srv/config
+
+    security_opt:
+      - no-new-privileges:true
+
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1:8080/api/health"]
+      interval: 30s
+      timeout: 3s
+      start_period: 5s
+      retries: 3

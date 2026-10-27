@@ -1,0 +1,40 @@
+{
+  "name": "jellyflick-web",
+  "version": "0.1.0",
+  "description": "A lightweight web client for a single Jellyfin server",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "hls.js": "1.7.3",
+    "jassub": "2.5.20",
+    "libpgs": "0.9.0",
+    "preact": "11.0.1",
+    "preact-iso": "2.12.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@jellyfin/sdk": "1.0.0",
+    "@playwright/test": "1.64.0",
+    "@preact/preset-vite": "2.10.6",
+    "@testing-library/preact": "3.2.4",
+    "eslint": "^9.39.5",
+    "globals": "^17.13.0",
+    "happy-dom": "20.14.6",
+    "typescript": "5.9.3",
+    "typescript-eslint": "^8.71.1",
+    "vite": "8.3.4",
+    "vitest": "5.0.3"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "node scripts/build.mjs",
+    "build:server": "tsc -p tsconfig.server.json",
+    "preview": "vite preview",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "screenshots": "SCREENSHOTS=1 playwright test screenshots --project=desktop"
+  }
+}

@@ -1,0 +1,297 @@
+import { useLayoutEffect, useRef, useState } from 'preact/hooks';
+import { useTranslate } from '../i18n/index';
+import {
+  formatClock,
+  fractionPlayed,
+  positionForFraction,
+  remainingSeconds,
+} from './scrubbing';
+import type { TrickplayResolution } from './trickplay';
+import { PREVIEW_MAX_WIDTH, TrickplayPreview } from './trickplay-preview';
+
+/**
+ * What a User presses while something is playing (#26): the seek bar, the time
+ * played and the time left, and the two buttons.
+ *
+ * It draws and it reports presses. It owns no playback state of its own — the
+ * position and the length come from the player, which is the one place the
+ * media element is touched — so this is a component a test can hand any moment
+ * of a Title and read back exactly what a User would see.
+ *
+ * The bar is a `role="slider"` rather than an `<input type="range">`. A range
+ * input is tempting, because it comes with keys and a drag for nothing, but it
+ * is an `<input>`: `src/shell/back.ts` leaves a field's Backspace alone and
+ * `src/navigation/focusable.ts` leaves a field's arrow keys alone, so a range
+ * input with focus would quietly take Back and the arrow keys away from the
+ * player. A slider is not a field, so both of those keep working, and the
+ * player's own key handler is the one place a seek is decided.
+ */
+
+/** Marks the seek bar, so the player's key handler knows when it has focus. */
+export const SEEK_BAR_ATTRIBUTE = 'data-player-seek';
+
+export type PlayerControlsProps = {
+  /** For every control's name, so a screen reader hears what is being paused. */
+  titleName: string;
+  paused: boolean;
+  /** Where the picture is, in seconds. */
+  position: number;
+  /** How long the Title is, in seconds, where that is known yet. */
+  duration?: number;
+  /** Whether there is anything to control: a plan the Server agreed to. */
+  ready: boolean;
+  onToggle: () => void;
+  /** Seek to this position, in seconds. The player clamps it. */
+  onSeek: (seconds: number) => void;
+  onClose: () => void;
+  /**
+   * Opens the track picker (#27). Absent when the Title has nothing to choose
+   * between — one sound track and no subtitles — because a control that opens
+   * an empty menu is a stop the arrow keys have to step through for nothing.
+   */
+  onOpenTracks?: () => void;
+  /**
+   * Opens the playback options — the speed, the quality and
+   * picture-in-picture (#32). Unlike the tracks it is **always** offered:
+   * every Title has a speed and every device has a quality, so there is no
+   * Title this menu would be empty for.
+   */
+  onOpenOptions?: () => void;
+  /**
+   * The scrubbing thumbnails this source has (#32, story 90), where the
+   * Server generated any. **Absent is the common case** — a Server with
+   * trickplay switched off, or a Title it has not got round to — and then the
+   * bar behaves exactly as it did before this ticket.
+   */
+  preview?: {
+    resolution: TrickplayResolution;
+    /** The address of one tile image, by its index. */
+    tileUrl: (tileIndex: number) => string;
+  };
+};
+
+export function PlayerControls({
+  titleName,
+  paused,
+  position,
+  duration,
+  ready,
+  onToggle,
+  onSeek,
+  onClose,
+  onOpenTracks,
+  onOpenOptions,
+  preview,
+}: PlayerControlsProps) {
+  const t = useTranslate();
+  const toggle = useRef<HTMLButtonElement | null>(null);
+  const bar = useRef<HTMLDivElement | null>(null);
+  const played = fractionPlayed(position, duration);
+  const elapsed = formatClock(position);
+  const total = formatClock(duration ?? 0);
+
+  /**
+   * Controls that appear take focus with them, unless focus is already on one
+   * of the player's own. Two things need that, and they are the same thing:
+   *
+   * - **The player opening.** The press that opened it was the title page's
+   *   Play button, and that button is still what focus is on — *behind* the
+   *   player. `src/navigation/` tries the page's own flow before anything
+   *   fixed, so an arrow key from there walks the title page under the picture
+   *   rather than entering the player at all. Focus has to come in for the
+   *   "from inside something fixed, the fixed thing is the flow" rule to
+   *   apply, which is what makes the controls reachable with a remote.
+   * - **The controls coming back.** Hiding them takes away whatever control
+   *   focus was on and the browser hands focus to the document, so the press
+   *   that reveals them has to put focus somewhere a User can see.
+   *
+   * A **layout** effect, so it lands with the DOM and no frame goes by with
+   * the controls drawn and focus somewhere else. It waits for the negotiation
+   * rather than running on mount: until the Server has said how to play the
+   * Title there is nothing to pause, the button is disabled, and `focus()` on
+   * a disabled button does nothing at all — which is how an earlier version of
+   * this left a remote walking the title page behind the picture.
+   */
+  useLayoutEffect(() => {
+    if (!ready) return;
+    const button = toggle.current;
+    const overlay = button?.closest('.player') ?? undefined;
+    const active = document.activeElement;
+    if (button === null || overlay === undefined) return;
+    if (active !== null && overlay.contains(active)) return;
+    button.focus();
+  }, [ready]);
+
+  /**
+   * Which moment the thumbnail is showing, or nothing at all (#32, story 90).
+   *
+   * Two things ask for a preview, and they are asking different questions. **A
+   * pointer over the bar** is asking about a moment it has not gone to yet, so
+   * the preview follows it. **A remote cannot hover at all**: its Left and
+   * Right seek immediately, so what it is owed is a thumbnail of where it has
+   * just arrived — which is why focus on the bar is the second trigger, and
+   * why a preview with no pointer behind it sits at the playhead.
+   */
+  const [hovered, setHovered] = useState<number | undefined>(undefined);
+  const [barFocused, setBarFocused] = useState(false);
+  const previewAt = hovered ?? (barFocused ? position : undefined);
+
+  /** Where along the bar a pointer is, in seconds, or nothing off either end. */
+  const momentUnder = (event: MouseEvent): number | undefined => {
+    const target = event.currentTarget;
+    if (!(target instanceof HTMLElement)) return undefined;
+    const box = target.getBoundingClientRect();
+    if (box.width === 0) return undefined;
+    return positionForFraction((event.clientX - box.left) / box.width, duration);
+  };
+
+  /**
+   * A press on the bar seeks to where it was pressed. Pointer only: the keys
+   * are the player's, so that Left and Right seek wherever focus happens to be
+   * among the controls rather than only on the bar itself.
+   */
+  const onBarPress = (event: MouseEvent): void => {
+    // A click with no pointer behind it — `element.click()`, or a browser
+    // pressing a focused control — reports (0, 0), which here would read as a
+    // press on the very start of the bar and throw the User back to the
+    // beginning. `detail` is how many times the pointer was clicked, and it is
+    // zero for every click that was not one.
+    if (event.detail === 0) return;
+    const bar = event.currentTarget;
+    if (!(bar instanceof HTMLElement)) return;
+    const box = bar.getBoundingClientRect();
+    if (box.width === 0) return;
+    const wanted = positionForFraction((event.clientX - box.left) / box.width, duration);
+    if (wanted !== undefined) onSeek(wanted);
+  };
+
+  return (
+    <div class="player__controls">
+      <div class="player__scrubber">
+        <span class="player__time">{elapsed}</span>
+        {/*
+          `aria-valuenow` is whole seconds, which is what the readout beside it
+          says: a slider announcing 125.183 would be read out in full.
+        */}
+        <div
+          class="player__seek"
+          role="slider"
+          tabIndex={0}
+          ref={bar}
+          aria-label={t('player.seek', { name: titleName })}
+          aria-valuemin={0}
+          aria-valuemax={Math.floor(duration ?? 0)}
+          aria-valuenow={Math.floor(position)}
+          aria-valuetext={t('player.position', { elapsed, total })}
+          onClick={onBarPress}
+          onMouseMove={(event: MouseEvent) => setHovered(momentUnder(event))}
+          onMouseLeave={() => setHovered(undefined)}
+          onFocus={() => setBarFocused(true)}
+          onBlur={() => setBarFocused(false)}
+          {...{ [SEEK_BAR_ATTRIBUTE]: '' }}
+        >
+          <span class="player__seek-played" style={`width: ${String(played * 100)}%`} />
+          {/*
+            The thumbnail (#32, story 90). It is drawn **inside** the bar,
+            which is already `position: relative`, and its left edge is
+            clamped to the bar's own width — so however far along a pointer
+            goes, the preview cannot push the document wider than the screen.
+            That is #44's lesson: a layout that overflows is the one thing the
+            e2e suite cannot see, because Playwright scrolls before it presses.
+          */}
+          {preview === undefined || previewAt === undefined ? null : (
+            <TrickplayPreview
+              resolution={preview.resolution}
+              tileUrl={preview.tileUrl}
+              positionSeconds={previewAt}
+              left={previewLeft(bar.current, previewAt, duration)}
+            />
+          )}
+        </div>
+        <span class="player__time">{t('player.remaining', { clock: formatClock(remainingSeconds(position, duration)) })}</span>
+      </div>
+
+      <p class="player__buttons">
+        <button
+          type="button"
+          class="button button--primary"
+          ref={toggle}
+          disabled={!ready}
+          onClick={onToggle}
+        >
+          {paused ? t('player.play', { name: titleName }) : t('player.pause', { name: titleName })}
+        </button>
+        {/*
+          The sound and the subtitles (#27). Named with the Title like every
+          other control here, and only drawn when the Title has something to
+          choose between — see the note on `onOpenTracks`.
+        */}
+        {onOpenTracks === undefined ? null : (
+          <button
+            type="button"
+            class="button button--quiet"
+            disabled={!ready}
+            /*
+              The *name* carries the Title, as every control here does, but the
+              visible text does not: "Audio and subtitles for The Unfinished"
+              on a button is wider than a phone, and this row has three buttons
+              in it now. A screen reader still hears which Title's tracks are
+              being changed.
+            */
+            aria-label={t('player.tracks', { name: titleName })}
+            onClick={onOpenTracks}
+          >
+            {t('player.tracksLabel')}
+          </button>
+        )}
+        {/*
+          The speed, the quality and picture-in-picture (#32), behind one
+          control for the same reason the tracks are: three more buttons on
+          this row is a row wider than a phone.
+        */}
+        {onOpenOptions === undefined ? null : (
+          <button
+            type="button"
+            class="button button--quiet"
+            disabled={!ready}
+            /*
+              The name carries the Title and the visible text does not, the
+              same split the tracks control makes: "Playback options for The
+              Unfinished" on a button is wider than a phone.
+            */
+            aria-label={t('player.options', { name: titleName })}
+            onClick={onOpenOptions}
+          >
+            {t('player.optionsButton')}
+          </button>
+        )}
+        <button type="button" class="button button--quiet" onClick={onClose}>
+          {t('player.close')}
+        </button>
+      </p>
+    </div>
+  );
+}
+
+/**
+ * Where the preview's left edge goes, in pixels from the bar's own left edge.
+ *
+ * Centred on the moment it is showing, and then **clamped to the bar**, which
+ * is what stops it hanging off either end: at the start of a Title a centred
+ * preview would reach to the left of the screen, and at the end past the right
+ * of it — and a box past the right of the screen is a document wider than the
+ * screen, which is the failure a scrolling test cannot see (#44).
+ *
+ * A bar with no width is every bar in happy-dom, where a box has no size at
+ * all, and the answer there is simply zero rather than `NaN`.
+ */
+function previewLeft(
+  bar: HTMLElement | null,
+  positionSeconds: number,
+  duration: number | undefined,
+): number {
+  const width = bar?.getBoundingClientRect().width ?? 0;
+  if (width === 0) return 0;
+  const along = width * fractionPlayed(positionSeconds, duration);
+  return Math.min(Math.max(0, along - PREVIEW_MAX_WIDTH / 2), Math.max(0, width - PREVIEW_MAX_WIDTH));
+}

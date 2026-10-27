@@ -1,0 +1,188 @@
+{
+  "title": "The Matrix",
+  "year": 1999,
+  "released": "1999-03-31",
+  "released_digital": "2016-01-07",
+  "description": "Set in the 22nd century, The Matrix tells the story of a computer hacker who joins a group of underground insurgents fighting the vast and powerful computers who now rule the earth.",
+  "tagline": "Believe the unbelievable.",
+  "runtime": 136,
+  "budget": 63000000,
+  "revenue": 463517383,
+  "score": 82,
+  "score_average": 82,
+  "ids": {
+    "imdb": "tt0133093",
+    "trakt": 481,
+    "tmdb": 603,
+    "tvdb": 169,
+    "mal": null,
+    "mdblist": "a2na"
+  },
+  "type": "movie",
+  "updated": "2026-10-20T20:00:33.000Z",
+  "ratings": [
+    {
+      "source": "imdb",
+      "value": 8.7,
+      "score": 87,
+      "votes": 2287638,
+      "url": 181
+    },
+    {
+      "source": "metacritic",
+      "value": 73,
+      "score": 73,
+      "votes": 36,
+      "url": "/the-matrix"
+    },
+    {
+      "source": "metacriticuser",
+      "value": 8.9,
+      "score": 89.0,
+      "votes": 1870,
+      "url": null
+    },
+    {
+      "source": "trakt",
+      "value": 87,
+      "score": 87,
+      "votes": 61116,
+      "url": null
+    },
+    {
+      "source": "tomatoes",
+      "value": 83,
+      "score": 83,
+      "votes": 209,
+      "url": "/m/matrix",
+      "fresh": 1
+    },
+    {
+      "source": "popcorn",
+      "value": 85,
+      "score": 85,
+      "votes": 1307885,
+      "url": "/m/matrix"
+    },
+    {
+      "source": "tmdb",
+      "value": 83,
+      "score": 83,
+      "votes": 29003,
+      "url": null
+    },
+    {
+      "source": "letterboxd",
+      "value": 4.2,
+      "score": 84,
+      "votes": 3157489,
+      "url": "/film/the-matrix/"
+    },
+    {
+      "source": "rogerebert",
+      "value": 3.0,
+      "score": null,
+      "votes": null,
+      "url": "the-matrix-1999"
+    },
+    {
+      "source": "myanimelist",
+      "value": null,
+      "score": null,
+      "votes": null,
+      "url": null
+    }
+  ],
+  "genres": [
+    {
+      "id": 1,
+      "title": "Action"
+    },
+    {
+      "id": 67,
+      "title": "Sci-Fi"
+    },
+    {
+      "id": 16,
+      "title": "Science Fiction"
+    }
+  ],
+  "streams": [
+    {
+      "id": 8,
+      "name": "HBO MAX"
+    }
+  ],
+  "watch_providers": [
+    {
+      "id": 2,
+      "name": "Apple TV Store"
+    },
+    {
+      "id": 3,
+      "name": "Google Play Movies"
+    },
+    {
+      "id": 7,
+      "name": "Fandango At Home"
+    },
+    {
+      "id": 10,
+      "name": "Amazon Video"
+    },
+    {
+      "id": 192,
+      "name": "YouTube"
+    },
+    {
+      "id": 486,
+      "name": "Spectrum On Demand"
+    },
+    {
+      "id": 538,
+      "name": "Plex"
+    },
+    {
+      "id": 2528,
+      "name": "YouTube TV"
+    }
+  ],
+  "production_companies": [
+    {
+      "id": 79,
+      "name": "Village Roadshow Pictures"
+    },
+    {
+      "id": 372,
+      "name": "Groucho II Film Partnership"
+    },
+    {
+      "id": 1885,
+      "name": "Silver Pictures"
+    },
+    {
+      "id": 174,
+      "name": "Warner Bros. Pictures"
+    }
+  ],
+  "language": "en",
+  "spoken_language": "en",
+  "country": "us",
+  "certification": "R",
+  "commonsense": true,
+  "age_rating": 15,
+  "commonsense_media": {
+    "common_sense": 15,
+    "common_sense_selection": false,
+    "parental_source": 1,
+    "parental_violence": 4,
+    "parental_nudity": 2,
+    "parental_language": 3,
+    "parental_drinking": 2
+  },
+  "awards": "Won: Best Effects, Sound Effects Editing (Oscars, 2000). Plus 3 more Oscars, 1 Oscar nomination, 2 wins & 3 nominations.",
+  "status": "released",
+  "trailer": "https://www.youtube.com/watch?v=FVI84Dfx2-I",
+  "poster": "https://image.tmdb.org/t/p/original/dXNAPwY7VrqMAo51EKhhCJfaGb5.jpg",
+  "backdrop": "https://image.tmdb.org/t/p/w1920_and_h800_multi_faces/tlm8UkiQsitc8rSuIAscQDCnP8d.jpg"
+}

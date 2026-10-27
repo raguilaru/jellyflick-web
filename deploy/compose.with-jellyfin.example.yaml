@@ -1,0 +1,113 @@
+# Example compose file for **Jellyfin and Jellyflick together**, behind a
+# reverse proxy that is already running on a shared Docker network.
+#
+# Use this one when your Jellyfin is (or is about to be) a container on the same
+# host. If your Jellyfin lives elsewhere — another machine, or not in Docker at
+# all — use `compose.example.yaml` instead: it is Jellyflick on its own.
+#
+# docs/setup.md walks through the whole thing, including the one-time sign-in to
+# the private registry and the reverse proxy.
+#
+# ---------------------------------------------------------------------------
+# THE ONE THING THAT CATCHES EVERYONE
+#
+#   JELLYFIN_URL is resolved by the **browser**, not by this container.
+#
+# deploy/entrypoint.sh renders it into a browser-visible config file, so it has
+# to be an address your Users' browsers can reach. `http://jellyfin:8096` is a
+# hostname that works beautifully inside this network and not at all on a
+# laptop, so it fails for every User while looking completely correct here.
+#
+# Use the public HTTPS address your reverse proxy serves Jellyfin on. And it
+# must be HTTPS once Jellyflick itself is: a browser on an HTTPS page refuses to
+# call a plain-HTTP server.
+#
+# Nothing in this container ever calls Jellyfin, which is also why there is no
+# `depends_on` below. The two services are independent at start-up; Jellyflick
+# only hands the address to the browser.
+# ---------------------------------------------------------------------------
+
+services:
+  jellyfin:
+    image: lscr.io/linuxserver/jellyfin:latest
+    container_name: jellyfin
+    networks:
+      - proxy-net
+    environment:
+      # Set these to the user that owns your media. `id -u` and `id -g` on the
+      # host will tell you; these values are placeholders, not advice.
+      PUID: "1000"
+      PGID: "1000"
+      TZ: "Etc/UTC"
+    volumes:
+      - /srv/appdata/jellyfin:/config
+      # Your own library layout goes here. Read-only is enough for playback and
+      # means a misconfigured scan cannot delete anything.
+      - /srv/media/tvshows:/data/tvshows:ro
+      - /srv/media/movies:/data/movies:ro
+      - /srv/appdata/jellyfin/transcode:/transcode
+    # No published ports: the reverse proxy on this network reaches Jellyfin as
+    # http://jellyfin:8096. Publish 8096 only if you also want to reach it
+    # directly on the host, and never straight to the internet.
+    #
+    # The two UDP ports Jellyfin documents — 7359 for client auto-discovery and
+    # 1900 for DLNA — are left out on purpose: neither is needed by Jellyflick
+    # or by a browser. Add them if something else on your network wants them.
+    restart: unless-stopped
+
+  jellyflick:
+    image: ghcr.io/raguilaru/jellyflick-web:latest
+    container_name: jellyflick
+    networks:
+      - proxy-net
+    # Likewise no published port. The proxy reaches this as
+    # http://jellyflick:8080 — the container speaks plain HTTP on 8080.
+    # If you proxy from the host instead, publish `"8096:8080"` and point the
+    # proxy at 127.0.0.1 on whichever host port you chose.
+
+    environment:
+      # The Server address Users go straight to sign-in with. **A browser has to
+      # be able to resolve this** — see the note at the top of this file. Leave
+      # it empty and Jellyflick asks for an address on first launch instead.
+      JELLYFIN_URL: "https://jellyfin.example.com"
+      # Optional. When it is set, this container proxies MDBList and caches each
+      # Title's ratings, so the key is never sent to a browser and the whole
+      # household shares one daily quota. Leave it empty to switch extra ratings
+      # off (ADR 0004).
+      MDBLIST_API_KEY: "${MDBLIST_API_KEY:-}"
+      # APP_VERSION is deliberately not set here: the published image already
+      # stamps the commit it was built from, and setting it empty would replace
+      # that with "dev". Add it only to override the stamp.
+
+    # Nothing in the image is ever written to, with one exception: the
+    # entrypoint renders /srv/config/config.js from the environment at start-up.
+    # That directory is therefore a tmpfs, which keeps the rest of the
+    # filesystem read-only. Docker mounts a tmpfs world-writable, so the
+    # unprivileged `node` user the image runs as can write there; if it ever
+    # cannot, the container stops immediately and says so.
+    read_only: true
+    tmpfs:
+      - /srv/config
+
+    security_opt:
+      - no-new-privileges:true
+
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O-", "http://127.0.0.1:8080/api/health"]
+      interval: 30s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
+
+    restart: unless-stopped
+
+# Already created by whatever runs your reverse proxy — a SWAG, Nginx Proxy
+# Manager or Traefik stack, usually. `external: true` means compose expects to
+# find it rather than make it. If you have no such network yet:
+#
+#   docker network create proxy-net
+#
+# and put your proxy on it too.
+networks:
+  proxy-net:
+    external: true

@@ -40,6 +40,17 @@ One playable instalment of a Series, belonging to one Season.
 A Jellyfin grouping of related Titles, such as a movie franchise.
 _Avoid_: Box set, franchise
 
+**Trailer**:
+A short preview video for a Title. The Server may hold one as a file beside the Title, or carry a link to one on YouTube; where both exist, the Server's own file is the one used.
+_Avoid_: Preview, teaser, clip
+
+**Watch trailer**:
+The action on a title page that shows a Title's Trailer. The Server's own file plays in Jellyflick's player; a YouTube one is embedded, and is loaded only when a User presses the button. The Billboard is the other way round: it only ever autoplays a local Trailer, never a YouTube one.
+
+**Extra Ratings**:
+The Audience, Metacritic, Letterboxd and Trakt scores for a Title, shown beside the critic and community scores the Server sends. They need an MDBList key, and a Title without one shows none.
+_Avoid_: MDBList ratings (that's where they come from), reviews, scores
+
 **My List**:
 The Titles a User has marked as favorite in Jellyfin. It's the same list other Jellyfin apps show as Favorites.
 _Avoid_: Watchlist, saved, favorites (in the UI)
@@ -79,15 +90,55 @@ _Avoid_: Resume row, Next Up (as a separate concept)
 The Row of the newest Titles across all libraries. A Series appears once, however many Episodes were added.
 _Avoid_: Recently Added, Latest, New Releases
 
+**Watch Again**:
+The Row of Titles the User has finished, the most recently finished first.
+_Avoid_: Rewatch, Watched, History
+
+**Genre Row**:
+A Row of the Titles in one genre the User chose. A User can have several, one per genre.
+_Avoid_: Category row, tag row
+
+**Collection Row**:
+A Row of the Titles in one Collection the User chose. A User can have several.
+_Avoid_: Franchise row, box set row
+
 **Title Label**:
 A short tag on a Title's card art saying what's new about it: Recently Added, New Season, or New Episodes.
 _Avoid_: Badge, tag, ribbon
+
+**Enlarged Card**:
+The bigger version of a card that a resting mouse pointer opens, carrying Play, My List and More info beside the Title's age rating, length, genres and Extra Ratings. It appears only where there is a pointer that can rest on something, so never on a touch screen and never on a TV, and it never plays video.
+_Avoid_: Hover preview, preview card, popover, tooltip, expanded card
+
+**Movies section**, **Series section**:
+Two screens that are Home narrowed to one kind of Title: the same Billboard and the same Rows, drawn by the same registry, showing only Movies or only Series. Each has its own address. They are not the Home Layout — a Row the User hid on Home is still here, because the layout of a section is fixed and nothing stores or edits it.
+_Avoid_: Movies page, Series page, TV page, library, tab
+
+**Top genres**:
+The three Genre Rows a section ends with, chosen by how many Titles of that section's kind each genre holds, most first, ties broken by name. Derived each time the section loads; nothing stores them and the User does not choose them.
+_Avoid_: Popular genres, your genres, recommended genres
 
 ## Playback
 
 **Subtitle Offset**:
 How far the subtitles are shifted earlier or later than the video, adjusted by the User while watching.
 _Avoid_: Subtitle delay, sync
+
+**Subtitle timing**:
+The panel the User opens while watching to change the Subtitle Offset. The panel is what is opened; the Offset is the number it moves.
+_Avoid_: Subtitle settings, delay panel
+
+**Skip Intro**:
+The button over the picture that jumps past the opening of what's playing. It appears only while the intro is on screen, because the Server is what says where the intro is.
+_Avoid_: Skip ahead, skip recap, intro skipper
+
+**Skip Credits**:
+The same button for the closing credits of what's playing, appearing only while they're on screen.
+_Avoid_: Skip outro, skip end
+
+**next Episode**:
+The Episode that follows the one playing. It is offered as the Episode ends, and either starts on its own after a countdown or waits to be asked for, following the User's playback preference.
+_Avoid_: Next Up, up next, autoplay, binge
 
 **Cast**:
 Sending playback to a Chromecast or AirPlay receiver, with this app acting as the remote.
@@ -100,3 +151,15 @@ _Avoid_: Cast (that's for Chromecast or AirPlay), remote control
 **Download File**:
 Saving a Title's original video file to the device. Only Users the Server allows to download see it. It isn't an offline mode.
 _Avoid_: Download (alone), offline, save
+
+**Styled subtitles**:
+A subtitle track that carries its own typography, positioning and effects rather than plain lines of text, drawn here with those styles intact where the device can manage it and flattened to its words where it cannot.
+_Avoid_: ASS subtitles, SSA, fancy subtitles, karaoke
+
+**Image subtitles**:
+A subtitle track that is pictures rather than text. Some are drawn here over the picture; the rest the Server draws into the video itself before sending it, which is the only way they can be shown at all.
+_Avoid_: Bitmap subtitles, PGS (that's one of several formats), graphical subs
+
+**Burned in**:
+Said of subtitles the Server has drawn into the video itself. They cannot be turned off, moved or re-timed without asking the Server for a different stream, which is why choosing or leaving such a track reloads the video where switching any other subtitle does not.
+_Avoid_: Hardcoded, hardsubbed, baked in
